@@ -17,16 +17,24 @@
       "bundleIdentifier": "com.lingospark.app",
       "buildNumber": "1",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "LingoSpark использует микрофон, чтобы вы могли записывать и сравнивать своё произношение."
+        "NSMicrophoneUsageDescription": "LingoSpark использует микрофон, чтобы вы могли записывать и сравнивать своё произношение.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#7C5CFC"
-      },
-      "edgeToEdgeEnabled": true
-    }
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "7f33d965-f80c-4e1d-abf7-252be0c47ca5"
+      }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-asset"
+    ]
   }
 }
-

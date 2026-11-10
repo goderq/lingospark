@@ -14,7 +14,8 @@
       "distribution": "internal",
       "ios": {
         "withoutCredentials": true,
-        "buildConfiguration": "Release"
+        "buildConfiguration": "Release",
+        "config": "sideloadly.yml"
       }
     },
     "production": {}
