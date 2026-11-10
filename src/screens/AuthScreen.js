@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../store/AuthContext";
+import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 
 const errorText = (error) => {
@@ -32,8 +33,8 @@ const errorText = (error) => {
 
 export default function AuthScreen({ optional = false, onClose }) {
   const { signIn, signUp, enterGuestMode } = useAuth();
+  const { progress } = useProgress();
   const [mode, setMode] = useState("login");
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -56,7 +57,7 @@ export default function AuthScreen({ optional = false, onClose }) {
     const { data, error } =
       mode === "login"
         ? await signIn(email, password)
-        : await signUp(name, email, password);
+        : await signUp(progress.name, email, password);
     setBusy(false);
     if (error) {
       setMessage({ type: "error", text: errorText(error) });
@@ -119,15 +120,6 @@ export default function AuthScreen({ optional = false, onClose }) {
               </Pressable>
             ))}
           </View>
-          {mode === "register" ? (
-            <Field
-              icon="person-outline"
-              placeholder="Имя"
-              value={name}
-              onChangeText={setName}
-              textContentType="name"
-            />
-          ) : null}
           <Field
             icon="mail-outline"
             placeholder="Электронная почта"
