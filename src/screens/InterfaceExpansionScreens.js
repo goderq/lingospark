@@ -217,6 +217,16 @@ export function StreakCalendarScreen({ onClose }) {
 export function WhatsNewScreen({ onClose }) {
   const updates = [
     [
+      "cloud-done",
+      "Аккаунт и облачный прогресс",
+      "Регистрируйся по почте: занятия автоматически сохраняются и восстанавливаются после переустановки.",
+    ],
+    [
+      "phone-portrait",
+      "Офлайн по-прежнему работает",
+      "Интернет нужен только для входа и синхронизации — уроки, словарь и времена остаются на iPhone.",
+    ],
+    [
       "notifications",
       "Напоминания без интернета",
       "Выбери время занятия в настройках — iPhone напомнит локально, без сервера.",
@@ -302,9 +312,9 @@ export function WhatsNewScreen({ onClose }) {
       <Header title="Что нового" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.newEmoji}>✨</Text>
-        <Text style={s.title}>Большое обновление</Text>
+        <Text style={s.title}>Аккаунт и синхронизация</Text>
         <Text style={s.newSubtitle}>
-          Интерфейс стал быстрее, понятнее и персональнее.
+          Прогресс теперь можно безопасно хранить в Supabase.
         </Text>
         {updates.map(([icon, title, text]) => (
           <View key={title} style={s.update}>

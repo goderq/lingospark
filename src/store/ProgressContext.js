@@ -4,11 +4,13 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { lessons } from "../data/course";
 
 const STORAGE_KEY = "@lingospark/progress-v1";
+const UPDATED_KEY = "@lingospark/progress-updated-v1";
 const initial = {
   onboarded: false,
   name: "Друг",
@@ -131,10 +133,14 @@ const contiguousCompleted = (completed = []) => {
 export function ProgressProvider({ children }) {
   const [progress, setProgress] = useState(initial);
   const [ready, setReady] = useState(false);
+  const [localUpdatedAt, setLocalUpdatedAt] = useState(null);
+  const skipFirstPersist = useRef(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
+    AsyncStorage.multiGet([STORAGE_KEY, UPDATED_KEY])
+      .then((entries) => {
+        const raw = entries[0][1];
+        setLocalUpdatedAt(entries[1][1]);
         if (!raw) return;
         const saved = { ...initial, ...JSON.parse(raw) };
         saved.completed = contiguousCompleted(saved.completed);
@@ -147,10 +153,15 @@ export function ProgressProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    if (ready)
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(progress)).catch(
-        () => {},
-      );
+    if (!ready) return;
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(progress)).catch(() => {});
+    if (skipFirstPersist.current) {
+      skipFirstPersist.current = false;
+      return;
+    }
+    const now = new Date().toISOString();
+    setLocalUpdatedAt(now);
+    AsyncStorage.setItem(UPDATED_KEY, now).catch(() => {});
   }, [progress, ready]);
 
   const finishOnboarding = (name, dailyGoal) => {
@@ -1132,6 +1143,7 @@ export function ProgressProvider({ children }) {
     () => ({
       progress,
       ready,
+      localUpdatedAt,
       finishOnboarding,
       completeLesson,
       completeTense,
@@ -1186,7 +1198,7 @@ export function ProgressProvider({ children }) {
       markUpdateSeen,
       isUnlocked,
     }),
-    [progress, ready],
+    [progress, ready, localUpdatedAt],
   );
   return (
     <ProgressContext.Provider value={value}>

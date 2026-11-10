@@ -10,6 +10,8 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useProgress } from "../store/ProgressContext";
+import { useAuth } from "../store/AuthContext";
+import { useCloudSync } from "../store/CloudSyncContext";
 import { colors } from "../theme";
 import { ProgressBar } from "../components/UI";
 
@@ -20,8 +22,11 @@ export default function ProfileScreen({
   onLevels,
   onStreak,
   onWhatsNew,
+  onAccount,
 }) {
   const { progress, reset } = useProgress();
+  const { user, signOut } = useAuth();
+  const { status, lastSyncedAt, syncNow } = useCloudSync();
   const level = Math.floor(progress.totalXP / 100) + 1;
   const data = progress.stats || {};
   const reviewAccuracy = data.reviewTotal
@@ -39,6 +44,24 @@ export default function ProfileScreen({
         { text: "Сбросить", style: "destructive", onPress: reset },
       ],
     );
+  const confirmSignOut = () =>
+    Alert.alert(
+      "Выйти из аккаунта?",
+      "Облачная копия останется в безопасности. На этом iPhone можно продолжить офлайн.",
+      [
+        { text: "Отмена", style: "cancel" },
+        { text: "Выйти", style: "destructive", onPress: signOut },
+      ],
+    );
+  const syncLabels = {
+    syncing: "Сохраняем прогресс…",
+    pending: "Есть новые изменения",
+    synced: lastSyncedAt
+      ? `Сохранено ${new Date(lastSyncedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
+      : "Прогресс сохранён",
+    error: "Нет связи — повторим позже",
+    offline: "Только на этом iPhone",
+  };
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <LinearGradient
@@ -54,6 +77,37 @@ export default function ProfileScreen({
         Уровень приложения {level} · английский{" "}
         {progress.learnerLevel || "не определён"}
       </Text>
+      {user ? (
+        <View style={styles.accountCard}>
+          <View style={styles.accountIcon}>
+            <Ionicons name="cloud-done" size={25} color={colors.mint} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Облачный аккаунт</Text>
+            <Text style={styles.accountEmail} numberOfLines={1}>
+              {user.email}
+            </Text>
+            <Text style={styles.syncText}>{syncLabels[status]}</Text>
+          </View>
+          <Pressable onPress={syncNow} style={styles.syncButton}>
+            <Ionicons name="sync" size={20} color={colors.purple} />
+          </Pressable>
+          <Pressable onPress={confirmSignOut} style={styles.syncButton}>
+            <Ionicons name="log-out-outline" size={20} color={colors.pink} />
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable onPress={onAccount} style={styles.accountCard}>
+          <View style={styles.accountIcon}>
+            <Ionicons name="cloud-upload" size={25} color={colors.purple} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardTitle}>Сохраняй прогресс в облаке</Text>
+            <Text style={styles.accountEmail}>Войди или создай аккаунт</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={21} color={colors.textMuted} />
+        </Pressable>
+      )}
       <View style={styles.stats}>
         <Stat emoji="🔥" value={progress.streak} label="дней" />
         <Stat emoji="⚡️" value={progress.totalXP} label="всего XP" />
@@ -190,6 +244,36 @@ const styles = StyleSheet.create({
     marginTop: 22,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  accountCard: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 14,
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  accountIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(46,211,183,.10)",
+  },
+  accountEmail: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
+  syncText: { color: colors.mint, fontSize: 11, marginTop: 4 },
+  syncButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: colors.cardLight,
+    alignItems: "center",
+    justifyContent: "center",
   },
   settingsIcon: {
     width: 48,

@@ -5,6 +5,8 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { ProgressProvider, useProgress } from "./src/store/ProgressContext";
+import { AuthProvider, useAuth } from "./src/store/AuthContext";
+import { CloudSyncProvider } from "./src/store/CloudSyncContext";
 import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
@@ -16,6 +18,7 @@ import {
 } from "./src/screens/StudyToolsScreens";
 import ReviewScreen from "./src/screens/ReviewScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
+import AuthScreen from "./src/screens/AuthScreen";
 import PhrasebookScreen from "./src/screens/PhrasebookScreen";
 import LessonScreen from "./src/screens/LessonScreen";
 import DictationScreen from "./src/screens/DictationScreen";
@@ -107,21 +110,30 @@ import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-offline-personal";
+const UPDATE_VERSION = "2026.11-cloud-account";
 
 export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      <ProgressProvider>
-        <AppContent />
-      </ProgressProvider>
+      <AuthProvider>
+        <ProgressProvider>
+          <CloudSyncProvider>
+            <AppContent />
+          </CloudSyncProvider>
+        </ProgressProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
 
 function AppContent() {
   const { ready, progress, markUpdateSeen } = useProgress();
+  const {
+    ready: authReady,
+    user,
+    guestMode,
+  } = useAuth();
   const [tab, setTab] = useState("home");
   const [overlay, setOverlay] = useState(null);
   const [recentScreens, setRecentScreens] = useState([]);
@@ -217,8 +229,9 @@ function AppContent() {
     );
     return () => subscription.remove();
   }, [overlay]);
-  if (!ready || !navigationReady) return <LoadingScreen />;
+  if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
+  if (!user && !guestMode) return <AuthScreen />;
   if (progress.seenUpdate !== UPDATE_VERSION)
     return (
       <SafeAreaView style={styles.safe}>
@@ -229,6 +242,12 @@ function AppContent() {
     return (
       <SafeAreaView style={styles.safe}>
         <WhatsNewScreen onClose={() => setOverlay(null)} />
+      </SafeAreaView>
+    );
+  if (overlay?.type === "account")
+    return (
+      <SafeAreaView style={styles.safe}>
+        <AuthScreen optional onClose={() => setOverlay(null)} />
       </SafeAreaView>
     );
   if (overlay?.type === "levelProgress")
@@ -768,6 +787,7 @@ function AppContent() {
             onLevels={() => setOverlay({ type: "levelProgress" })}
             onStreak={() => setOverlay({ type: "streakCalendar" })}
             onWhatsNew={() => setOverlay({ type: "whatsNew" })}
+            onAccount={() => setOverlay({ type: "account" })}
           />
         )}
       </View>
