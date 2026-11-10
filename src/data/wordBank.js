@@ -19,14 +19,14 @@ const emojiForLevel = {
 };
 
 export const wordBank = compactWordBank.map(
-  ([english, translation, transcription], index) => {
+  ([english, translation, transcription, stableIndex], index) => {
     const level = levelForIndex(index);
     const variants = translation
       .split(/[;,]/)
       .map((value) => value.replace(/\([^)]*\)/g, "").trim())
       .filter(Boolean);
     return {
-      id: `bank-${index}`,
+      id: `bank-${stableIndex ?? index}`,
       english,
       russian: variants[0] || translation,
       translations: variants.slice(1, 8),

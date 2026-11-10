@@ -1,6 +1,6 @@
 {
   "name": "lingospark-expo",
-  "version": "1.2.1",
+  "version": "1.3.0",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -8,6 +8,8 @@
     "tunnel": "expo start --tunnel",
     "ios": "expo start --ios",
     "check": "expo-doctor",
+    "dictionary:build": "node scripts/build-word-bank.mjs",
+    "dictionary:audit": "node scripts/audit-word-bank.mjs",
     "build:ipa": "npx eas-cli build --platform ios --profile sideloadly"
   },
   "dependencies": {

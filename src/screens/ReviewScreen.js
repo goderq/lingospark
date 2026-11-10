@@ -366,7 +366,7 @@ export default function ReviewScreen() {
           disabled={!selectedPool.length}
         />
         <Text style={styles.source}>
-          Частотная англо-русская база · 8 763 уникальных слова
+          Проверенная англо-русская база · более 8 000 слов
         </Text>
       </ScrollView>
     );

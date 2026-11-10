@@ -76,7 +76,7 @@ export default function HomeScreen({
     },
     review: {
       title: "Случайные слова",
-      subtitle: "8 763 · A1–C1",
+      subtitle: "8 000+ · A1–C1",
       icon: "library",
       color: colors.mint,
       onPress: onReview,

@@ -145,7 +145,7 @@ export default function ProfileScreen({
         <ProfileLink
           icon="book"
           title="Офлайн-словарь"
-          detail="8 763 слова · поиск · избранное"
+          detail="8 000+ слов · проверенная база"
           onPress={onVocabulary}
         />
         <ProfileLink
