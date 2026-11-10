@@ -79,6 +79,7 @@ const initial = {
     reviews: 0,
     dictations: 0,
     dialogues: 0,
+    grammar: 0,
   },
   stats: {
     reviewCorrect: 0,
@@ -106,6 +107,8 @@ const initial = {
     reduceMotion: false,
     haptics: true,
     voiceFeedback: false,
+    remindersEnabled: false,
+    reminderHour: 19,
     quickActions: ["dictation", "dialogues", "review", "mistakes"],
   },
   lastStudyDate: null,
@@ -528,6 +531,17 @@ export function ProgressProvider({ children }) {
             ...remaining,
           ].slice(0, 50);
       const today = dateKey();
+      const actions =
+        old.dailyActions?.date === today
+          ? old.dailyActions
+          : {
+              date: today,
+              lessons: 0,
+              reviews: 0,
+              dictations: 0,
+              dialogues: 0,
+              grammar: 0,
+            };
       return {
         ...old,
         mistakes,
@@ -541,6 +555,10 @@ export function ProgressProvider({ children }) {
           grammarCorrect:
             (old.stats?.grammarCorrect || 0) + (isCorrect ? 1 : 0),
           grammarTotal: (old.stats?.grammarTotal || 0) + 1,
+        },
+        dailyActions: {
+          ...actions,
+          grammar: (actions.grammar || 0) + 1,
         },
       };
     });

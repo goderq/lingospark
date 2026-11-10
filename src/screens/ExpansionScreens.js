@@ -12,6 +12,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Speech from "expo-speech";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
+import * as DocumentPicker from "expo-document-picker";
+import * as Notifications from "expo-notifications";
 import { Base64 } from "js-base64";
 import {
   RecordingPresets,
@@ -30,6 +34,15 @@ import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 function Header({ title, onClose }) {
   return (
@@ -50,6 +63,12 @@ export function BackupScreen({ onClose }) {
   const backup = Base64.encode(
     JSON.stringify({ ...progress, backupVersion: 1 }),
   );
+  const backupData = {
+    format: "LingoSpark Backup",
+    backupVersion: 2,
+    createdAt: new Date().toISOString(),
+    progress,
+  };
   const copy = async () => {
     await Clipboard.setStringAsync(backup);
     Alert.alert(
@@ -66,6 +85,51 @@ export function BackupScreen({ onClose }) {
       setCode("");
     } catch {
       Alert.alert("Неверный код", "Проверьте, что код скопирован полностью.");
+    }
+  };
+  const exportFile = async () => {
+    try {
+      const date = new Date().toISOString().slice(0, 10);
+      const uri = `${FileSystem.cacheDirectory}LingoSpark-backup-${date}.json`;
+      await FileSystem.writeAsStringAsync(uri, JSON.stringify(backupData, null, 2));
+      if (!(await Sharing.isAvailableAsync())) throw new Error("sharing");
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/json",
+        dialogTitle: "Сохранить резервную копию LingoSpark",
+        UTI: "public.json",
+      });
+    } catch {
+      Alert.alert("Не удалось сохранить", "Попробуйте скопировать резервный код ниже.");
+    }
+  };
+  const importFile = async () => {
+    try {
+      const picked = await DocumentPicker.getDocumentAsync({
+        type: ["application/json", "text/plain"],
+        copyToCacheDirectory: true,
+      });
+      if (picked.canceled) return;
+      const raw = await FileSystem.readAsStringAsync(picked.assets[0].uri);
+      const parsed = JSON.parse(raw);
+      const restored = parsed.format === "LingoSpark Backup" ? parsed.progress : parsed;
+      if (!restored?.name || !Array.isArray(restored.completed)) throw new Error("invalid");
+      Alert.alert(
+        "Восстановить прогресс?",
+        `Копия создана ${parsed.createdAt ? new Date(parsed.createdAt).toLocaleDateString("ru-RU") : "ранее"}. Текущие данные будут заменены.`,
+        [
+          { text: "Отмена", style: "cancel" },
+          {
+            text: "Восстановить",
+            style: "destructive",
+            onPress: () => {
+              restoreProgress(restored);
+              Alert.alert("Готово", "Все данные восстановлены из файла.");
+            },
+          },
+        ],
+      );
+    } catch {
+      Alert.alert("Файл не подходит", "Выберите JSON-файл, созданный в LingoSpark.");
     }
   };
   return (
@@ -104,7 +168,10 @@ export function BackupScreen({ onClose }) {
                 {backup}
               </Text>
             </View>
+            <PrimaryButton title="Сохранить файл .json" icon="download" onPress={exportFile} />
+            <View style={{ height: 9 }} />
             <PrimaryButton title="Скопировать код" icon="copy" onPress={copy} />
+            <Text style={s.backupHint}>Файл удобнее переносить между версиями IPA. Код оставлен как запасной способ.</Text>
           </>
         ) : (
           <>
@@ -112,6 +179,8 @@ export function BackupScreen({ onClose }) {
             <Text style={s.subtitleLeft}>
               Старые данные на этом устройстве будут заменены резервной копией.
             </Text>
+            <PrimaryButton title="Выбрать файл резервной копии" icon="folder-open" onPress={importFile} />
+            <Text style={s.orText}>ИЛИ ВСТАВЬТЕ РЕЗЕРВНЫЙ КОД</Text>
             <TextInput
               value={code}
               onChangeText={setCode}
@@ -147,6 +216,8 @@ export function SettingsScreen({ onClose }) {
     reduceMotion: false,
     haptics: true,
     voiceFeedback: false,
+    remindersEnabled: false,
+    reminderHour: 19,
     quickActions: ["dictation", "dialogues", "review", "mistakes"],
     ...progress.settings,
   };
@@ -155,10 +226,86 @@ export function SettingsScreen({ onClose }) {
       language: settings.accent,
       rate: settings.speechRate,
     });
+  const configureReminder = async (enabled, hour = settings.reminderHour) => {
+    try {
+      if (enabled) {
+        const permission = await Notifications.requestPermissionsAsync();
+        if (permission.status !== "granted") {
+          Alert.alert("Уведомления выключены", "Разрешите уведомления для LingoSpark в настройках iPhone.");
+          updateSettings({ remindersEnabled: false });
+          return;
+        }
+      }
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      if (enabled) {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Пора немного английского ✨",
+            body: "Твой персональный план уже готов — достаточно 15 минут.",
+            sound: "default",
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.DAILY,
+            hour,
+            minute: 0,
+          },
+        });
+      }
+      updateSettings({ remindersEnabled: enabled, reminderHour: hour });
+    } catch {
+      Alert.alert("Не удалось настроить", "Проверьте разрешение уведомлений в настройках iPhone.");
+    }
+  };
+  const testReminder = async () => {
+    const permission = await Notifications.requestPermissionsAsync();
+    if (permission.status !== "granted") return;
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "LingoSpark работает 🔔",
+        body: "Напоминания будут приходить даже без интернета.",
+        sound: "default",
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 2,
+      },
+    });
+    Alert.alert("Проверяем", "Тестовое уведомление появится через пару секунд.");
+  };
   return (
     <View style={s.container}>
       <Header title="Настройки обучения" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
+        <Text style={s.sectionTitle}>Напоминания</Text>
+        <View style={s.card}>
+          <SettingRow
+            title="Ежедневное занятие"
+            detail="Локальное уведомление работает без сервера и интернета"
+            value={settings.remindersEnabled}
+            onChange={(value) => configureReminder(value)}
+          />
+          <Text style={s.label}>Время напоминания</Text>
+          <View style={s.choices}>
+            {[
+              [9, "09:00"],
+              [14, "14:00"],
+              [19, "19:00"],
+              [21, "21:00"],
+            ].map(([value, label]) => (
+              <Pressable
+                key={value}
+                onPress={() => configureReminder(settings.remindersEnabled, value)}
+                style={[s.choice, settings.reminderHour === value && s.choiceActive]}
+              >
+                <Text style={s.choiceText}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable onPress={testReminder} style={s.testVoice}>
+            <Ionicons name="notifications" size={20} color={colors.orange} />
+            <Text style={[s.testVoiceText, { color: colors.orange }]}>Проверить уведомление</Text>
+          </Pressable>
+        </View>
         <Text style={s.sectionTitle}>Быстрые действия</Text>
         <View style={s.card}>
           <Text style={s.cardText}>
@@ -644,6 +791,8 @@ const s = StyleSheet.create({
     marginBottom: 15,
   },
   code: { color: colors.textMuted, fontSize: 11, lineHeight: 16 },
+  backupHint: { color: colors.textMuted, fontSize: 10, lineHeight: 16, textAlign: "center", marginTop: 12 },
+  orText: { color: colors.textMuted, fontSize: 9, fontWeight: "900", letterSpacing: 1.1, textAlign: "center", marginVertical: 18 },
   codeInput: {
     minHeight: 180,
     backgroundColor: colors.card,

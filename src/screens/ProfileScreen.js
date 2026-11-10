@@ -15,6 +15,8 @@ import { ProgressBar } from "../components/UI";
 
 export default function ProfileScreen({
   onSettings,
+  onVocabulary,
+  onBackup,
   onLevels,
   onStreak,
   onWhatsNew,
@@ -86,6 +88,18 @@ export default function ProfileScreen({
         <Ionicons name="chevron-forward" size={21} color={colors.textMuted} />
       </Pressable>
       <View style={styles.profileLinks}>
+        <ProfileLink
+          icon="book"
+          title="Офлайн-словарь"
+          detail="8 763 слова · поиск · избранное"
+          onPress={onVocabulary}
+        />
+        <ProfileLink
+          icon="cloud-download"
+          title="Резервная копия"
+          detail="Сохранить или восстановить прогресс файлом"
+          onPress={onBackup}
+        />
         <ProfileLink
           icon="school"
           title="Прогресс A1–C1"

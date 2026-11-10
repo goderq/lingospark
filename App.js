@@ -107,7 +107,7 @@ import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-wordacademy";
+const UPDATE_VERSION = "2026.11-offline-personal";
 
 export default function App() {
   return (
@@ -763,6 +763,8 @@ function AppContent() {
         {tab === "profile" && (
           <ProfileScreen
             onSettings={() => setOverlay({ type: "settings" })}
+            onVocabulary={() => setOverlay({ type: "vocabulary" })}
+            onBackup={() => setOverlay({ type: "backup" })}
             onLevels={() => setOverlay({ type: "levelProgress" })}
             onStreak={() => setOverlay({ type: "streakCalendar" })}
             onWhatsNew={() => setOverlay({ type: "whatsNew" })}
