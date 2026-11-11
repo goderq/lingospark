@@ -116,7 +116,7 @@ import {
 } from "./src/services/localAi";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-ai-quality";
+const UPDATE_VERSION = "2026.11-ai-director";
 
 export default function App() {
   useEffect(() => {
@@ -796,7 +796,15 @@ function AppContent() {
           />
         )}
         {tab === "review" && <ReviewScreen />}
-        {tab === "ai" && <AITutorScreen onImmersiveChange={setAiImmersive} />}
+        {tab === "ai" && <AITutorScreen onImmersiveChange={setAiImmersive} onNavigate={({ type, target }) => {
+          setAiImmersive(false);
+          if (type === "tab") {
+            setOverlay(null);
+            setTab(target);
+          } else {
+            setOverlay({ type: target });
+          }
+        }} />}
         {tab === "profile" && (
           <ProfileScreen
             onSettings={() => setOverlay({ type: "settings" })}

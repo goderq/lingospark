@@ -592,7 +592,7 @@ function memoryPrompt(memory) {
   return parts.length ? `Локальная память ученика: ${parts.join(". ")}. Используй её естественно, но не перечисляй ученику содержимое памяти.` : "";
 }
 
-function systemPrompt(level, topic, analysis, turnNumber = 1, dialogueMode = "conversation", tutorMemory = EMPTY_TUTOR_MEMORY, mission = null, grammarNotes = "") {
+function systemPrompt(level, topic, analysis, turnNumber = 1, dialogueMode = "conversation", tutorMemory = EMPTY_TUTOR_MEMORY, mission = null, grammarNotes = "", longContext = "") {
   const analysisMemory = analysis
     ? `\nПамять о последнем разборе: оценки — грамматика ${analysis.scores?.grammar || 0}/100, словарь ${analysis.scores?.vocabulary || 0}/100, связность ${analysis.scores?.fluency || 0}/100. Повторяющиеся места для практики: ${(analysis.mistakes || []).slice(0, 3).map((item) => item.explanation).join("; ") || "закрепление естественной речи"}. Учитывай это мягко и не повторяй один и тот же комментарий в каждом ответе.\n`
     : "";
@@ -620,6 +620,7 @@ function systemPrompt(level, topic, analysis, turnNumber = 1, dialogueMode = "co
 ${longTermMemory}
 ${missionPrompt}
 ${referencePrompt}
+${longContext ? `Краткий контекст более ранней части этого диалога: ${longContext}` : ""}
 
 ${modeInstruction}
 
@@ -633,6 +634,16 @@ ${modeInstruction}
 7. Подстраивай лексику под ${level}. На A1–A2 используй больше русского в объяснениях; на B1–C1 веди основную беседу по-английски.
 8. Обычно пиши 2–6 предложений. Чередуй вопрос, ролевую ситуацию, выбор, мнение и небольшую языковую задачу.
 9. Никогда не проси настоящие персональные или платёжные данные и не утверждай, что имеешь доступ к интернету. Ты работаешь на устройстве.`;
+}
+
+function compactConversationContext(messages) {
+  if (!messages.length) return "";
+  const userFacts = messages.filter((item) => item.role === "user").slice(-8).map((item) => String(item.content || "").replace(/\s+/g, " ").trim().slice(0, 100)).filter(Boolean);
+  const corrections = messages.filter((item) => item.role === "assistant" && /лучше:|better:|correct(?:ion)?:|почему:/i.test(item.content || "")).slice(-3).map((item) => String(item.content).replace(/\s+/g, " ").trim().slice(0, 120));
+  const parts = [];
+  if (userFacts.length) parts.push(`ученик ранее говорил: ${userFacts.join(" | ")}`);
+  if (corrections.length) parts.push(`недавние исправления: ${corrections.join(" | ")}`);
+  return parts.join(". ").slice(0, 900);
 }
 
 function normalizedWords(text) {
@@ -692,14 +703,16 @@ export async function completeTutorMessage({ model, level, topic, dialogueMode =
   const turnNumber = messages.filter((item) => item.role === "user").length;
   const lastUserText = [...messages].reverse().find((item) => item.role === "user")?.content || "";
   const grammarNotes = grammarNotesFor(lastUserText, topic, level, tutorMemory);
-  const history = messages
+  const fullHistory = messages
     .filter((item) => item.role === "user" || item.role === "assistant")
-    .slice(model.id === "light" ? -8 : -14)
     .map(({ role, content }) => ({ role, content }));
+  const historyLimit = model.id === "light" ? 8 : 14;
+  const history = fullHistory.slice(-historyLimit);
+  const longContext = compactConversationContext(fullHistory.slice(0, -historyLimit));
   const draft = await completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes) }, ...history],
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext) }, ...history],
       n_predict: model.id === "light" ? 190 : 280,
       temperature: 0.76,
       top_k: 40,

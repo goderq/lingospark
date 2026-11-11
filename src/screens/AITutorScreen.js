@@ -26,6 +26,7 @@ import { balancedOptions } from "../utils/shuffle";
 import VoiceCoachScreen from "./VoiceCoachScreen";
 import AICenterScreen from "./AICenterScreen";
 import PronunciationLabScreen from "./PronunciationLabScreen";
+import AIDirectorScreen from "./AIDirectorScreen";
 import {
   AI_MODELS,
   analyzeTutorConversation,
@@ -82,7 +83,7 @@ function formatSpace(bytes) {
     : `${Math.round(bytes / 1024 ** 2)} МБ`;
 }
 
-export default function AITutorScreen({ onImmersiveChange }) {
+export default function AITutorScreen({ onImmersiveChange, onNavigate }) {
   const [installed, setInstalled] = useState({});
   const [activeId, setActiveId] = useState(null);
   const [screen, setScreen] = useState("models");
@@ -117,6 +118,16 @@ export default function AITutorScreen({ onImmersiveChange }) {
   }
 
   const activeModel = AI_MODELS.find((item) => item.id === activeId);
+  if (screen === "director") {
+    return (
+      <AIDirectorScreen
+        onClose={() => setScreen(activeModel ? "chat" : "models")}
+        onOpenChat={() => setScreen(activeModel ? "chat" : "models")}
+        onOpenPronunciation={() => setScreen("pronunciation")}
+        onNavigate={onNavigate}
+      />
+    );
+  }
   if (screen === "center") {
     return <AICenterScreen onClose={() => setScreen("models")} onPronunciation={() => setScreen("pronunciation")} />;
   }
@@ -139,6 +150,7 @@ export default function AITutorScreen({ onImmersiveChange }) {
       <TutorChat
         model={activeModel}
         onModels={() => setScreen("models")}
+        onDirector={() => setScreen("director")}
         onVoice={() => {
           onImmersiveChange?.(true);
           setScreen("voice");
@@ -154,6 +166,7 @@ export default function AITutorScreen({ onImmersiveChange }) {
       onRefresh={refresh}
       onCenter={() => setScreen("center")}
       onPronunciation={() => setScreen("pronunciation")}
+      onDirector={() => setScreen("director")}
       onStart={async (model) => {
         await setActiveModelId(model.id);
         setActiveId(model.id);
@@ -163,7 +176,7 @@ export default function AITutorScreen({ onImmersiveChange }) {
   );
 }
 
-function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation }) {
+function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation, onDirector }) {
   const [download, setDownload] = useState(getDownloadState());
   const [freeSpace, setFreeSpace] = useState(null);
   const [error, setError] = useState("");
@@ -252,6 +265,15 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
           <Text style={styles.smallMuted}>Сообщения не отправляются на сервер. Модель можно удалить в любой момент.</Text>
         </View>
       </View>
+
+      <Pressable onPress={onDirector} style={styles.directorBanner}>
+        <View style={styles.directorIcon}><Ionicons name="sparkles" size={25} color="white" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.privacyTitle}>ИИ-маршрут на сегодня</Text>
+          <Text style={styles.smallMuted}>План на 10–30 минут из твоего прогресса и ошибок</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={21} color={colors.textMuted} />
+      </Pressable>
 
       <Pressable onPress={onPronunciation} style={styles.pronunciationBanner}>
         <View style={styles.pronunciationIcon}><Ionicons name="mic" size={25} color="white" /></View>
@@ -344,7 +366,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
   );
 }
 
-function TutorChat({ model, onModels, onVoice }) {
+function TutorChat({ model, onModels, onVoice, onDirector }) {
   const { progress, toggleNotebook, addCustomWord } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
@@ -807,6 +829,7 @@ function TutorChat({ model, onModels, onVoice }) {
               <Text style={styles.missionDescription}>{mission.description}</Text>
               <ProgressBar value={missionProgress.current / Math.max(1, missionProgress.target)} color={missionProgress.completed ? colors.mint : colors.orange} height={6} />
               {missionProgress.completed ? <Text style={styles.missionDone}>Миссия выполнена — Lingo запомнил результат</Text> : null}
+              <Pressable onPress={onDirector} style={styles.routeLink}><Ionicons name="sparkles" size={15} color={colors.purple} /><Text style={styles.routeLinkText}>Открыть полный ИИ-маршрут</Text><Ionicons name="chevron-forward" size={16} color={colors.purple} /></Pressable>
             </View>
           ) : null}
           {messages.map((message, index) => {
@@ -1115,6 +1138,8 @@ const styles = StyleSheet.create({
   privacyCard: { flexDirection: "row", gap: 12, backgroundColor: "rgba(46,211,183,0.09)", borderColor: "rgba(46,211,183,0.22)", borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 18 },
   pronunciationBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 18, padding: 14, marginTop: 12 },
   pronunciationIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
+  directorBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "rgba(124,92,252,0.11)", borderColor: "rgba(124,92,252,0.32)", borderWidth: 1, borderRadius: 18, padding: 14, marginTop: 12 },
+  directorIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
   privacyTitle: { color: "white", fontSize: 14, fontWeight: "800", marginBottom: 4 },
   smallMuted: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 28, marginBottom: 12 },
@@ -1183,6 +1208,8 @@ const styles = StyleSheet.create({
   missionCount: { color: colors.orange, fontSize: 16, fontWeight: "900" },
   missionDescription: { color: colors.textMuted, fontSize: 11, lineHeight: 16 },
   missionDone: { color: colors.mint, fontSize: 10, fontWeight: "800" },
+  routeLink: { minHeight: 34, flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" },
+  routeLinkText: { color: colors.purple, fontSize: 10, fontWeight: "900" },
   messageRow: { flexDirection: "row", justifyContent: "flex-start" },
   messageRowUser: { justifyContent: "flex-end" },
   bubble: { maxWidth: "88%", padding: 14, borderRadius: 18 },
