@@ -274,8 +274,11 @@ export async function stopGeneration() {
   if (context) await context.stopCompletion();
 }
 
-function systemPrompt(level, topic) {
-  return `Ты — Lingo, доброжелательный преподаватель английского в приложении LingoSpark. Ученик говорит по-русски и учит английский на уровне ${level}. Тема занятия: ${topic}.
+function systemPrompt(level, topic, analysis) {
+  const memory = analysis
+    ? `\nПамять о последнем разборе: оценки — грамматика ${analysis.scores?.grammar || 0}/100, словарь ${analysis.scores?.vocabulary || 0}/100, связность ${analysis.scores?.fluency || 0}/100. Повторяющиеся места для практики: ${(analysis.mistakes || []).slice(0, 3).map((item) => item.explanation).join("; ") || "закрепление естественной речи"}. Учитывай это мягко и не повторяй один и тот же комментарий в каждом ответе.\n`
+    : "";
+  return `Ты — Lingo, доброжелательный преподаватель английского в приложении LingoSpark. Ученик говорит по-русски и учит английский на уровне ${level}. Тема занятия: ${topic}.${memory}
 
 Правила:
 1. Веди живой учебный диалог, а не просто отвечай на вопросы.
@@ -288,7 +291,7 @@ function systemPrompt(level, topic) {
 8. Никогда не проси персональные данные и не утверждай, что имеешь доступ к интернету. Ты работаешь полностью на устройстве.`;
 }
 
-export async function completeTutorMessage({ model, level, topic, messages, onToken }) {
+export async function completeTutorMessage({ model, level, topic, messages, analysis, onToken }) {
   const llama = await loadModel(model);
   const history = messages
     .filter((item) => item.role === "user" || item.role === "assistant")
@@ -296,7 +299,7 @@ export async function completeTutorMessage({ model, level, topic, messages, onTo
     .map(({ role, content }) => ({ role, content }));
   return llama.completion(
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic) }, ...history],
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis) }, ...history],
       n_predict: model.id === "light" ? 180 : 260,
       temperature: 0.65,
       top_k: 40,
@@ -306,4 +309,81 @@ export async function completeTutorMessage({ model, level, topic, messages, onTo
     },
     ({ token }) => onToken?.(token || ""),
   );
+}
+
+function parseAnalysis(text) {
+  const cleaned = String(text || "")
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  const start = cleaned.indexOf("{");
+  const end = cleaned.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("ИИ не смог составить разбор. Попробуйте ещё раз.");
+  const parsed = JSON.parse(cleaned.slice(start, end + 1));
+  const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
+  const list = (value, limit) => (Array.isArray(value) ? value.slice(0, limit) : []);
+  return {
+    summary: String(parsed.summary || "Разговор завершён. Продолжай практиковаться регулярно."),
+    scores: {
+      grammar: clamp(parsed.scores?.grammar),
+      vocabulary: clamp(parsed.scores?.vocabulary),
+      fluency: clamp(parsed.scores?.fluency),
+    },
+    strengths: list(parsed.strengths, 4).map(String),
+    mistakes: list(parsed.mistakes, 6)
+      .map((item) => ({
+        original: String(item?.original || ""),
+        corrected: String(item?.corrected || ""),
+        explanation: String(item?.explanation || ""),
+      }))
+      .filter((item) => item.original && item.corrected),
+    words: list(parsed.words, 8)
+      .map((item) => ({
+        english: String(item?.english || "").trim(),
+        russian: String(item?.russian || "").trim(),
+        example: String(item?.example || "").trim(),
+      }))
+      .filter((item) => item.english && item.russian),
+    exercises: list(parsed.exercises, 8)
+      .map((item) => {
+        const answer = String(item?.answer || "").trim();
+        const options = [...new Set(list(item?.options, 4).map(String).filter(Boolean))];
+        return {
+          prompt: String(item?.prompt || ""),
+          options: options.includes(answer) ? options : [answer, ...options].filter(Boolean).slice(0, 4),
+          answer,
+          explanation: String(item?.explanation || ""),
+        };
+      })
+      .filter((item) => item.prompt && item.answer && item.options.length >= 2),
+  };
+}
+
+export async function analyzeTutorConversation({ model, level, topic, messages }) {
+  const llama = await loadModel(model);
+  const transcript = messages
+    .filter((item) => item.role === "user" || item.role === "assistant")
+    .slice(-16)
+    .map((item) => `${item.role === "user" ? "Ученик" : "Преподаватель"}: ${item.content}`)
+    .join("\n");
+  const result = await llama.completion({
+    messages: [
+      {
+        role: "system",
+        content: `Ты анализируешь разговор ученика английского уровня ${level}. Тема: ${topic}. Оценивай только реплики ученика. Допустимые варианты английского не считай ошибками. Верни только один JSON-объект без markdown и дополнительного текста. Все объяснения и переводы пиши по-русски.`,
+      },
+      {
+        role: "user",
+        content: `Разбери этот диалог:\n${transcript}\n\nВерни JSON строго такой структуры:\n{"summary":"краткий итог","scores":{"grammar":0,"vocabulary":0,"fluency":0},"strengths":["сильная сторона"],"mistakes":[{"original":"фраза ученика","corrected":"правильная фраза","explanation":"объяснение"}],"words":[{"english":"полезное слово","russian":"перевод","example":"пример"}],"exercises":[{"prompt":"задание по ошибке или теме","options":["вариант 1","вариант 2","вариант 3","вариант 4"],"answer":"точная строка одного из options","explanation":"почему"}]}. Сделай 4–6 упражнений. Если ошибок мало, создай задания на улучшение словаря и естественность речи.`,
+      },
+    ],
+    response_format: { type: "json_object" },
+    n_predict: model.id === "light" ? 650 : 900,
+    temperature: 0.25,
+    top_k: 30,
+    top_p: 0.85,
+    repeat_penalty: 1.05,
+    stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
+  });
+  return parseAnalysis(result?.text);
 }
