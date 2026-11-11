@@ -3,20 +3,15 @@ import * as Speech from "expo-speech";
 let requestId = 0;
 let warmupStarted = false;
 
-// Load iOS voices and initialize AVSpeechSynthesizer before the first visible
-// tap. The silent utterance avoids the several-second cold start on iPhone.
+// Only query the voice list during warm-up. Calling Speech.speak with a silent
+// utterance during app launch can raise an Objective-C exception on newer iOS
+// beta releases. Native exceptions bypass JavaScript try/catch and terminate
+// the entire process, so actual playback must only follow a user action.
 export async function warmSpeech() {
   if (warmupStarted) return;
   warmupStarted = true;
-  const warmupRequest = requestId;
   try {
     await Speech.getAvailableVoicesAsync();
-    if (warmupRequest !== requestId) return;
-    Speech.speak(".", {
-      language: "en-US",
-      rate: 1,
-      volume: 0,
-    });
   } catch {
     warmupStarted = false;
   }
