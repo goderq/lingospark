@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppState, BackHandler, InteractionManager, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -108,38 +108,9 @@ import {
 } from "./src/screens/PremiumScreens";
 import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
-import { warmSpeech } from "./src/utils/speech";
-import {
-  pauseActiveModelDownload,
-  resumePendingModelDownload,
-} from "./src/services/localAi";
-import {
-  pauseSpeechModelDownload,
-  resumeSpeechModelDownload,
-} from "./src/services/offlineSpeech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
 export default function App() {
-  useEffect(() => {
-    const startupTask = InteractionManager.runAfterInteractions(() => {
-      warmSpeech();
-      resumePendingModelDownload().catch(() => {});
-      resumeSpeechModelDownload().catch(() => {});
-    });
-    const listener = AppState.addEventListener("change", (state) => {
-      if (state === "active") {
-        resumePendingModelDownload().catch(() => {});
-        resumeSpeechModelDownload().catch(() => {});
-      } else if (state === "background") {
-        pauseActiveModelDownload().catch(() => {});
-        pauseSpeechModelDownload().catch(() => {});
-      }
-    });
-    return () => {
-      startupTask.cancel();
-      listener.remove();
-    };
-  }, []);
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
@@ -185,8 +156,11 @@ function AppContent() {
       .then((raw) => {
         if (!raw) return;
         const saved = JSON.parse(raw);
-        if (saved.tab) setTab(saved.tab);
-        if (saved.overlay) setOverlay(hydrateOverlay(saved.overlay));
+        // Always enter through the lightweight home screen. Restoring an AI,
+        // speech or unfinished lesson screen during process launch can invoke
+        // a native module before iOS has finished activating the application.
+        setTab("home");
+        setOverlay(null);
         setRecentScreens(saved.recentScreens || []);
       })
       .catch(() => {})

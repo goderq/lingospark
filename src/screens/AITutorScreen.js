@@ -48,6 +48,7 @@ import {
   loadTutorFeedback,
   loadTutorSessions,
   markTutorMissionCompleted,
+  resumePendingModelDownload,
   saveTutorSession,
   saveTutorFeedback,
   setActiveModelId,
@@ -61,6 +62,7 @@ import {
   startSpeechRecording,
   stopSpeechRecording,
   transcribeSpeechData,
+  resumeSpeechModelDownload,
 } from "../services/offlineSpeech";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
@@ -119,6 +121,8 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate }) {
   }, []);
 
   useEffect(() => {
+    resumePendingModelDownload().catch(() => {});
+    resumeSpeechModelDownload().catch(() => {});
     refresh(true).catch(() => setLoading(false));
   }, []);
 
