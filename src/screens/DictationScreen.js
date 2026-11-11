@@ -19,7 +19,7 @@ import { dictations } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
-import { expandExplanation } from "../utils/explanations";
+import ExplanationCard from "../components/ExplanationCard";
 
 const clean = (value) =>
   value
@@ -159,18 +159,21 @@ export default function DictationScreen({ onClose }) {
                   {!correct && (
                     <Text style={styles.correctText}>{item.text}</Text>
                   )}
-                  <Text style={styles.explanationText}>
-                    {expandExplanation(
-                      {
-                        prompt: `Запиши на слух: ${item.translation}`,
-                        answer: item.text,
-                        type: "build",
-                        explanation:
-                          "В диктанте важно распознать не только знакомые слова, но и служебные формы, окончания и порядок слов в целой фразе.",
-                      },
-                      { selected: answer, topic: "Диктант на слух" },
-                    )}
-                  </Text>
+                  <ExplanationCard
+                    item={{
+                      id: item.id,
+                      prompt: `Запиши на слух: ${item.translation}`,
+                      answer: item.text,
+                      type: "build",
+                      speak: item.text,
+                      explanation:
+                        "В диктанте важно распознать не только знакомые слова, но и служебные формы, окончания и порядок слов в целой фразе.",
+                    }}
+                    selected={answer}
+                    correct={correct}
+                    context={{ topic: "Диктант на слух" }}
+                    showStatus={false}
+                  />
                 </View>
               </View>
             )}

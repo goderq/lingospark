@@ -8,7 +8,7 @@ import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
 import { getTenseGuide } from "../data/tenseGuides";
-import { expandExplanation } from "../utils/explanations";
+import ExplanationCard from "../components/ExplanationCard";
 
 const groupColor = (name) =>
   name.startsWith("Present")
@@ -350,7 +350,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
               <Text style={styles.optionText}>{option}</Text>
             </Pressable>
           ))}
-          {gateSelected && <View style={styles.explain}><Text style={[styles.explainTitle, { color: gateCorrect ? colors.mint : colors.orange }]}>{gateCorrect ? "Правильно!" : `Ответ: ${gateQuestion.answer}`}</Text><Text style={styles.explainText}>{expandExplanation(gateQuestion, { selected: gateSelected, topic: module.name, formula: module.formula, use: module.use, markers: module.markers })}</Text></View>}
+          {gateSelected && <ExplanationCard item={{ ...gateQuestion, type: "choice" }} selected={gateSelected} correct={gateCorrect} context={{ topic: module.name, formula: module.formula, use: module.use, markers: module.markers }} reinforcement={{ ...module.exercises[Math.min(2 + gateIndex, module.exercises.length - 1)], type: "choice" }} accentColor={groupColor(module.name)} />}
           {gateSelected && <PrimaryButton title={gateIndex === 1 ? (gateScore === 2 ? "Открыть практику" : "Повторить мини-тест") : "Следующий вопрос"} onPress={nextGate} color={gateCorrect ? colors.mint : colors.orange} />}
         </ScrollView>
       </View>
@@ -431,32 +431,22 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
           </Pressable>
         ))}
         {selected && (
-          <View style={styles.explain}>
-            <Ionicons
-              name="information-circle"
-              size={23}
-              color={correct ? colors.mint : colors.orange}
-            />
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.explainTitle,
-                  { color: correct ? colors.mint : colors.orange },
-                ]}
-              >
-                {correct ? "Правильно!" : `Ответ: ${question.answer}`}
-              </Text>
-              <Text style={styles.explainText}>
-                {expandExplanation(question, {
-                  selected,
-                  topic: module.name,
-                  formula: module.formula,
-                  use: module.use,
-                  markers: module.markers,
-                })}
-              </Text>
-            </View>
-          </View>
+          <ExplanationCard
+            item={{ ...question, type: "choice" }}
+            selected={selected}
+            correct={correct}
+            context={{
+              topic: module.name,
+              formula: module.formula,
+              use: module.use,
+              markers: module.markers,
+            }}
+            reinforcement={{
+              ...module.exercises[(index + 1) % module.exercises.length],
+              type: "choice",
+            }}
+            accentColor={groupColor(module.name)}
+          />
         )}
         {selected && (
           <PrimaryButton

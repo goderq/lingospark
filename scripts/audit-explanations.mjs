@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { lessons } from '../src/data/course.js';
 import { tenseModules } from '../src/data/advancedCourse.js';
 import { grammarQuestions, placementQuestions, stories } from '../src/data/practice.js';
-import { expandExplanation } from '../src/utils/explanations.js';
+import {
+  expandExplanation,
+  getExplanationExamples,
+  getExplanationSections,
+} from '../src/utils/explanations.js';
 
 const entries = [
   ...lessons.flatMap((lesson) => lesson.exercises.map((item) => ({ item, topic: lesson.title }))),
@@ -37,6 +41,31 @@ for (const entry of entries) {
   requiredSections.forEach((section) =>
     assert.ok(explanation.includes(section), `${entry.topic}: missing ${section}`));
   assert.ok(!/\b(undefined|null)\b/.test(explanation), `${entry.topic}: broken explanation value`);
+  const sections = getExplanationSections(item, { ...entry, selected });
+  assert.equal(sections.length, 7, `${entry.topic}: expected seven explanation sections`);
+  assert.ok(sections.every((section) => section.title && section.text), `${entry.topic}: empty explanation section`);
+  assert.ok(getExplanationExamples(item, { ...entry, selected }).length > 0, `${entry.topic}: no worked example`);
 }
 
-console.log(`Explanation audit passed: ${entries.length} course, tense, grammar, placement and story questions.`);
+for (const lesson of lessons) {
+  for (const item of lesson.exercises) {
+    assert.ok(
+      String(item.explanation || '').length >= 80,
+      `${lesson.title}: missing individual explanation for “${item.prompt}”`,
+    );
+    if (item.type !== 'choice') continue;
+    for (const option of item.options.filter((value) => value !== item.answer)) {
+      const optionExplanation = item.optionExplanations?.[option];
+      assert.ok(
+        String(optionExplanation || '').length >= 80,
+        `${lesson.title}: missing explanation for wrong option “${option}”`,
+      );
+      assert.ok(
+        optionExplanation.includes(item.answer),
+        `${lesson.title}: option explanation does not identify the correct answer`,
+      );
+    }
+  }
+}
+
+console.log(`Explanation audit passed: ${entries.length} questions, including individual course options and examples.`);

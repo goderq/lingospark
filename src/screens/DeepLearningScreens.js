@@ -26,7 +26,7 @@ import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { answersMatch } from "../utils/answer";
-import { expandExplanation } from "../utils/explanations";
+import ExplanationCard from "../components/ExplanationCard";
 
 const today = () => new Date().toISOString().slice(0, 10);
 function Header({ title, onClose }) {
@@ -453,9 +453,7 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
           ),
         )}
         {selected && (
-          <View style={s.feedback}>
-            <Text style={s.feedbackText}>{expandExplanation(question, { selected, topic: listening ? 'IELTS Listening' : 'IELTS Reading', explanation: 'Правильный ответ подтверждается конкретной формулировкой в тексте или записи, а не общим впечатлением.' })}</Text>
-          </View>
+          <ExplanationCard item={{ ...question, type: 'choice' }} selected={selected} correct={selected === question.answer} context={{ topic: listening ? 'IELTS Listening' : 'IELTS Reading', explanation: 'Правильный ответ подтверждается конкретной формулировкой в тексте или записи, а не общим впечатлением.' }} accentColor={colors.orange} />
         )}
         {selected && (
           <PrimaryButton
@@ -876,7 +874,7 @@ export function SmartCoachScreen({ onClose }) {
             >
               {right ? "Верно!" : `Правильно: ${item.answer}`}
             </Text>
-            <Text style={s.feedbackText}>{expandExplanation({ ...item, type: useMistakes ? 'translate' : 'choice' }, { selected: useMistakes ? answer : selected, topic: 'Персональный урок' })}</Text>
+            <ExplanationCard item={{ ...item, type: useMistakes ? 'translate' : 'choice' }} selected={useMistakes ? answer : selected} correct={right} context={{ topic: 'Персональный урок' }} showStatus={false} reinforcement={!useMistakes && deck.length > 1 ? { ...deck[(index + 1) % deck.length], type: 'choice' } : null} accentColor={colors.purple} />
           </View>
         )}
         <PrimaryButton

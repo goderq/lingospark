@@ -61,11 +61,12 @@ const ruleFor = (item, context) => {
   return signalExplanation(item);
 };
 
-const selectedReason = (item, context) => {
+export const explainSelectedOption = (item, context = {}) => {
   const selected = clean(context.selected);
   const answer = clean(item?.answer || context.answer);
   if (!selected || lower(selected) === lower(answer))
     return "Ответ совпадает и по смыслу, и по форме. Всё предложение после подстановки остаётся грамматически цельным.";
+  if (item?.optionExplanations?.[selected]) return clean(item.optionExplanations[selected]);
   if ((isRussian(selected) && hasLatin(answer)) || (hasLatin(selected) && isRussian(answer)))
     return `«${selected}» написано не на том языке, который требуется в этом задании. Здесь нужен ответ «${answer}» без добавления перевода на другом языке.`;
   if (item?.type === "translate")
@@ -101,19 +102,45 @@ const memoryTip = (item, context) => {
   return "Не запоминай ответ отдельно: прочитай вслух весь правильный пример и представь ситуацию, в которой ты его скажешь.";
 };
 
-export function expandExplanation(item = {}, context = {}) {
+export function getExplanationSections(item = {}, context = {}) {
   const answer = clean(item.answer || context.answer);
   const base = clean(item.explanation || item.hint || context.explanation);
   const why = base
     ? `${base.replace(/\.$/, "")}. В этом вопросе подсказка напрямую приводит к варианту «${answer}».`
     : `Правильный ответ — «${answer}»: он сохраняет требуемый смысл и подходит к грамматической конструкции целиком.`;
   return [
-    `РЕЗУЛЬТАТ\n${answer || "Ответ определяется полным контекстом задания."}`,
-    `ПОЧЕМУ ЭТО ПРАВИЛЬНО\n${why}`,
-    `РАЗБОР ТВОЕГО ОТВЕТА\n${selectedReason(item, context)}`,
-    `ПРАВИЛО\n${ruleFor(item, context)}`,
-    `РАЗБОР ПО ШАГАМ\n${breakdownFor({ ...item, answer })}`,
-    `КАК ЗАПОМНИТЬ\n${memoryTip(item, context)}`,
-    "МИНИ-ПРОВЕРКА\nЗакрой правильный ответ, снова прочитай вопрос и объясни вслух, какой сигнал или смысл привёл тебя к нужной форме.",
-  ].join("\n\n");
+    { id: "result", title: "Результат", text: answer || "Ответ определяется полным контекстом задания." },
+    { id: "why", title: "Почему это правильно", text: why },
+    { id: "selected", title: "Разбор твоего ответа", text: explainSelectedOption(item, context) },
+    { id: "rule", title: "Правило", text: ruleFor(item, context) },
+    { id: "steps", title: "Разбор по шагам", text: breakdownFor({ ...item, answer }) },
+    { id: "memory", title: "Как запомнить", text: memoryTip(item, context) },
+    { id: "check", title: "Мини-проверка", text: "Закрой правильный ответ, снова прочитай вопрос и объясни вслух, какой сигнал или смысл привёл тебя к нужной форме." },
+  ];
+}
+
+export function getExplanationExamples(item = {}, context = {}) {
+  const answer = clean(item.answer || context.answer);
+  const prompt = clean(item.prompt);
+  const selected = clean(context.selected);
+  const correctExample = filledExample({ ...item, answer });
+  const examples = [];
+  if (correctExample) examples.push({ label: "Правильный пример", text: correctExample });
+  if (prompt.includes("___") && selected && lower(selected) !== lower(answer)) {
+    examples.push({
+      label: "Сравни",
+      text: `${prompt.replace(/___/g, selected)} ✕\n${prompt.replace(/___/g, answer)} ✓`,
+    });
+  } else if (item?.type === "translate" && prompt && answer) {
+    examples.push({ label: "Пара для запоминания", text: `${prompt.replace(/^(переведи|напиши перевод)\s*:?\s*/i, "")} ↔ ${answer}` });
+  } else if (item?.speak && clean(item.speak) !== correctExample) {
+    examples.push({ label: "В живой речи", text: clean(item.speak) });
+  }
+  return examples;
+}
+
+export function expandExplanation(item = {}, context = {}) {
+  return getExplanationSections(item, context)
+    .map((section) => `${section.title.toLocaleUpperCase("ru")}\n${section.text}`)
+    .join("\n\n");
 }

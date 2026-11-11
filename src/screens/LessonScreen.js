@@ -24,7 +24,7 @@ import {
   closestAnswerAnalysis,
   gradeAnswer,
 } from "../utils/answer";
-import { expandExplanation } from "../utils/explanations";
+import ExplanationCard from "../components/ExplanationCard";
 import { courseConversationTopics } from "../data/courseSupplement";
 
 export default function LessonScreen({ lesson, onClose }) {
@@ -115,6 +115,13 @@ export default function LessonScreen({ lesson, onClose }) {
     () => closestAnswerAnalysis(current, accepted),
     [current, accepted],
   );
+  const reinforcement = useMemo(() => {
+    for (let offset = 1; offset < lesson.exercises.length; offset += 1) {
+      const candidate = lesson.exercises[(index + offset) % lesson.exercises.length];
+      if (candidate.type === "choice" && candidate.id !== exercise.id) return candidate;
+    }
+    return null;
+  }, [exercise.id, index, lesson.exercises]);
   const usefulPhrase =
     [...lesson.exercises]
       .reverse()
@@ -663,40 +670,26 @@ export default function LessonScreen({ lesson, onClose }) {
                   )}
                 </View>
               )}
-              <Text style={styles.ruleText}>
-                {expandExplanation(exercise, {
-                  topic: lesson.title,
-                  selected: current,
-                })}
-              </Text>
-              <Pressable
-                  onPress={() =>
-                    toggleNotebook({
-                      id: `lesson-rule-${exercise.id}`,
-                      topic: lesson.title,
-                      rule:
-                        exercise.explanation ||
-                        exercise.hint ||
-                        exercise.prompt,
-                      example: exercise.answer,
-                      level: lesson.difficulty,
-                    })
-                  }
-                  style={styles.saveRule}
-                >
-                  <Ionicons
-                    name={
-                      progress.notebook?.some(
-                        (item) => item.id === `lesson-rule-${exercise.id}`,
-                      )
-                        ? "bookmark"
-                        : "bookmark-outline"
-                    }
-                    size={17}
-                    color={colors.orange}
-                  />
-                  <Text style={styles.saveRuleText}>Сохранить правило</Text>
-                </Pressable>
+              <ExplanationCard
+                item={exercise}
+                selected={current}
+                correct={correct}
+                context={{ topic: lesson.title }}
+                reinforcement={reinforcement}
+                showStatus={false}
+                saved={progress.notebook?.some(
+                  (item) => item.id === `lesson-rule-${exercise.id}`,
+                )}
+                onSave={() =>
+                  toggleNotebook({
+                    id: `lesson-rule-${exercise.id}`,
+                    topic: lesson.title,
+                    rule: exercise.explanation || exercise.hint || exercise.prompt,
+                    example: exercise.answer,
+                    level: lesson.difficulty,
+                  })
+                }
+              />
             </View>
           </Animated.View>
         )}

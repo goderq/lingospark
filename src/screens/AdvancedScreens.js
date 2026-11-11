@@ -27,7 +27,7 @@ import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
-import { expandExplanation } from "../utils/explanations";
+import ExplanationCard from "../components/ExplanationCard";
 
 function Header({ title, onClose }) {
   return (
@@ -471,14 +471,17 @@ export function WeeklyExamScreen({ onClose }) {
           </Pressable>
         ))}
         {selected && (
-          <View style={s.explanationCard}>
-            <Text style={s.explanationText}>
-              {expandExplanation(question, {
-                selected,
-                topic: "Недельный экзамен",
-              })}
-            </Text>
-          </View>
+          <ExplanationCard
+            item={{ ...question, type: "choice" }}
+            selected={selected}
+            correct={selected === question.answer}
+            context={{ topic: "Недельный экзамен" }}
+            reinforcement={{
+              ...questions[(index + 1) % questions.length],
+              type: "choice",
+            }}
+            accentColor={colors.orange}
+          />
         )}
         {selected && (
           <PrimaryButton

@@ -2,6 +2,35 @@ import { courseSupplement } from './courseSupplement.js';
 
 const cleanWords = (value) => value.replace(/[?.!,]/g, '').split(' ');
 
+const explanationFor = (exercise, lesson) => {
+  if (exercise.explanation) return exercise.explanation;
+  const hint = exercise.hint ? `${exercise.hint.replace(/[.!?]+$/, '')}. ` : '';
+  if (exercise.type === 'translate') {
+    return `${hint}В теме «${lesson.title}» перевод должен сохранить смысл, время и тон исходной фразы. Естественный вариант здесь — «${exercise.answer}»; добавлять ответ на втором языке не нужно.`;
+  }
+  if (exercise.type === 'build') {
+    return `${hint}Фраза собирается вокруг основы «${exercise.answer}». Сначала определи подлежащее и глагольную группу, затем присоедини дополнения в естественном английском порядке.`;
+  }
+  if (exercise.prompt.includes('___')) {
+    return `${hint}После подстановки «${exercise.answer}» предложение становится грамматически и смыслово завершённым. Слова по обе стороны пропуска определяют именно эту форму или устойчивое сочетание.`;
+  }
+  if (/[а-яё]/i.test(exercise.answer)) {
+    return `${hint}В контексте вопроса выражение передаёт значение «${exercise.answer}». Остальные варианты описывают другую ситуацию или искажают важную часть смысла.`;
+  }
+  return `${hint}Для ситуации из темы «${lesson.title}» естественно звучит «${exercise.answer}»: этот вариант одновременно подходит по значению, форме и стилю.`;
+};
+
+const optionExplanationsFor = (exercise) => Object.fromEntries(
+  (exercise.options || [])
+    .filter((option) => option !== exercise.answer)
+    .map((option) => [
+      option,
+      exercise.prompt.includes('___')
+        ? `При подстановке «${option}» нарушается форма или устойчивое управление в данном предложении. В этом окружении требуется «${exercise.answer}».`
+        : `«${option}» передаёт другой смысл или звучит неестественно в указанной ситуации. Точный ответ — «${exercise.answer}».`,
+    ]),
+);
+
 export const enrichLessons = (lessons) => lessons.map((lesson) => {
   const phrases = courseSupplement[lesson.id];
   if (!phrases || phrases.length !== 5) {
@@ -18,5 +47,10 @@ export const enrichLessons = (lessons) => lessons.map((lesson) => {
     { id: `${prefix}-4`, type: 'translate', prompt: `Напиши перевод: ${english3}`, hint: 'Пиши только по-русски, без английского варианта', answers: [russian3.toLowerCase()], answer: russian3, speak: english3 },
     { id: `${prefix}-5`, type: 'choice', prompt: `Как естественно сказать: «${russian4}»?`, hint: `Закрепление темы «${lesson.title}»`, options: [english4, english2, english0, english3], answer: english4, speak: english4 },
   ];
-  return { ...lesson, exercises: [...lesson.exercises, ...bonus] };
+  const exercises = [...lesson.exercises, ...bonus].map((exercise) => ({
+    ...exercise,
+    explanation: explanationFor(exercise, lesson),
+    optionExplanations: optionExplanationsFor(exercise),
+  }));
+  return { ...lesson, exercises };
 });

@@ -18,7 +18,7 @@ import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { answersMatch } from "../utils/answer";
-import { expandExplanation } from "../utils/explanations";
+import ExplanationCard from "../components/ExplanationCard";
 function Header({ title, onClose }) {
   return (
     <View style={s.header}>
@@ -139,7 +139,7 @@ export function WrittenVocabularyScreen({ onClose }) {
               {right ? "Верно!" : `Правильно: ${expected}`}
             </Text>
             <Text style={s.example}>{item.example}</Text>
-            <Text style={s.explanationText}>{expandExplanation({ type: 'translate', prompt: item.direction === 'ru-en' ? item.russian : item.english, answer: expected, example: item.example }, { selected: answer, topic: 'Письменный перевод' })}</Text>
+            <ExplanationCard item={{ id: item.id, type: 'translate', prompt: item.direction === 'ru-en' ? item.russian : item.english, answer: expected, example: item.example }} selected={answer} correct={right} context={{ topic: 'Письменный перевод' }} showStatus={false} />
           </View>
         )}
         <View style={{ flex: 1 }} />
@@ -277,9 +277,7 @@ export function CareerCoursesScreen({ onClose }) {
           ),
         )}
         {selected && (
-          <View style={s.feedback}>
-            <Text style={s.explanationText}>{expandExplanation(item, { selected, topic: track.title })}</Text>
-          </View>
+          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: track.title }} reinforcement={{ ...track.exercises[(index + 1) % track.exercises.length], type: 'choice' }} accentColor={colors.purple} />
         )}
         {selected && (
           <PrimaryButton
@@ -489,9 +487,7 @@ export function FullIeltsMockScreen({ onClose }) {
           ),
         )}
         {selected && (
-          <View style={s.feedback}>
-            <Text style={s.explanationText}>{expandExplanation(item, { selected, topic: item.type === 'listening' ? 'IELTS Listening' : 'IELTS Reading' })}</Text>
-          </View>
+          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: `IELTS ${item.section}` }} reinforcement={{ ...deck[(index + 1) % deck.length], type: 'choice' }} accentColor={colors.orange} />
         )}
         {selected && (
           <PrimaryButton
