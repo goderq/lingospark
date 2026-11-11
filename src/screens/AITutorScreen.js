@@ -36,10 +36,14 @@ import {
   downloadModel,
   getActiveModelId,
   getDownloadState,
+  getDailyTutorMission,
   getFreeSpace,
+  getTutorMissionProgress,
   inspectModels,
   loadModel,
+  loadTutorMemory,
   loadTutorSessions,
+  markTutorMissionCompleted,
   saveTutorSession,
   setActiveModelId,
   stopGeneration,
@@ -345,6 +349,7 @@ function TutorChat({ model, onModels, onVoice }) {
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [dialogueMode, setDialogueMode] = useState("conversation");
+  const [mission, setMission] = useState(null);
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
   const [sessionId, setSessionId] = useState(`ai-${Date.now()}`);
   const [sessions, setSessions] = useState([]);
@@ -375,6 +380,16 @@ function TutorChat({ model, onModels, onVoice }) {
       stopSpeech();
     };
   }, [model.id]);
+
+  useEffect(() => {
+    let mounted = true;
+    loadTutorMemory().then((memory) => {
+      if (!mounted) return;
+      const daily = getDailyTutorMission({ level, topic, memory });
+      setMission({ ...daily, alreadyCompleted: memory.completedMissions.includes(daily.id) });
+    });
+    return () => { mounted = false; };
+  }, [level, topic, analysis]);
 
   useEffect(() => {
     const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
@@ -445,6 +460,18 @@ function TutorChat({ model, onModels, onVoice }) {
         : "Не удалось распознать речь. Проверьте доступ к микрофону.",
     );
   });
+
+  const liveMissionProgress = getTutorMissionProgress(mission, messages);
+  const missionProgress = mission?.alreadyCompleted
+    ? { ...liveMissionProgress, current: liveMissionProgress.target, completed: true }
+    : liveMissionProgress;
+
+  useEffect(() => {
+    if (!mission || !missionProgress.completed || mission.alreadyCompleted) return;
+    markTutorMissionCompleted(mission.id)
+      .then(() => setMission((current) => current?.id === mission.id ? { ...current, alreadyCompleted: true } : current))
+      .catch(() => {});
+  }, [mission?.id, mission?.alreadyCompleted, missionProgress.completed]);
 
   const startListening = async () => {
     setError("");
@@ -765,6 +792,23 @@ function TutorChat({ model, onModels, onVoice }) {
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
+          {mission ? (
+            <View style={[styles.missionCard, missionProgress.completed && styles.missionCardDone]}>
+              <View style={styles.missionTop}>
+                <View style={[styles.missionIcon, missionProgress.completed && { backgroundColor: "rgba(46,211,183,0.16)" }]}>
+                  <Ionicons name={missionProgress.completed ? "checkmark" : "flag"} size={20} color={missionProgress.completed ? colors.mint : colors.orange} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.missionLabel}>МИССИЯ ДНЯ</Text>
+                  <Text style={styles.missionTitle}>{mission.title}</Text>
+                </View>
+                <Text style={[styles.missionCount, missionProgress.completed && { color: colors.mint }]}>{missionProgress.current}/{missionProgress.target}</Text>
+              </View>
+              <Text style={styles.missionDescription}>{mission.description}</Text>
+              <ProgressBar value={missionProgress.current / Math.max(1, missionProgress.target)} color={missionProgress.completed ? colors.mint : colors.orange} height={6} />
+              {missionProgress.completed ? <Text style={styles.missionDone}>Миссия выполнена — Lingo запомнил результат</Text> : null}
+            </View>
+          ) : null}
           {messages.map((message, index) => {
             const note = message.role === "assistant" && message.id !== "streaming" ? noteForMessage(message, index) : null;
             const saved = note && progress.notebook?.some((item) => item.id === note.id);
@@ -1130,6 +1174,15 @@ const styles = StyleSheet.create({
   modelLoadingTitle: { color: "white", fontSize: 18, fontWeight: "900" },
   messages: { flex: 1 },
   messagesContent: { padding: 16, paddingBottom: 24, gap: 12 },
+  missionCard: { backgroundColor: "rgba(255,159,67,0.08)", borderWidth: 1, borderColor: "rgba(255,159,67,0.32)", borderRadius: 19, padding: 14, gap: 10 },
+  missionCardDone: { backgroundColor: "rgba(46,211,183,0.07)", borderColor: "rgba(46,211,183,0.3)" },
+  missionTop: { flexDirection: "row", alignItems: "center", gap: 10 },
+  missionIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: "rgba(255,159,67,0.14)", alignItems: "center", justifyContent: "center" },
+  missionLabel: { color: colors.orange, fontSize: 8, fontWeight: "900", letterSpacing: 1.3 },
+  missionTitle: { color: "white", fontSize: 15, fontWeight: "900", marginTop: 2 },
+  missionCount: { color: colors.orange, fontSize: 16, fontWeight: "900" },
+  missionDescription: { color: colors.textMuted, fontSize: 11, lineHeight: 16 },
+  missionDone: { color: colors.mint, fontSize: 10, fontWeight: "800" },
   messageRow: { flexDirection: "row", justifyContent: "flex-start" },
   messageRowUser: { justifyContent: "flex-end" },
   bubble: { maxWidth: "88%", padding: 14, borderRadius: 18 },
