@@ -213,7 +213,7 @@ export default function VoiceCoachScreen({ model, onClose }) {
     try {
       const recording = await stopSpeechRecording();
       localSpeechRef.current = false;
-      const result = await transcribeSpeechData(speechModel, recording.float32);
+      const result = await transcribeSpeechData(speechModel, recording.pcm16);
       const text = String(result?.result || "").trim();
       if (!text) { setStatus("ready"); setError("Речь не распознана. Попробуй произнести фразу чуть громче."); return; }
       setTranscript(text);

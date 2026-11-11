@@ -144,10 +144,12 @@ export async function loadSpeechModel(model, onProgress) {
 }
 export async function unloadSpeechModel() { if (!context) return; try { await releaseAllWhisper(); } finally { context = null; contextModelId = null; } }
 
-export async function transcribeSpeechData(model, float32Data, onProgress) {
+export async function transcribeSpeechData(model, pcm16Data, onProgress) {
   const whisper = await loadSpeechModel(model, (value) => onProgress?.(Math.round(value * 15)));
-  const { promise } = whisper.transcribeData(float32Data, { language: "en", translate: false, maxThreads: 4, nProcessors: 1, tokenTimestamps: true, maxLen: 1, wordThold: 0.01, beamSize: model.id === "speech-light" ? 3 : 5, onProgress: (value) => onProgress?.(15 + Math.round(value * 0.85)) });
-  return promise;
+  const { promise } = whisper.transcribeData(pcm16Data, { language: "en", translate: false, maxThreads: 4, nProcessors: 1, tokenTimestamps: true, maxLen: 1, wordThold: 0.01, beamSize: model.id === "speech-light" ? 3 : 5, temperature: 0, temperatureInc: 0, onProgress: (value) => onProgress?.(15 + Math.round(value * 0.85)) });
+  const result = await promise;
+  const nonSpeech = /[\[(](?:motor running|background noise|noise|music|silence|blank audio|inaudible)[\])]/gi;
+  return { ...result, result: String(result?.result || "").replace(nonSpeech, " ").replace(/\s+/g, " ").trim() };
 }
 
 function makeWav(pcm) {
@@ -187,12 +189,24 @@ export async function stopSpeechRecording() {
   const pcm = new Uint8Array(total); let offset = 0;
   recording.chunks.forEach((chunk) => { pcm.set(chunk, offset); offset += chunk.length; });
   if (pcm.length < 3200) throw new Error("Запись слишком короткая. Произнесите фразу ещё раз.");
-  const samples = Math.floor(pcm.length / 2);
-  const float = new Float32Array(samples); const view = new DataView(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-  for (let i = 0; i < samples; i++) float[i] = view.getInt16(i * 2, true) / 32768;
+  const evenPcm = pcm.subarray(0, pcm.length - (pcm.length % 2));
+  const view = new DataView(evenPcm.buffer, evenPcm.byteOffset, evenPcm.byteLength);
+  const frameSamples = 320; const sampleCount = evenPcm.length / 2; const frameLevels = [];
+  for (let start = 0; start < sampleCount; start += frameSamples) {
+    const end = Math.min(sampleCount, start + frameSamples); let energy = 0;
+    for (let i = start; i < end; i++) { const value = view.getInt16(i * 2, true) / 32768; energy += value * value; }
+    frameLevels.push(Math.sqrt(energy / Math.max(1, end - start)));
+  }
+  const peak = Math.max(...frameLevels); const threshold = Math.max(0.006, peak * 0.12);
+  let firstFrame = frameLevels.findIndex((value) => value >= threshold);
+  let lastFrame = frameLevels.length - 1;
+  while (lastFrame >= 0 && frameLevels[lastFrame] < threshold) lastFrame--;
+  if (firstFrame < 0 || lastFrame < firstFrame || peak < 0.004) throw new Error("Голос не услышан. Говорите ближе к микрофону и попробуйте ещё раз.");
+  firstFrame = Math.max(0, firstFrame - 10); lastFrame = Math.min(frameLevels.length - 1, lastFrame + 10);
+  const trimmed = evenPcm.slice(firstFrame * frameSamples * 2, Math.min(evenPcm.length, (lastFrame + 1) * frameSamples * 2));
   const uri = `${FileSystem.cacheDirectory}lingospark-speech-${Date.now()}.wav`;
-  await FileSystem.writeAsStringAsync(uri, Base64.fromUint8Array(makeWav(pcm)), { encoding: FileSystem.EncodingType.Base64 });
-  return { float32: float.buffer, uri, durationMs: Math.round((samples / 16000) * 1000) };
+  await FileSystem.writeAsStringAsync(uri, Base64.fromUint8Array(makeWav(trimmed)), { encoding: FileSystem.EncodingType.Base64 });
+  return { pcm16: trimmed.buffer, uri, durationMs: Math.round((trimmed.length / 2 / 16000) * 1000), peak };
 }
 
 export async function cancelSpeechRecording() {

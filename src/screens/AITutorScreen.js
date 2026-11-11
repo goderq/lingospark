@@ -538,7 +538,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
       try {
         const recording = await stopSpeechRecording();
         localSpeechRef.current = false;
-        const result = await transcribeSpeechData(speechModel, recording.float32);
+        const result = await transcribeSpeechData(speechModel, recording.pcm16);
         setInput(String(result?.result || "").trim());
       } catch (speechError) {
         localSpeechRef.current = false;

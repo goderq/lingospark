@@ -92,7 +92,7 @@ export default function PronunciationLabScreen({ onClose, onSpeechModels }) {
         const recording = await stopSpeechRecording();
         localRecordingRef.current = false;
         setRecordingUri(recording.uri);
-        const result = await transcribeSpeechData(speechModel, recording.float32, setTranscribeProgress);
+        const result = await transcribeSpeechData(speechModel, recording.pcm16, setTranscribeProgress);
         const transcript = String(result?.result || "").trim();
         const comparison = alignSpeechWords(target, transcript);
         applyRecognizedResult(transcript, comparison.score, comparison);
