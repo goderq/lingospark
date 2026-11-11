@@ -217,6 +217,21 @@ export function StreakCalendarScreen({ onClose }) {
 export function WhatsNewScreen({ onClose }) {
   const updates = [
     [
+      "time",
+      "История ИИ-разговоров",
+      "Диалоги сохраняются на iPhone автоматически. Создавай новые беседы, возвращайся к старым и удаляй ненужные.",
+    ],
+    [
+      "download",
+      "Загрузка продолжается",
+      "Переключайся между вкладками во время скачивания модели — процент и сама загрузка больше не сбрасываются.",
+    ],
+    [
+      "bookmark",
+      "Ответы ИИ в тетради",
+      "Полезное объяснение или фразу можно одним нажатием сохранить в «Мою тетрадь» для повторения.",
+    ],
+    [
       "chatbubbles",
       "Локальный ИИ-преподаватель",
       "Скачай лёгкую, обычную или продвинутую модель в новой вкладке «ИИ» и разговаривай с преподавателем без сервера.",
@@ -347,9 +362,9 @@ export function WhatsNewScreen({ onClose }) {
       <Header title="Что нового" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.newEmoji}>✨</Text>
-        <Text style={s.title}>Твой преподаватель теперь в iPhone</Text>
+        <Text style={s.title}>ИИ стал частью обучения</Text>
         <Text style={s.newSubtitle}>
-          Выбирай мощность модели, скачивай её отдельно и занимайся с локальным ИИ даже без интернета.
+          Загрузки не прерываются, разговоры сохраняются, а полезные ответы попадают в твою тетрадь.
         </Text>
         {updates.map(([icon, title, text]) => (
           <View key={title} style={s.update}>

@@ -4,6 +4,7 @@ import { initLlama, releaseAllLlama } from "@pocketpalai/llama.rn";
 
 const MODEL_DIR = `${FileSystem.documentDirectory}lingospark-ai/`;
 const ACTIVE_MODEL_KEY = "@lingospark/local-ai-model-v1";
+const TUTOR_SESSIONS_KEY = "@lingospark/ai-tutor-sessions-v1";
 
 export const AI_MODELS = [
   {
@@ -54,6 +55,30 @@ export const AI_MODELS = [
 let context = null;
 let contextModelId = null;
 let activeDownload = null;
+let downloadState = {
+  status: "idle",
+  modelId: null,
+  progress: 0,
+  written: 0,
+  total: 0,
+  error: "",
+};
+const downloadListeners = new Set();
+
+function publishDownload(changes) {
+  downloadState = { ...downloadState, ...changes };
+  downloadListeners.forEach((listener) => listener(downloadState));
+}
+
+export function getDownloadState() {
+  return downloadState;
+}
+
+export function subscribeToDownload(listener) {
+  downloadListeners.add(listener);
+  listener(downloadState);
+  return () => downloadListeners.delete(listener);
+}
 
 export const modelPath = (model) => `${MODEL_DIR}${model.filename}`;
 
@@ -93,50 +118,116 @@ export async function getFreeSpace() {
   }
 }
 
-export async function downloadModel(model, onProgress) {
+export async function downloadModel(model) {
   await ensureModelDirectory();
-  if (activeDownload) throw new Error("Другая модель уже загружается");
+  if (activeDownload) {
+    if (activeDownload.modelId === model.id) return activeDownload.promise;
+    throw new Error("Другая модель уже загружается");
+  }
   const destination = modelPath(model);
   const existing = await FileSystem.getInfoAsync(destination);
   if (existing.exists) await FileSystem.deleteAsync(destination, { idempotent: true });
 
+  publishDownload({
+    status: "downloading",
+    modelId: model.id,
+    progress: 0,
+    written: 0,
+    total: model.size,
+    error: "",
+  });
   const task = FileSystem.createDownloadResumable(
     model.url,
     destination,
     {},
     ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
       const total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : model.size;
-      onProgress?.({
+      publishDownload({
         written: totalBytesWritten,
         total,
         progress: Math.min(1, totalBytesWritten / total),
       });
     },
   );
-  activeDownload = { task, destination, modelId: model.id };
-  try {
-    const result = await task.downloadAsync();
-    if (!result?.uri) throw new Error("Файл модели не был сохранён");
-    const info = await FileSystem.getInfoAsync(result.uri, { size: true });
-    if (!info.exists || (info.size || 0) < model.size * 0.98) {
-      await FileSystem.deleteAsync(destination, { idempotent: true });
-      throw new Error("Модель загрузилась не полностью. Попробуйте ещё раз.");
+  const promise = (async () => {
+    try {
+      const result = await task.downloadAsync();
+      if (!result?.uri) throw new Error("Файл модели не был сохранён");
+      const info = await FileSystem.getInfoAsync(result.uri, { size: true });
+      if (!info.exists || (info.size || 0) < model.size * 0.98) {
+        await FileSystem.deleteAsync(destination, { idempotent: true });
+        throw new Error("Модель загрузилась не полностью. Попробуйте ещё раз.");
+      }
+      await setActiveModelId(model.id);
+      publishDownload({
+        status: "completed",
+        modelId: model.id,
+        progress: 1,
+        written: info.size || model.size,
+        total: model.size,
+        error: "",
+      });
+      return result.uri;
+    } catch (error) {
+      if (downloadState.status !== "cancelled") {
+        publishDownload({
+          status: "error",
+          error: error?.message || "Не удалось скачать модель",
+        });
+      }
+      throw error;
+    } finally {
+      if (activeDownload?.promise === promise) activeDownload = null;
     }
-    await setActiveModelId(model.id);
-    return result.uri;
-  } finally {
-    activeDownload = null;
-  }
+  })();
+  activeDownload = { task, destination, modelId: model.id, promise };
+  return promise;
 }
 
 export async function cancelModelDownload() {
   if (!activeDownload) return;
   const current = activeDownload;
   activeDownload = null;
+  publishDownload({
+    status: "cancelled",
+    modelId: current.modelId,
+    progress: 0,
+    written: 0,
+    error: "",
+  });
   try {
     await current.task.pauseAsync();
   } catch {}
   await FileSystem.deleteAsync(current.destination, { idempotent: true });
+}
+
+export async function loadTutorSessions() {
+  try {
+    const raw = await AsyncStorage.getItem(TUTOR_SESSIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveTutorSession(session) {
+  const sessions = await loadTutorSessions();
+  const next = [
+    { ...session, updatedAt: Date.now() },
+    ...sessions.filter((item) => item.id !== session.id),
+  ]
+    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+    .slice(0, 30);
+  await AsyncStorage.setItem(TUTOR_SESSIONS_KEY, JSON.stringify(next));
+  return next;
+}
+
+export async function deleteTutorSession(sessionId) {
+  const sessions = await loadTutorSessions();
+  const next = sessions.filter((item) => item.id !== sessionId);
+  await AsyncStorage.setItem(TUTOR_SESSIONS_KEY, JSON.stringify(next));
+  return next;
 }
 
 export async function deleteModel(model) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,18 +20,24 @@ import {
 import { colors } from "../theme";
 import { ProgressBar } from "../components/UI";
 import { speak, stopSpeech } from "../utils/speech";
+import { useProgress } from "../store/ProgressContext";
 import {
   AI_MODELS,
   cancelModelDownload,
   completeTutorMessage,
+  deleteTutorSession,
   deleteModel,
   downloadModel,
   getActiveModelId,
+  getDownloadState,
   getFreeSpace,
   inspectModels,
   loadModel,
+  loadTutorSessions,
+  saveTutorSession,
   setActiveModelId,
   stopGeneration,
+  subscribeToDownload,
 } from "../services/localAi";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
@@ -56,17 +62,18 @@ export default function AITutorScreen() {
   const [screen, setScreen] = useState("models");
   const [loading, setLoading] = useState(true);
 
-  const refresh = async () => {
+  const refresh = useCallback(async (openActive = false) => {
     const [state, storedId] = await Promise.all([inspectModels(), getActiveModelId()]);
     const usableId = state[storedId]?.installed ? storedId : null;
+    const currentDownload = getDownloadState();
     setInstalled(state);
     setActiveId(usableId);
-    if (usableId) setScreen("chat");
+    if (usableId && openActive && currentDownload.status !== "downloading") setScreen("chat");
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
-    refresh().catch(() => setLoading(false));
+    refresh(true).catch(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -98,9 +105,7 @@ export default function AITutorScreen() {
 }
 
 function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
-  const [downloading, setDownloading] = useState(null);
-  const [progress, setProgress] = useState(0);
-  const [written, setWritten] = useState(0);
+  const [download, setDownload] = useState(getDownloadState());
   const [freeSpace, setFreeSpace] = useState(null);
   const [error, setError] = useState("");
   const cancelledRef = useRef(false);
@@ -109,6 +114,14 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
     getFreeSpace().then(setFreeSpace);
   }, []);
 
+  useEffect(() =>
+    subscribeToDownload((state) => {
+      setDownload(state);
+      if (state.status === "completed") onRefresh();
+      if (state.status === "error") setError(state.error);
+    }),
+  [onRefresh]);
+
   const install = async (model) => {
     cancelledRef.current = false;
     setError("");
@@ -116,28 +129,19 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
       setError(`Недостаточно места. Освободите не менее ${model.sizeLabel}.`);
       return;
     }
-    setDownloading(model.id);
-    setProgress(0);
-    setWritten(0);
     try {
-      await downloadModel(model, (event) => {
-        setProgress(event.progress);
-        setWritten(event.written);
-      });
+      await downloadModel(model);
       await onRefresh();
     } catch (downloadError) {
       if (!cancelledRef.current) {
         setError(downloadError?.message || "Не удалось скачать модель. Проверьте интернет и свободное место.");
       }
     } finally {
-      setDownloading(null);
-      setProgress(0);
     }
   };
 
   const cancel = async () => {
     cancelledRef.current = true;
-    setDownloading(null);
     await cancelModelDownload();
     await onRefresh();
   };
@@ -194,8 +198,8 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
 
       {AI_MODELS.map((model) => {
         const isInstalled = installed[model.id]?.installed;
-        const isDownloading = downloading === model.id;
-        const blocked = Boolean(downloading && !isDownloading);
+        const isDownloading = download.status === "downloading" && download.modelId === model.id;
+        const blocked = download.status === "downloading" && !isDownloading;
         return (
           <View
             key={model.id}
@@ -225,10 +229,11 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
             {isDownloading ? (
               <View style={styles.downloadBox}>
                 <View style={styles.downloadLabels}>
-                  <Text style={styles.downloadText}>Загрузка {Math.round(progress * 100)}%</Text>
-                  <Text style={styles.smallMuted}>{formatSpace(written)} из {model.sizeLabel}</Text>
+                  <Text style={styles.downloadText}>Загрузка {Math.round(download.progress * 100)}%</Text>
+                  <Text style={styles.smallMuted}>{formatSpace(download.written)} из {model.sizeLabel}</Text>
                 </View>
-                <ProgressBar value={progress} color={model.color} height={8} />
+                <ProgressBar value={download.progress} color={model.color} height={8} />
+                <Text style={styles.backgroundHint}>Можно перейти в другой раздел — загрузка продолжится</Text>
                 <Pressable onPress={cancel} style={styles.cancelButton}>
                   <Text style={styles.cancelText}>Отменить загрузку</Text>
                 </Pressable>
@@ -269,18 +274,24 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
 }
 
 function TutorChat({ model, onModels }) {
+  const { progress, toggleNotebook } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
+  const [sessionId, setSessionId] = useState(`ai-${Date.now()}`);
+  const [sessions, setSessions] = useState([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [input, setInput] = useState("");
   const [modelReady, setModelReady] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const scrollRef = useRef(null);
   const generationText = useRef("");
   const updateTimer = useRef(null);
+  const historyReady = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -295,8 +306,55 @@ function TutorChat({ model, onModels }) {
   }, [model.id]);
 
   useEffect(() => {
-    setMessages([welcomeFor(level, topic)]);
-  }, [level, topic]);
+    const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener("keyboardWillHide", () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    historyReady.current = false;
+    loadTutorSessions().then((allSessions) => {
+      if (!mounted) return;
+      const modelSessions = allSessions.filter((item) => item.modelId === model.id);
+      setSessions(modelSessions);
+      const recent = modelSessions[0];
+      if (recent) {
+        setSessionId(recent.id);
+        setLevel(recent.level || "A2");
+        setTopic(recent.topic || TOPICS[0]);
+        setMessages(recent.messages?.length ? recent.messages : [welcomeFor("A2", TOPICS[0])]);
+      }
+      historyReady.current = true;
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [model.id]);
+
+  useEffect(() => {
+    if (!historyReady.current) return;
+    const timer = setTimeout(() => {
+      const cleanMessages = messages.filter((item) => item.id !== "streaming").slice(-60);
+      const firstUser = cleanMessages.find((item) => item.role === "user")?.content;
+      saveTutorSession({
+        id: sessionId,
+        modelId: model.id,
+        modelTitle: model.title,
+        level,
+        topic,
+        title: firstUser ? firstUser.slice(0, 42) : topic,
+        messages: cleanMessages,
+        createdAt: sessions.find((item) => item.id === sessionId)?.createdAt || Date.now(),
+      }).then((allSessions) =>
+        setSessions(allSessions.filter((item) => item.modelId === model.id)),
+      );
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [messages, level, topic, sessionId, model.id]);
 
   useSpeechRecognitionEvent("start", () => setListening(true));
   useSpeechRecognitionEvent("end", () => setListening(false));
@@ -375,13 +433,23 @@ function TutorChat({ model, onModels }) {
         },
       });
       const finalText = (result?.text || generationText.current).trim();
-      setMessages((current) =>
-        current.map((item) =>
-          item.id === "streaming"
-            ? { id: `assistant-${Date.now()}`, role: "assistant", content: finalText || "Попробуем ещё раз." }
-            : item,
-        ),
-      );
+      const assistantMessage = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: finalText || "Попробуем ещё раз.",
+      };
+      const completedMessages = [...nextMessages, assistantMessage];
+      setMessages(completedMessages);
+      await saveTutorSession({
+        id: sessionId,
+        modelId: model.id,
+        modelTitle: model.title,
+        level,
+        topic,
+        title: nextMessages.find((item) => item.role === "user")?.content?.slice(0, 42) || topic,
+        messages: completedMessages.slice(-60),
+        createdAt: sessions.find((item) => item.id === sessionId)?.createdAt || Date.now(),
+      });
     } catch (generationError) {
       setMessages((current) => current.filter((item) => item.id !== "streaming"));
       setError(generationError?.message || "Не удалось получить ответ");
@@ -392,11 +460,97 @@ function TutorChat({ model, onModels }) {
 
   const stop = async () => {
     await stopGeneration();
+    const partial = generationText.current.trim();
+    setMessages((current) =>
+      current.map((item) =>
+        item.id === "streaming"
+          ? {
+              id: `assistant-${Date.now()}`,
+              role: "assistant",
+              content: partial || "Ответ остановлен.",
+            }
+          : item,
+      ),
+    );
     setGenerating(false);
   };
 
   const speakMessage = (text) => speak(text, { language: "en-US", rate: 0.88 });
   const progressLabel = loadProgress > 0 ? `${Math.round(loadProgress * 100)}%` : "подготовка";
+
+  const newConversation = () => {
+    const id = `ai-${Date.now()}`;
+    setSessionId(id);
+    setMessages([welcomeFor(level, topic)]);
+    setHistoryOpen(false);
+  };
+
+  const openSession = (session) => {
+    setSessionId(session.id);
+    setLevel(session.level || "A2");
+    setTopic(session.topic || TOPICS[0]);
+    setMessages(session.messages?.length ? session.messages : [welcomeFor(session.level || "A2", session.topic || TOPICS[0])]);
+    setHistoryOpen(false);
+  };
+
+  const removeSession = async (session) => {
+    const next = await deleteTutorSession(session.id);
+    const filtered = next.filter((item) => item.modelId === model.id);
+    setSessions(filtered);
+    if (session.id === sessionId) newConversation();
+  };
+
+  const noteForMessage = (message, index) => {
+    const userMessage = [...messages.slice(0, index)].reverse().find((item) => item.role === "user");
+    return {
+      id: `ai-note-${message.id}`,
+      topic: `ИИ-диалог · ${topic}`,
+      rule: message.content,
+      example: userMessage?.content || "Разговор с Lingo",
+      level,
+    };
+  };
+
+  if (historyOpen) {
+    return (
+      <View style={styles.chatPage}>
+        <View style={styles.chatHeader}>
+          <Pressable onPress={() => setHistoryOpen(false)} style={styles.headerButton}>
+            <Ionicons name="chevron-back" size={22} color="white" />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.chatTitle}>История разговоров</Text>
+            <Text style={styles.chatStatus}>Хранится только на этом iPhone</Text>
+          </View>
+          <Pressable onPress={newConversation} style={[styles.headerButton, { backgroundColor: colors.purple }]}>
+            <Ionicons name="add" size={24} color="white" />
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={styles.historyContent}>
+          {sessions.length ? sessions.map((session) => (
+            <Pressable key={session.id} onPress={() => openSession(session)} style={[styles.historyCard, session.id === sessionId && styles.historyCardActive]}>
+              <View style={styles.historyIcon}>
+                <Ionicons name="chatbubble-ellipses" size={21} color={colors.purple} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text numberOfLines={1} style={styles.historyTitle}>{session.title || session.topic}</Text>
+                <Text style={styles.historyMeta}>{session.level} · {session.topic} · {Math.max(0, (session.messages?.length || 1) - 1)} сообщений</Text>
+              </View>
+              <Pressable onPress={(event) => { event.stopPropagation(); removeSession(session); }} hitSlop={10}>
+                <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
+              </Pressable>
+            </Pressable>
+          )) : (
+            <View style={styles.emptyHistory}>
+              <Text style={{ fontSize: 42 }}>💬</Text>
+              <Text style={styles.modelLoadingTitle}>Разговоров пока нет</Text>
+              <Text style={styles.smallMuted}>Начни диалог — он сохранится автоматически.</Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -410,9 +564,14 @@ function TutorChat({ model, onModels }) {
           <Text style={styles.chatTitle}>Lingo · {model.title}</Text>
           <Text style={styles.chatStatus}>{modelReady ? "Локально · без интернета" : `Запуск модели · ${progressLabel}`}</Text>
         </View>
-        <Pressable onPress={onModels} style={styles.headerButton}>
-          <Ionicons name="hardware-chip-outline" size={22} color={colors.white} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={() => setHistoryOpen(true)} style={styles.headerButton}>
+            <Ionicons name="time-outline" size={22} color={colors.white} />
+          </Pressable>
+          <Pressable onPress={onModels} style={styles.headerButton}>
+            <Ionicons name="hardware-chip-outline" size={22} color={colors.white} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.optionsStrip}>
@@ -444,7 +603,10 @@ function TutorChat({ model, onModels }) {
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         >
-          {messages.map((message) => (
+          {messages.map((message, index) => {
+            const note = message.role === "assistant" && message.id !== "streaming" ? noteForMessage(message, index) : null;
+            const saved = note && progress.notebook?.some((item) => item.id === note.id);
+            return (
             <View key={message.id} style={[styles.messageRow, message.role === "user" && styles.messageRowUser]}>
               <View style={[styles.bubble, message.role === "user" ? styles.userBubble : styles.aiBubble]}>
                 {message.role === "assistant" ? <Text style={styles.lingoLabel}>✦ LINGO</Text> : null}
@@ -457,14 +619,22 @@ function TutorChat({ model, onModels }) {
                   <Text style={styles.messageText}>{message.content}</Text>
                 )}
                 {message.role === "assistant" && message.content ? (
-                  <Pressable onPress={() => speakMessage(message.content)} style={styles.speakButton}>
-                    <Ionicons name="volume-medium" size={17} color={colors.purple} />
-                    <Text style={styles.speakText}>Озвучить</Text>
-                  </Pressable>
+                  <View style={styles.bubbleActions}>
+                    <Pressable onPress={() => speakMessage(message.content)} style={styles.speakButton}>
+                      <Ionicons name="volume-medium" size={17} color={colors.purple} />
+                      <Text style={styles.speakText}>Озвучить</Text>
+                    </Pressable>
+                    {note ? (
+                      <Pressable onPress={() => toggleNotebook(note)} style={styles.speakButton}>
+                        <Ionicons name={saved ? "bookmark" : "bookmark-outline"} size={16} color={saved ? colors.orange : colors.textMuted} />
+                        <Text style={[styles.speakText, saved && { color: colors.orange }]}>{saved ? "Сохранено" : "В тетрадь"}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                 ) : null}
               </View>
             </View>
-          ))}
+          )})}
         </ScrollView>
       )}
 
@@ -475,7 +645,7 @@ function TutorChat({ model, onModels }) {
         </View>
       ) : null}
 
-      <View style={styles.composer}>
+      <View style={[styles.composer, { marginBottom: keyboardVisible ? 0 : 86 }]}>
         <Pressable onPress={startListening} disabled={!modelReady || generating} style={[styles.micButton, listening && styles.micActive]}>
           <Ionicons name={listening ? "stop" : "mic"} size={22} color="white" />
         </Pressable>
@@ -543,11 +713,12 @@ const styles = StyleSheet.create({
   errorBox: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "rgba(255,92,138,0.1)", padding: 14, borderRadius: 14 },
   errorText: { color: "white", fontSize: 12, lineHeight: 17, flex: 1 },
   licenseText: { color: colors.textMuted, opacity: 0.7, textAlign: "center", fontSize: 10, marginTop: 8 },
-  chatPage: { flex: 1, backgroundColor: colors.background, paddingBottom: 90 },
+  chatPage: { flex: 1, backgroundColor: colors.background },
   chatHeader: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, borderBottomWidth: 1, borderColor: colors.border },
   onlineDot: { width: 10, height: 10, borderRadius: 5 },
   chatTitle: { color: "white", fontSize: 17, fontWeight: "900" },
   chatStatus: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
+  headerActions: { flexDirection: "row", gap: 7 },
   headerButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   optionsStrip: { borderBottomWidth: 1, borderColor: colors.border },
   chips: { paddingHorizontal: 14, paddingVertical: 10, gap: 7 },
@@ -561,7 +732,7 @@ const styles = StyleSheet.create({
   loadingModel: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 36, gap: 12 },
   modelLoadingTitle: { color: "white", fontSize: 18, fontWeight: "900" },
   messages: { flex: 1 },
-  messagesContent: { padding: 16, gap: 12 },
+  messagesContent: { padding: 16, paddingBottom: 24, gap: 12 },
   messageRow: { flexDirection: "row", justifyContent: "flex-start" },
   messageRowUser: { justifyContent: "flex-end" },
   bubble: { maxWidth: "88%", padding: 14, borderRadius: 18 },
@@ -572,6 +743,7 @@ const styles = StyleSheet.create({
   thinkingRow: { flexDirection: "row", gap: 9, alignItems: "center" },
   speakButton: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, alignSelf: "flex-start" },
   speakText: { color: colors.purple, fontSize: 11, fontWeight: "800" },
+  bubbleActions: { flexDirection: "row", alignItems: "center", gap: 18 },
   chatError: { marginHorizontal: 14, marginBottom: 7, backgroundColor: "rgba(255,159,67,0.12)", borderRadius: 12, padding: 10, flexDirection: "row", gap: 8, alignItems: "center" },
   chatErrorText: { color: "white", fontSize: 11, lineHeight: 15, flex: 1 },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
@@ -579,4 +751,12 @@ const styles = StyleSheet.create({
   micActive: { backgroundColor: colors.pink },
   input: { flex: 1, minHeight: 46, maxHeight: 108, color: "white", backgroundColor: colors.card, borderRadius: 16, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12, fontSize: 14 },
   sendButton: { width: 46, height: 46, borderRadius: 16, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
+  backgroundHint: { color: colors.mint, fontSize: 10, textAlign: "center", marginTop: 9 },
+  historyContent: { padding: 16, paddingBottom: 110, gap: 10 },
+  historyCard: { minHeight: 74, borderRadius: 18, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 11 },
+  historyCardActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,0.09)" },
+  historyIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(124,92,252,0.13)", alignItems: "center", justifyContent: "center" },
+  historyTitle: { color: "white", fontSize: 14, fontWeight: "800" },
+  historyMeta: { color: colors.textMuted, fontSize: 10, marginTop: 5 },
+  emptyHistory: { alignItems: "center", paddingTop: 90, gap: 10 },
 });

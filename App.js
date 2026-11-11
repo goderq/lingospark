@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BackHandler, Pressable, StyleSheet, Text, View } from "react-native";
+import { BackHandler, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -112,7 +112,7 @@ import { lessons } from "./src/data/course";
 import { warmSpeech } from "./src/utils/speech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-local-ai-tutor";
+const UPDATE_VERSION = "2026.11-ai-tutor-workspace";
 
 export default function App() {
   useEffect(() => {
@@ -811,6 +811,16 @@ const tabs = [
   ["profile", "person-circle", "Профиль"],
 ];
 function TabBar({ tab, setTab }) {
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener("keyboardWillHide", () => setKeyboardVisible(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  if (keyboardVisible) return null;
   return (
     <View style={styles.tabs}>
       {tabs.map(([id, icon, label]) => {
