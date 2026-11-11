@@ -49,11 +49,26 @@ import {
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
 const TOPICS = ["Свободный разговор", "Путешествия", "Работа", "Грамматика", "Экзамен"];
+const DIALOGUE_MODES = [
+  { id: "conversation", title: "Живой", icon: "chatbubbles", hint: "Вопросы, выбор и неожиданные повороты" },
+  { id: "roleplay", title: "Ролевая игра", icon: "people", hint: "ИИ остаётся персонажем выбранной ситуации" },
+  { id: "debate", title: "Дебаты", icon: "megaphone", hint: "Защищай мнение и отвечай на возражения" },
+  { id: "story", title: "История", icon: "book", hint: "Продолжай сюжет через решения A или B" },
+  { id: "strict", title: "Строгий", icon: "school", hint: "Каждая ошибка разбирается коротко и точно" },
+];
 
-const welcomeFor = (level, topic) => ({
+const welcomeFor = (level, topic, modeId = "conversation") => ({
   id: `welcome-${Date.now()}`,
   role: "assistant",
-  content: `Привет! Я Lingo — твой локальный преподаватель. Сейчас уровень ${level}, тема «${topic}». Напиши или скажи фразу по-английски — я продолжу разговор и спокойно объясню ошибки.`,
+  content: modeId === "roleplay"
+    ? `Ролевая игра готова. Уровень ${level}, тема «${topic}». Опиши место и мою роль по-английски — я войду в образ и начну сцену.`
+    : modeId === "debate"
+      ? `Режим дебатов готов. Назови мнение по теме «${topic}» на английском — я займу другую позицию и попрошу тебя её защитить.`
+      : modeId === "story"
+        ? `Создадим историю на английском вместе. Напиши героя или первую фразу — дальше я продолжу сюжет и дам выбор.`
+        : modeId === "strict"
+          ? `Строгий режим включён. Напиши фразу по-английски: я проверю каждую заметную ошибку и дам следующее задание.`
+          : `Привет! Я Lingo — твой локальный преподаватель. Сейчас уровень ${level}, тема «${topic}». Напиши или скажи фразу по-английски — я продолжу живой разговор и объясню только реальные ошибки.`,
 });
 
 function formatSpace(bytes) {
@@ -329,6 +344,7 @@ function TutorChat({ model, onModels, onVoice }) {
   const { progress, toggleNotebook, addCustomWord } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
+  const [dialogueMode, setDialogueMode] = useState("conversation");
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
   const [sessionId, setSessionId] = useState(`ai-${Date.now()}`);
   const [sessions, setSessions] = useState([]);
@@ -381,7 +397,8 @@ function TutorChat({ model, onModels, onVoice }) {
         setSessionId(recent.id);
         setLevel(recent.level || "A2");
         setTopic(recent.topic || TOPICS[0]);
-        setMessages(recent.messages?.length ? recent.messages : [welcomeFor("A2", TOPICS[0])]);
+        setDialogueMode(recent.dialogueMode || "conversation");
+        setMessages(recent.messages?.length ? recent.messages : [welcomeFor("A2", TOPICS[0], recent.dialogueMode)]);
         setAnalysis(recent.analysis || null);
       }
       historyReady.current = true;
@@ -402,6 +419,7 @@ function TutorChat({ model, onModels, onVoice }) {
         modelTitle: model.title,
         level,
         topic,
+        dialogueMode,
         title: firstUser ? firstUser.slice(0, 42) : topic,
         messages: cleanMessages,
         analysis,
@@ -411,7 +429,7 @@ function TutorChat({ model, onModels, onVoice }) {
       );
     }, 450);
     return () => clearTimeout(timer);
-  }, [messages, level, topic, sessionId, model.id, analysis]);
+  }, [messages, level, topic, dialogueMode, sessionId, model.id, analysis]);
 
   useSpeechRecognitionEvent("start", () => setListening(true));
   useSpeechRecognitionEvent("end", () => setListening(false));
@@ -478,6 +496,7 @@ function TutorChat({ model, onModels, onVoice }) {
         model,
         level,
         topic,
+        dialogueMode,
         messages: nextMessages,
         analysis,
         onToken: (token) => {
@@ -504,6 +523,7 @@ function TutorChat({ model, onModels, onVoice }) {
         modelTitle: model.title,
         level,
         topic,
+        dialogueMode,
         title: nextMessages.find((item) => item.role === "user")?.content?.slice(0, 42) || topic,
         messages: completedMessages.slice(-60),
         analysis,
@@ -540,7 +560,7 @@ function TutorChat({ model, onModels, onVoice }) {
   const newConversation = () => {
     const id = `ai-${Date.now()}`;
     setSessionId(id);
-    setMessages([welcomeFor(level, topic)]);
+    setMessages([welcomeFor(level, topic, dialogueMode)]);
     setAnalysis(null);
     setHistoryOpen(false);
   };
@@ -549,7 +569,8 @@ function TutorChat({ model, onModels, onVoice }) {
     setSessionId(session.id);
     setLevel(session.level || "A2");
     setTopic(session.topic || TOPICS[0]);
-    setMessages(session.messages?.length ? session.messages : [welcomeFor(session.level || "A2", session.topic || TOPICS[0])]);
+    setDialogueMode(session.dialogueMode || "conversation");
+    setMessages(session.messages?.length ? session.messages : [welcomeFor(session.level || "A2", session.topic || TOPICS[0], session.dialogueMode)]);
     setAnalysis(session.analysis || null);
     setHistoryOpen(false);
   };
@@ -633,7 +654,7 @@ function TutorChat({ model, onModels, onVoice }) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text numberOfLines={1} style={styles.historyTitle}>{session.title || session.topic}</Text>
-                <Text style={styles.historyMeta}>{session.level} · {session.topic} · {Math.max(0, (session.messages?.length || 1) - 1)} сообщений</Text>
+                <Text style={styles.historyMeta}>{session.level} · {DIALOGUE_MODES.find((item) => item.id === session.dialogueMode)?.title || "Живой"} · {Math.max(0, (session.messages?.length || 1) - 1)} сообщений</Text>
               </View>
               <Pressable onPress={(event) => { event.stopPropagation(); removeSession(session); }} hitSlop={10}>
                 <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
@@ -689,6 +710,21 @@ function TutorChat({ model, onModels, onVoice }) {
             </Pressable>
           ))}
         </ScrollView>
+      </View>
+
+      <View style={styles.modeStrip}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeChips}>
+          {DIALOGUE_MODES.map((item) => {
+            const active = dialogueMode === item.id;
+            return (
+              <Pressable key={item.id} onPress={() => setDialogueMode(item.id)} style={[styles.modeChip, active && styles.modeChipActive]}>
+                <Ionicons name={item.icon} size={15} color={active ? "white" : colors.textMuted} />
+                <Text style={[styles.modeText, active && { color: "white" }]}>{item.title}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        <Text numberOfLines={1} style={styles.modeHint}>{DIALOGUE_MODES.find((item) => item.id === dialogueMode)?.hint}</Text>
       </View>
 
       {!modelReady && !error ? (
@@ -1056,6 +1092,12 @@ const styles = StyleSheet.create({
   topicChip: { height: 34, paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   topicChipActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,0.14)" },
   topicText: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
+  modeStrip: { borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 7 },
+  modeChips: { paddingHorizontal: 14, paddingTop: 8, gap: 7 },
+  modeChip: { height: 34, paddingHorizontal: 11, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 },
+  modeChipActive: { backgroundColor: "rgba(124,92,252,0.2)", borderColor: colors.purple },
+  modeText: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
+  modeHint: { color: colors.textMuted, fontSize: 9, marginTop: 5, paddingHorizontal: 16 },
   loadingModel: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 36, gap: 12 },
   modelLoadingTitle: { color: "white", fontSize: 18, fontWeight: "900" },
   messages: { flex: 1 },
