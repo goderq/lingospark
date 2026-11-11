@@ -2,7 +2,7 @@
   "expo": {
     "name": "LingoSpark",
     "slug": "lingospark",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,9 +15,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lingospark.app",
-      "buildNumber": "10",
+      "buildNumber": "11",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "LingoSpark использует микрофон, чтобы вы могли записывать и сравнивать своё произношение.",
+        "NSSpeechRecognitionUsageDescription": "LingoSpark распознаёт вашу английскую речь локально, чтобы ИИ-преподаватель мог поддерживать разговор.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -36,7 +37,24 @@
       "expo-font",
       "expo-asset",
       "expo-sharing",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-build-properties",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Разрешите LingoSpark слышать вашу речь для разговорной практики.",
+          "speechRecognitionPermission": "Разрешите LingoSpark локально преобразовывать английскую речь в текст."
+        }
+      ],
+      [
+        "@pocketpalai/llama.rn",
+        {
+          "enableEntitlements": true,
+          "entitlementsProfile": "sideloadly",
+          "forceCxx20": true,
+          "enableOpenCL": false
+        }
+      ]
     ]
   }
 }

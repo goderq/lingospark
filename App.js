@@ -28,6 +28,7 @@ import PlacementScreen from "./src/screens/PlacementScreen";
 import GrammarScreen from "./src/screens/GrammarScreen";
 import StoriesScreen from "./src/screens/StoriesScreen";
 import WordGameScreen from "./src/screens/WordGameScreen";
+import AITutorScreen from "./src/screens/AITutorScreen";
 import {
   ActivityScreen,
   PlanScreen,
@@ -111,7 +112,7 @@ import { lessons } from "./src/data/course";
 import { warmSpeech } from "./src/utils/speech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-deep-explanations";
+const UPDATE_VERSION = "2026.11-local-ai-tutor";
 
 export default function App() {
   useEffect(() => {
@@ -188,6 +189,7 @@ function AppContent() {
     if (key === "tab-home") return;
     const labels = {
       course: "Курс",
+      ai: "ИИ-преподаватель",
       review: "Слова",
       profile: "Профиль",
       learningHub: "Каталог",
@@ -783,6 +785,7 @@ function AppContent() {
           />
         )}
         {tab === "review" && <ReviewScreen />}
+        {tab === "ai" && <AITutorScreen />}
         {tab === "profile" && (
           <ProfileScreen
             onSettings={() => setOverlay({ type: "settings" })}
@@ -803,6 +806,7 @@ function AppContent() {
 const tabs = [
   ["home", "sparkles", "Сегодня"],
   ["course", "map", "Курс"],
+  ["ai", "chatbubbles", "ИИ"],
   ["review", "library", "Слова"],
   ["profile", "person-circle", "Профиль"],
 ];

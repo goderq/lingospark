@@ -217,6 +217,16 @@ export function StreakCalendarScreen({ onClose }) {
 export function WhatsNewScreen({ onClose }) {
   const updates = [
     [
+      "chatbubbles",
+      "Локальный ИИ-преподаватель",
+      "Скачай лёгкую, обычную или продвинутую модель в новой вкладке «ИИ» и разговаривай с преподавателем без сервера.",
+    ],
+    [
+      "mic",
+      "Голосовой разговор",
+      "Говори по-английски, получай исправления и озвучивай ответы. Распознавание можно выполнять прямо на iPhone.",
+    ],
+    [
       "school",
       "Большие объяснения везде",
       "После каждого ответа показываются причина, правило, разобранный пример и частая ошибка — даже если ответ был правильным.",
@@ -337,9 +347,9 @@ export function WhatsNewScreen({ onClose }) {
       <Header title="Что нового" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.newEmoji}>✨</Text>
-        <Text style={s.title}>Теперь понятно почему</Text>
+        <Text style={s.title}>Твой преподаватель теперь в iPhone</Text>
         <Text style={s.newSubtitle}>
-          Курсы, времена, грамматика, слова и диалоги получили подробные разборы.
+          Выбирай мощность модели, скачивай её отдельно и занимайся с локальным ИИ даже без интернета.
         </Text>
         {updates.map(([icon, title, text]) => (
           <View key={title} style={s.update}>
