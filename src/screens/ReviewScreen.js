@@ -14,7 +14,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
-import { wordBank, wordBankSize, wordLevels } from "../data/wordBank";
+import {
+  getWordCandidates,
+  wordBank,
+  wordBankSize,
+  wordCountsByLevel,
+  wordLevels,
+  wordsByLevel,
+} from "../data/wordBank";
 import { wordThemes } from "../data/wordThemes";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
@@ -79,63 +86,86 @@ export default function ReviewScreen() {
   const [editingTranslation, setEditingTranslation] = useState(false);
   const [translationDraft, setTranslationDraft] = useState("");
 
-  const counts = useMemo(
-    () =>
-      Object.fromEntries(
-        wordLevels.map((item) => [
-          item,
-          wordBank.filter((word) => word.level === item).length,
-        ]),
-      ),
-    [],
-  );
   const today = new Date().toISOString().slice(0, 10);
   const stats = progress.reviewStats || {};
-  const preferences = {
-    favorites: [],
-    hard: [],
-    hidden: [],
-    customTranslations: {},
-    ...(progress.wordPreferences || {}),
-  };
-  const studiedIds = new Set(Object.keys(stats));
-  const hiddenIds = new Set(preferences.hidden);
-  const knownAtLevel =
-    level === "Все"
-      ? studiedIds.size
-      : wordBank.filter(
-          (word) => word.level === level && studiedIds.has(word.id),
-        ).length;
-  const levelCount = level === "Все" ? wordBankSize : counts[level];
-
-  const summary = Object.values(stats).reduce(
-    (result, item) => {
-      if ((item.interval || 0) >= 14) result.learned += 1;
-      else result.learning += 1;
-      if (item.dueDate <= today) result.due += 1;
-      return result;
-    },
-    { learning: 0, learned: 0, due: 0 },
+  const preferences = useMemo(
+    () => ({
+      favorites: [],
+      hard: [],
+      hidden: [],
+      customTranslations: {},
+      ...(progress.wordPreferences || {}),
+    }),
+    [progress.wordPreferences],
   );
-  const selectedTheme = wordThemes.find((item) => item.id === theme);
-  const basePool = (selectedTheme
-    ? selectedTheme.words
-    : level === "Все"
-      ? wordBank
-      : wordBank.filter((word) => word.level === level)
-  ).filter((word) => !hiddenIds.has(word.id));
-  const selectedPool = basePool.filter((word) => {
-    const wordStat = stats[word.id];
-    if (statusFilter === "new") return !wordStat;
-    if (statusFilter === "learning")
-      return wordStat && (wordStat.interval || 0) < 14;
-    if (statusFilter === "due") return wordStat?.dueDate <= today;
-    if (statusFilter === "learned") return (wordStat?.interval || 0) >= 14;
-    if (statusFilter === "hard") return preferences.hard.includes(word.id);
-    if (statusFilter === "favorites")
-      return preferences.favorites.includes(word.id);
-    return true;
-  });
+  const studiedIds = useMemo(() => new Set(Object.keys(stats)), [stats]);
+  const favoriteIds = useMemo(
+    () => new Set(preferences.favorites),
+    [preferences.favorites],
+  );
+  const hardIds = useMemo(
+    () => new Set(preferences.hard),
+    [preferences.hard],
+  );
+  const hiddenIds = useMemo(
+    () => new Set(preferences.hidden),
+    [preferences.hidden],
+  );
+  const knownAtLevel = useMemo(
+    () =>
+      level === "Все"
+        ? studiedIds.size
+        : wordsByLevel[level].reduce(
+            (total, word) => total + (studiedIds.has(word.id) ? 1 : 0),
+            0,
+          ),
+    [level, studiedIds],
+  );
+  const levelCount =
+    level === "Все" ? wordBankSize : wordCountsByLevel[level];
+
+  const summary = useMemo(
+    () =>
+      Object.values(stats).reduce(
+        (result, item) => {
+          if ((item.interval || 0) >= 14) result.learned += 1;
+          else result.learning += 1;
+          if (item.dueDate <= today) result.due += 1;
+          return result;
+        },
+        { learning: 0, learned: 0, due: 0 },
+      ),
+    [stats, today],
+  );
+  const selectedTheme = useMemo(
+    () => wordThemes.find((item) => item.id === theme),
+    [theme],
+  );
+  const basePool = useMemo(
+    () =>
+      (selectedTheme
+        ? selectedTheme.words
+        : level === "Все"
+          ? wordBank
+          : wordsByLevel[level]
+      ).filter((word) => !hiddenIds.has(word.id)),
+    [selectedTheme, level, hiddenIds],
+  );
+  const selectedPool = useMemo(
+    () =>
+      basePool.filter((word) => {
+        const wordStat = stats[word.id];
+        if (statusFilter === "new") return !wordStat;
+        if (statusFilter === "learning")
+          return wordStat && (wordStat.interval || 0) < 14;
+        if (statusFilter === "due") return wordStat?.dueDate <= today;
+        if (statusFilter === "learned") return (wordStat?.interval || 0) >= 14;
+        if (statusFilter === "hard") return hardIds.has(word.id);
+        if (statusFilter === "favorites") return favoriteIds.has(word.id);
+        return true;
+      }),
+    [basePool, stats, statusFilter, today, hardIds, favoriteIds],
+  );
   const dateSeed = Number(today.replaceAll("-", ""));
   const wordOfDay = wordBank[dateSeed % wordBank.length];
 
@@ -233,7 +263,7 @@ export default function ReviewScreen() {
                   level === item && { color: "rgba(255,255,255,.75)" },
                 ]}
               >
-                {item === "Все" ? wordBankSize : counts[item]}
+                {item === "Все" ? wordBankSize : wordCountsByLevel[item]}
               </Text>
             </Pressable>
           ))}
@@ -419,12 +449,7 @@ export default function ReviewScreen() {
   const direction = englishToRussian
     ? "ПЕРЕВЕДИ НА РУССКИЙ"
     : "ПЕРЕВЕДИ НА АНГЛИЙСКИЙ";
-  const distractors = [...deck, ...wordBank]
-    .filter(
-      (item, itemIndex, list) =>
-        item.id !== card.id &&
-        list.findIndex((candidate) => candidate.id === item.id) === itemIndex,
-    )
+  const distractors = getWordCandidates(card.id, 12)
     .map((item) => (englishToRussian ? item.russian : item.english))
     .filter(
       (option, optionIndex, options) =>

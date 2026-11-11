@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useDeferredValue, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -199,15 +199,31 @@ export function VocabularyScreen({ onClose }) {
   const [level, setLevel] = useState("Все");
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
-  const preferences = {
-    favorites: [],
-    hard: [],
-    hidden: [],
-    customTranslations: {},
-    ...(progress.wordPreferences || {}),
-  };
+  const preferences = useMemo(
+    () => ({
+      favorites: [],
+      hard: [],
+      hidden: [],
+      customTranslations: {},
+      ...(progress.wordPreferences || {}),
+    }),
+    [progress.wordPreferences],
+  );
   const stats = progress.reviewStats || {};
-  const normalized = query.trim().toLocaleLowerCase("ru");
+  const deferredQuery = useDeferredValue(query);
+  const normalized = deferredQuery.trim().toLocaleLowerCase("ru");
+  const favoriteIds = useMemo(
+    () => new Set(preferences.favorites),
+    [preferences.favorites],
+  );
+  const hardIds = useMemo(
+    () => new Set(preferences.hard),
+    [preferences.hard],
+  );
+  const hiddenIds = useMemo(
+    () => new Set(preferences.hidden),
+    [preferences.hidden],
+  );
   const save = () => {
     if (!english.trim() || !russian.trim()) return;
     addCustomWord(english, russian, example);
@@ -224,28 +240,25 @@ export function VocabularyScreen({ onClose }) {
       frequency: 0,
       emoji: "✍️",
     }));
-    const hidden = new Set(preferences.hidden);
-    let words = [...custom, ...wordBank]
-      .filter((word) => !hidden.has(word.id))
-      .map((word) =>
-        preferences.customTranslations[word.id]
-          ? {
-              ...word,
-              russian: preferences.customTranslations[word.id],
-              fullTranslation: preferences.customTranslations[word.id],
-            }
-          : word,
-      );
+    let words = [...custom, ...wordBank].filter(
+      (word) => !hiddenIds.has(word.id),
+    );
     if (level !== "Все") words = words.filter((word) => word.level === level);
     if (filter === "favorites")
-      words = words.filter((word) => preferences.favorites.includes(word.id));
+      words = words.filter((word) => favoriteIds.has(word.id));
     if (filter === "hard")
-      words = words.filter((word) => preferences.hard.includes(word.id));
+      words = words.filter((word) => hardIds.has(word.id));
     if (filter === "learning") words = words.filter((word) => stats[word.id]);
     if (normalized)
       words = words
         .filter((word) =>
-          [word.english, word.russian, word.fullTranslation, ...(word.translations || [])]
+          [
+            word.english,
+            preferences.customTranslations[word.id],
+            word.russian,
+            word.fullTranslation,
+            ...(word.translations || []),
+          ]
             .filter(Boolean)
             .join(" ")
             .toLocaleLowerCase("ru")
@@ -257,11 +270,23 @@ export function VocabularyScreen({ onClose }) {
           return aStarts - bStarts || (a.frequency || 99999) - (b.frequency || 99999);
         });
     return { count: words.length, items: words.slice(0, 600) };
-  }, [progress.customWords, progress.wordPreferences, progress.reviewStats, query, level, filter]);
+  }, [
+    progress.customWords,
+    preferences.customTranslations,
+    stats,
+    normalized,
+    level,
+    filter,
+    hiddenIds,
+    favoriteIds,
+    hardIds,
+  ]);
   const renderWord = ({ item: word }) => {
-    const favorite = preferences.favorites.includes(word.id);
-    const hard = preferences.hard.includes(word.id);
+    const favorite = favoriteIds.has(word.id);
+    const hard = hardIds.has(word.id);
     const opened = expanded === word.id;
+    const displayedRussian =
+      preferences.customTranslations[word.id] || word.russian;
     return (
       <Pressable onPress={() => setExpanded(opened ? null : word.id)} style={s.wordRow}>
         <Pressable
@@ -275,7 +300,7 @@ export function VocabularyScreen({ onClose }) {
             <Text style={s.wordEnglish}>{word.english}</Text>
             <Text style={s.wordLevel}>{word.level}</Text>
           </View>
-          <Text style={s.wordRussian}>{word.russian}</Text>
+          <Text style={s.wordRussian}>{displayedRussian}</Text>
           {opened && (
             <>
               {!!word.transcription && <Text style={s.wordTranscription}>{word.transcription}</Text>}
@@ -316,7 +341,11 @@ export function VocabularyScreen({ onClose }) {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerStyle={s.dictionaryContent}
-        initialNumToRender={16}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={40}
+        windowSize={7}
+        removeClippedSubviews
         ListHeaderComponent={
           <>
             <View style={s.row}>

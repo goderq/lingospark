@@ -110,7 +110,7 @@ import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-dictionary-core-meanings";
+const UPDATE_VERSION = "2026.11-word-performance";
 
 export default function App() {
   return (

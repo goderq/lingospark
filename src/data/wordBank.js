@@ -40,3 +40,34 @@ export const wordBank = compactWordBank.map(
 );
 
 export const wordBankSize = wordBank.length;
+
+export const wordsByLevel = Object.fromEntries(
+  wordLevels.map((level) => [
+    level,
+    wordBank.filter((word) => word.level === level),
+  ]),
+);
+
+export const wordCountsByLevel = Object.fromEntries(
+  wordLevels.map((level) => [level, wordsByLevel[level].length]),
+);
+
+const wordIndexById = new Map(
+  wordBank.map((word, index) => [word.id, index]),
+);
+
+export const getWordCandidates = (activeId, amount = 12) => {
+  const activeIndex = wordIndexById.get(activeId) ?? -1;
+  const start = activeIndex < 0 ? 0 : activeIndex;
+  const result = [];
+  const used = new Set([activeId]);
+  const step = 997;
+  for (let offset = 1; result.length < amount && offset < wordBank.length; offset += 1) {
+    const word = wordBank[(start + offset * step) % wordBank.length];
+    if (!used.has(word.id)) {
+      used.add(word.id);
+      result.push(word);
+    }
+  }
+  return result;
+};
