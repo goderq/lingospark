@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 import { supabase } from "../lib/supabase";
+const { chooseInitialProgressSource } = require("../utils/cloudSyncRules");
 import { useAuth } from "./AuthContext";
 import { useProgress } from "./ProgressContext";
 
@@ -77,9 +78,12 @@ export function CloudSyncProvider({ children }) {
         if (cloudJson === JSON.stringify(progress)) {
           setStatus("synced");
         } else if (
-          localUpdatedAt &&
-          new Date(localUpdatedAt).getTime() >
-            new Date(data.device_updated_at || data.updated_at).getTime()
+          chooseInitialProgressSource({
+            local: progress,
+            cloud: data.progress,
+            localUpdatedAt,
+            cloudUpdatedAt: data.device_updated_at || data.updated_at,
+          }) === "local"
         ) {
           await upload(progress);
         } else {

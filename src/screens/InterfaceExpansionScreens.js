@@ -217,6 +217,11 @@ export function StreakCalendarScreen({ onClose }) {
 export function WhatsNewScreen({ onClose }) {
   const updates = [
     [
+      "cloud-download",
+      "Надёжное восстановление",
+      "После переустановки облачная копия загружается первой и новый пустой профиль больше не может стереть занятия.",
+    ],
+    [
       "speedometer",
       "Быстрый раздел «Слова»",
       "Поиск, фильтры и варианты ответов переработаны: длинные списки больше не пересчитываются при каждом нажатии.",
@@ -322,9 +327,9 @@ export function WhatsNewScreen({ onClose }) {
       <Header title="Что нового" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.newEmoji}>✨</Text>
-        <Text style={s.title}>Аккаунт и синхронизация</Text>
+        <Text style={s.title}>Облако стало надёжнее</Text>
         <Text style={s.newSubtitle}>
-          Прогресс теперь можно безопасно хранить в Supabase.
+          Прогресс правильно возвращается после удаления и повторной установки.
         </Text>
         {updates.map(([icon, title, text]) => (
           <View key={title} style={s.update}>
