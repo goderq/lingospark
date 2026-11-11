@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useDeferredValue, useMemo, useState } from "react";
 import {
   Keyboard,
   Pressable,
@@ -34,7 +34,8 @@ export function SmartSearchScreen({ onClose, onLesson, onNavigate }) {
   const { progress, toggleFavorite } = useProgress();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Все");
-  const normalized = query.trim().toLocaleLowerCase("ru");
+  const deferredQuery = useDeferredValue(query);
+  const normalized = deferredQuery.trim().toLocaleLowerCase("ru");
   const results = useMemo(() => {
     if (normalized.length < 2) return [];
     const contains = (...values) =>
@@ -103,14 +104,9 @@ export function SmartSearchScreen({ onClose, onLesson, onNavigate }) {
         })),
       ...wordBank
         .filter((item) =>
-          contains(
-            item.english,
-            item.russian,
-            item.fullTranslation,
-            ...(item.translations || []),
-            item.transcription,
-          ),
+          item.searchText?.includes(normalized),
         )
+        .slice(0, 60)
         .map((item) => ({
           key: `word-${item.id}`,
           id: item.id,

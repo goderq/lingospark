@@ -25,12 +25,14 @@ export const wordBank = compactWordBank.map(
       .split(/[;,]/)
       .map((value) => value.replace(/\([^)]*\)/g, "").trim())
       .filter(Boolean);
+    const fullTranslation = variants.slice(0, 3).join("; ");
     return {
       id: `bank-${stableIndex ?? index}`,
       english,
       russian: variants[0] || translation,
       translations: variants.slice(1, 3),
-      fullTranslation: variants.slice(0, 3).join("; "),
+      fullTranslation,
+      searchText: `${english} ${translation} ${transcription || ""}`.toLocaleLowerCase("ru"),
       transcription,
       level,
       emoji: emojiForLevel[level],

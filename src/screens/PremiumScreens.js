@@ -18,6 +18,7 @@ import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { answersMatch } from "../utils/answer";
+import { expandExplanation } from "../utils/explanations";
 function Header({ title, onClose }) {
   return (
     <View style={s.header}>
@@ -138,6 +139,7 @@ export function WrittenVocabularyScreen({ onClose }) {
               {right ? "Верно!" : `Правильно: ${expected}`}
             </Text>
             <Text style={s.example}>{item.example}</Text>
+            <Text style={s.explanationText}>{expandExplanation({ type: 'translate', prompt: item.direction === 'ru-en' ? item.russian : item.english, answer: expected, example: item.example }, { selected: answer, topic: 'Письменный перевод' })}</Text>
           </View>
         )}
         <View style={{ flex: 1 }} />
@@ -273,6 +275,11 @@ export function CareerCoursesScreen({ onClose }) {
               <Text style={s.optionText}>{option}</Text>
             </Pressable>
           ),
+        )}
+        {selected && (
+          <View style={s.feedback}>
+            <Text style={s.explanationText}>{expandExplanation(item, { selected, topic: track.title })}</Text>
+          </View>
         )}
         {selected && (
           <PrimaryButton
@@ -482,6 +489,11 @@ export function FullIeltsMockScreen({ onClose }) {
           ),
         )}
         {selected && (
+          <View style={s.feedback}>
+            <Text style={s.explanationText}>{expandExplanation(item, { selected, topic: item.type === 'listening' ? 'IELTS Listening' : 'IELTS Reading' })}</Text>
+          </View>
+        )}
+        {selected && (
           <PrimaryButton
             title={index === 19 ? "Рассчитать Band" : "Дальше"}
             onPress={next}
@@ -562,6 +574,7 @@ const s = StyleSheet.create({
     padding: 15,
     marginTop: 13,
   },
+  explanationText: { color: colors.textMuted, lineHeight: 21, marginTop: 10 },
   example: { color: colors.textMuted, fontStyle: "italic", marginTop: 7 },
   card: {
     flexDirection: "row",

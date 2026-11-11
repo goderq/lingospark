@@ -102,11 +102,16 @@ export function CloudSyncProvider({ children }) {
 
   useEffect(() => {
     if (!ready || !user || initializedUser.current !== user.id) return;
-    const snapshot = JSON.stringify(progress);
-    if (snapshot === lastSyncedJson.current) return;
     if (timer.current) clearTimeout(timer.current);
     setStatus("pending");
-    timer.current = setTimeout(() => upload(progress), 1800);
+    timer.current = setTimeout(() => {
+      const snapshot = JSON.stringify(progress);
+      if (snapshot === lastSyncedJson.current) {
+        setStatus("synced");
+        return;
+      }
+      upload(progress);
+    }, 1800);
     return () => timer.current && clearTimeout(timer.current);
   }, [progress, ready, user?.id, upload]);
 

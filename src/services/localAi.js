@@ -365,16 +365,23 @@ async function runDownload(model, resumeData = null) {
     total: model.size,
     error: "",
   });
+  let lastProgressPublish = 0;
+  let lastProgressAt = 0;
   const task = FileSystem.createDownloadResumable(
     model.url,
     destination,
     {},
     ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
       const total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : model.size;
+      const progress = Math.min(1, totalBytesWritten / total);
+      const now = Date.now();
+      if (progress < 1 && progress - lastProgressPublish < 0.005 && now - lastProgressAt < 150) return;
+      lastProgressPublish = progress;
+      lastProgressAt = now;
       publishDownload({
         written: totalBytesWritten,
         total,
-        progress: Math.min(1, totalBytesWritten / total),
+        progress,
       });
     },
     resumeData || undefined,

@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useMemo, useState } from "react";
+import React, { useCallback, useDeferredValue, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -20,13 +20,14 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import { lessons, phrases } from "../data/course";
-import { wordBank, wordBankSize, wordLevels } from "../data/wordBank";
+import { wordBank, wordBankSize, wordLevels, wordsByLevel } from "../data/wordBank";
 import { tenseModules } from "../data/advancedCourse";
 import { grammarQuestions, placementQuestions } from "../data/practice";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
+import { expandExplanation } from "../utils/explanations";
 
 function Header({ title, onClose }) {
   return (
@@ -240,10 +241,13 @@ export function VocabularyScreen({ onClose }) {
       frequency: 0,
       emoji: "✍️",
     }));
-    let words = [...custom, ...wordBank].filter(
-      (word) => !hiddenIds.has(word.id),
-    );
-    if (level !== "Все") words = words.filter((word) => word.level === level);
+    const baseWords = level === "Все"
+      ? wordBank
+      : level === "Мои"
+        ? []
+        : wordsByLevel[level] || [];
+    let words = level === "Мои" ? custom : level === "Все" ? [...custom, ...baseWords] : baseWords;
+    if (hiddenIds.size) words = words.filter((word) => !hiddenIds.has(word.id));
     if (filter === "favorites")
       words = words.filter((word) => favoriteIds.has(word.id));
     if (filter === "hard")
@@ -251,25 +255,19 @@ export function VocabularyScreen({ onClose }) {
     if (filter === "learning") words = words.filter((word) => stats[word.id]);
     if (normalized)
       words = words
-        .filter((word) =>
-          [
-            word.english,
-            preferences.customTranslations[word.id],
-            word.russian,
-            word.fullTranslation,
-            ...(word.translations || []),
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLocaleLowerCase("ru")
-            .includes(normalized),
-        )
+        .filter((word) => {
+          const customTranslation = preferences.customTranslations[word.id];
+          return word.searchText?.includes(normalized) ||
+            `${word.english} ${customTranslation || word.russian} ${word.fullTranslation || ""}`
+              .toLocaleLowerCase("ru")
+              .includes(normalized);
+        })
         .sort((a, b) => {
           const aStarts = a.english.toLowerCase().startsWith(normalized) ? 0 : 1;
           const bStarts = b.english.toLowerCase().startsWith(normalized) ? 0 : 1;
           return aStarts - bStarts || (a.frequency || 99999) - (b.frequency || 99999);
         });
-    return { count: words.length, items: words.slice(0, 600) };
+    return { count: words.length, items: words.slice(0, 300) };
   }, [
     progress.customWords,
     preferences.customTranslations,
@@ -281,7 +279,7 @@ export function VocabularyScreen({ onClose }) {
     favoriteIds,
     hardIds,
   ]);
-  const renderWord = ({ item: word }) => {
+  const renderWord = useCallback(({ item: word }) => {
     const favorite = favoriteIds.has(word.id);
     const hard = hardIds.has(word.id);
     const opened = expanded === word.id;
@@ -330,7 +328,7 @@ export function VocabularyScreen({ onClose }) {
         )}
       </Pressable>
     );
-  };
+  }, [expanded, favoriteIds, hardIds, preferences.customTranslations, progress.settings?.accent, progress.settings?.speechRate, stats, toggleWordPreference, removeCustomWord]);
   return (
     <View style={s.container}>
       <Header title="Словарь" onClose={onClose} />
@@ -344,7 +342,7 @@ export function VocabularyScreen({ onClose }) {
         initialNumToRender={10}
         maxToRenderPerBatch={10}
         updateCellsBatchingPeriod={40}
-        windowSize={7}
+        windowSize={5}
         removeClippedSubviews
         ListHeaderComponent={
           <>
@@ -384,7 +382,7 @@ export function VocabularyScreen({ onClose }) {
                 </Pressable>
               ))}
             </ScrollView>
-            <Text style={s.dictionaryCount}>НАЙДЕНО: {result.count}{result.count > 600 ? " · ПОКАЗАНЫ ПЕРВЫЕ 600" : ""}</Text>
+            <Text style={s.dictionaryCount}>НАЙДЕНО: {result.count}{result.count > 300 ? " · ПОКАЗАНЫ ПЕРВЫЕ 300" : ""}</Text>
           </>
         }
         ListEmptyComponent={<Text style={s.emptyDictionary}>Ничего не найдено. Попробуйте другой запрос или фильтр.</Text>}
@@ -472,6 +470,16 @@ export function WeeklyExamScreen({ onClose }) {
             <Text style={s.optionText}>{option}</Text>
           </Pressable>
         ))}
+        {selected && (
+          <View style={s.explanationCard}>
+            <Text style={s.explanationText}>
+              {expandExplanation(question, {
+                selected,
+                topic: "Недельный экзамен",
+              })}
+            </Text>
+          </View>
+        )}
         {selected && (
           <PrimaryButton
             title={index === questions.length - 1 ? "Результат" : "Дальше"}
@@ -987,4 +995,13 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   compareText: { color: colors.mint, fontWeight: "800" },
+  explanationCard: {
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: "rgba(124,92,252,.28)",
+  },
+  explanationText: { color: colors.textMuted, lineHeight: 21, fontSize: 14 },
 });

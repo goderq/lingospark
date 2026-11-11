@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppState, BackHandler, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, BackHandler, InteractionManager, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -60,7 +60,6 @@ import SkillSprintScreen from "./src/screens/SkillSprintScreen";
 import {
   LevelProgressScreen,
   StreakCalendarScreen,
-  WhatsNewScreen,
 } from "./src/screens/InterfaceExpansionScreens";
 import {
   BookmarksScreen,
@@ -120,13 +119,13 @@ import {
 } from "./src/services/offlineSpeech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-course-overhaul";
-
 export default function App() {
   useEffect(() => {
-    warmSpeech();
-    resumePendingModelDownload().catch(() => {});
-    resumeSpeechModelDownload().catch(() => {});
+    const startupTask = InteractionManager.runAfterInteractions(() => {
+      warmSpeech();
+      resumePendingModelDownload().catch(() => {});
+      resumeSpeechModelDownload().catch(() => {});
+    });
     const listener = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         resumePendingModelDownload().catch(() => {});
@@ -136,7 +135,10 @@ export default function App() {
         pauseSpeechModelDownload().catch(() => {});
       }
     });
-    return () => listener.remove();
+    return () => {
+      startupTask.cancel();
+      listener.remove();
+    };
   }, []);
   return (
     <SafeAreaProvider>
@@ -153,7 +155,7 @@ export default function App() {
 }
 
 function AppContent() {
-  const { ready, progress, markUpdateSeen } = useProgress();
+  const { ready, progress } = useProgress();
   const {
     ready: authReady,
     user,
@@ -224,7 +226,6 @@ function AppContent() {
       skillSprint: "Гибкая практика",
       levelProgress: "Прогресс A1–C1",
       streakCalendar: "Календарь серии",
-      whatsNew: "Что нового",
       smartSearch: "Поиск",
       bookmarks: "Закладки",
       lingoWorld: "Английская жизнь",
@@ -259,18 +260,6 @@ function AppContent() {
   if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
   if (!user && !guestMode) return <AuthScreen />;
-  if (progress.seenUpdate !== UPDATE_VERSION)
-    return (
-      <SafeAreaView style={styles.safe}>
-        <WhatsNewScreen onClose={() => markUpdateSeen(UPDATE_VERSION)} />
-      </SafeAreaView>
-    );
-  if (overlay?.type === "whatsNew")
-    return (
-      <SafeAreaView style={styles.safe}>
-        <WhatsNewScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
-    );
   if (overlay?.type === "account")
     return (
       <SafeAreaView style={styles.safe}>
@@ -822,7 +811,6 @@ function AppContent() {
             onBackup={() => setOverlay({ type: "backup" })}
             onLevels={() => setOverlay({ type: "levelProgress" })}
             onStreak={() => setOverlay({ type: "streakCalendar" })}
-            onWhatsNew={() => setOverlay({ type: "whatsNew" })}
             onAccount={() => setOverlay({ type: "account" })}
           />
         )}

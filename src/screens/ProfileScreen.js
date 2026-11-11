@@ -21,7 +21,6 @@ export default function ProfileScreen({
   onBackup,
   onLevels,
   onStreak,
-  onWhatsNew,
   onAccount,
 }) {
   const { progress, reset } = useProgress();
@@ -165,12 +164,6 @@ export default function ProfileScreen({
           title="Календарь серии"
           detail={`${progress.streak} дней подряд`}
           onPress={onStreak}
-        />
-        <ProfileLink
-          icon="sparkles"
-          title="Что нового"
-          detail="Возможности последнего обновления"
-          onPress={onWhatsNew}
         />
       </View>
       <Text style={styles.section}>Достижения</Text>

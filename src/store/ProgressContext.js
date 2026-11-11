@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { AppState } from "react-native";
 import React, {
   createContext,
   useContext,
@@ -115,7 +116,6 @@ const initial = {
   },
   lastStudyDate: null,
   dailyDate: null,
-  seenUpdate: null,
 };
 
 const ProgressContext = createContext(null);
@@ -135,6 +135,8 @@ export function ProgressProvider({ children }) {
   const [ready, setReady] = useState(false);
   const [localUpdatedAt, setLocalUpdatedAt] = useState(null);
   const skipFirstPersist = useRef(true);
+  const persistTimer = useRef(null);
+  const latestProgress = useRef(initial);
 
   useEffect(() => {
     AsyncStorage.multiGet([STORAGE_KEY, UPDATED_KEY])
@@ -154,15 +156,40 @@ export function ProgressProvider({ children }) {
 
   useEffect(() => {
     if (!ready) return;
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(progress)).catch(() => {});
+    latestProgress.current = progress;
     if (skipFirstPersist.current) {
       skipFirstPersist.current = false;
-      return;
+    } else {
+      setLocalUpdatedAt(new Date().toISOString());
     }
-    const now = new Date().toISOString();
-    setLocalUpdatedAt(now);
-    AsyncStorage.setItem(UPDATED_KEY, now).catch(() => {});
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      const now = new Date().toISOString();
+      AsyncStorage.multiSet([
+        [STORAGE_KEY, JSON.stringify(latestProgress.current)],
+        [UPDATED_KEY, now],
+      ]).catch(() => {});
+      persistTimer.current = null;
+    }, 350);
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
   }, [progress, ready]);
+
+  useEffect(() => {
+    if (!ready) return undefined;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") return;
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      const now = new Date().toISOString();
+      AsyncStorage.multiSet([
+        [STORAGE_KEY, JSON.stringify(latestProgress.current)],
+        [UPDATED_KEY, now],
+      ]).catch(() => {});
+      persistTimer.current = null;
+    });
+    return () => subscription.remove();
+  }, [ready]);
 
   const finishOnboarding = (name, dailyGoal) => {
     setProgress((old) => ({
@@ -1129,8 +1156,6 @@ export function ProgressProvider({ children }) {
       dailyGoal: old.dailyGoal,
     }));
   const unlockAll = () => setProgress((old) => ({ ...old, unlockedAll: true }));
-  const markUpdateSeen = (version) =>
-    setProgress((old) => ({ ...old, seenUpdate: version }));
   const isUnlocked = (lesson) => {
     const index = lessons.findIndex((item) => item.id === lesson.id);
     if (index <= 0) return true;
@@ -1195,7 +1220,6 @@ export function ProgressProvider({ children }) {
       restoreProgress,
       reset,
       unlockAll,
-      markUpdateSeen,
       isUnlocked,
     }),
     [progress, ready, localUpdatedAt],

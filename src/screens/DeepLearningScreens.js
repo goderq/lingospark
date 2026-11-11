@@ -26,6 +26,7 @@ import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { answersMatch } from "../utils/answer";
+import { expandExplanation } from "../utils/explanations";
 
 const today = () => new Date().toISOString().slice(0, 10);
 function Header({ title, onClose }) {
@@ -452,6 +453,11 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
           ),
         )}
         {selected && (
+          <View style={s.feedback}>
+            <Text style={s.feedbackText}>{expandExplanation(question, { selected, topic: listening ? 'IELTS Listening' : 'IELTS Reading', explanation: 'Правильный ответ подтверждается конкретной формулировкой в тексте или записи, а не общим впечатлением.' })}</Text>
+          </View>
+        )}
+        {selected && (
           <PrimaryButton
             title={current === total - 1 ? "Результат" : "Дальше"}
             onPress={next}
@@ -870,6 +876,7 @@ export function SmartCoachScreen({ onClose }) {
             >
               {right ? "Верно!" : `Правильно: ${item.answer}`}
             </Text>
+            <Text style={s.feedbackText}>{expandExplanation({ ...item, type: useMistakes ? 'translate' : 'choice' }, { selected: useMistakes ? answer : selected, topic: 'Персональный урок' })}</Text>
           </View>
         )}
         <PrimaryButton
@@ -1288,4 +1295,5 @@ const s = StyleSheet.create({
     marginBottom: 14,
   },
   feedbackTitle: { fontWeight: "900" },
+  feedbackText: { color: colors.textMuted, lineHeight: 21, marginTop: 10 },
 });
