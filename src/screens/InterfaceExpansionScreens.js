@@ -217,6 +217,11 @@ export function StreakCalendarScreen({ onClose }) {
 export function WhatsNewScreen({ onClose }) {
   const updates = [
     [
+      "school",
+      "Большие объяснения везде",
+      "После каждого ответа показываются причина, правило, разобранный пример и частая ошибка — даже если ответ был правильным.",
+    ],
+    [
       "volume-high",
       "Озвучивание без очереди",
       "Голосовой движок запускается заранее, а новое нажатие звучит сразу вместо ожидания предыдущей фразы.",
@@ -332,9 +337,9 @@ export function WhatsNewScreen({ onClose }) {
       <Header title="Что нового" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.newEmoji}>✨</Text>
-        <Text style={s.title}>Звук стал быстрее</Text>
+        <Text style={s.title}>Теперь понятно почему</Text>
         <Text style={s.newSubtitle}>
-          Слова, фразы и диктанты начинают звучать почти сразу после нажатия.
+          Курсы, времена, грамматика, слова и диалоги получили подробные разборы.
         </Text>
         {updates.map(([icon, title, text]) => (
           <View key={title} style={s.update}>

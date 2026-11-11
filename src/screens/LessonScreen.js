@@ -24,6 +24,7 @@ import {
   closestAnswerAnalysis,
   gradeAnswer,
 } from "../utils/answer";
+import { expandExplanation } from "../utils/explanations";
 
 export default function LessonScreen({ lesson, onClose }) {
   const {
@@ -658,15 +659,13 @@ export default function LessonScreen({ lesson, onClose }) {
                   )}
                 </View>
               )}
-              {!correct && (
-                <Text style={styles.ruleText}>
-                  {exercise.explanation ||
-                    exercise.hint ||
-                    `Запомни правильную конструкцию: ${exercise.answer}`}
-                </Text>
-              )}
-              {!correct && (
-                <Pressable
+              <Text style={styles.ruleText}>
+                {expandExplanation(exercise, {
+                  topic: lesson.title,
+                  selected: current,
+                })}
+              </Text>
+              <Pressable
                   onPress={() =>
                     toggleNotebook({
                       id: `lesson-rule-${exercise.id}`,
@@ -694,7 +693,6 @@ export default function LessonScreen({ lesson, onClose }) {
                   />
                   <Text style={styles.saveRuleText}>Сохранить правило</Text>
                 </Pressable>
-              )}
             </View>
           </Animated.View>
         )}

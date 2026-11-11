@@ -62,6 +62,23 @@ const mistakeFor = (module) => {
   return 'Сначала определи время события и смысл, а уже потом выбирай форму глагола.';
 };
 
+const decisionFor = (module) => {
+  if (module.name.includes('Contrast')) return `Сравни варианты по смыслу: ${module.use}. Не выбирай форму только из-за одного маркера — проверь, что говорящий хочет подчеркнуть.`;
+  if (module.name.includes('Perfect Continuous')) return 'Задай два вопроса: начался ли процесс раньше и важна ли его длительность? Если да, нужна форма Perfect Continuous. Затем выбери have/has, had или will have по точке отсчёта.';
+  if (module.name.includes('Perfect')) return 'Сначала найди более позднюю точку времени, затем спроси, какой результат уже будет готов к ней. Perfect показывает более раннее действие через его результат.';
+  if (module.name.includes('Continuous')) return 'Представь кадр в конкретный момент. Если действие в этот момент находится в процессе, выбирай Continuous; если важен факт или завершённый результат, нужна другая форма.';
+  if (module.id.includes('conditional') || module.id === 'unreal-past') return 'Определи, реальна ли ситуация и к какому времени относятся условие и результат. После этого отдельно построй обе части предложения по их формулам.';
+  return `Определи время события, его характер и точку отсчёта. После этого примени формулу «${module.formula}» и ещё раз проверь смысл всего предложения.`;
+};
+
+const contrastFor = (module) => {
+  if (module.name.startsWith('Present')) return 'Present Simple показывает факт или привычку; Continuous — процесс или временность; Perfect — связь прошлого результата с настоящим.';
+  if (module.name.startsWith('Past')) return 'Past Simple двигает сюжет; Continuous создаёт фон; Past Perfect показывает, что произошло ещё раньше.';
+  if (module.name.startsWith('Future')) return 'Will часто выражает решение или прогноз; going to — намерение или видимый признак; Continuous — будущий процесс; Perfect — результат к сроку.';
+  if (module.id.includes('reported') || module.id.includes('sequence')) return 'В прямой речи сохраняются слова говорящего, а в косвенной меняются местоимения, указатели времени и часто происходит сдвиг времён.';
+  return `Сравни эту конструкцию с соседними временами: здесь главный смысл — «${module.use.toLowerCase()}». Если смысл другой, одной похожей формы недостаточно.`;
+};
+
 export const getTenseGuide = (module) => {
   const isPerfect = module.name.includes('Perfect');
   const isContinuous = module.name.includes('Continuous');
@@ -76,5 +93,7 @@ export const getTenseGuide = (module) => {
     timeline: timelineFor(module),
     forms: formPatterns[module.id] || [`1️⃣ Найди точку времени`, `2️⃣ Примени схему: ${module.formula}`, '3️⃣ Проверь смысл и вспомогательный глагол'],
     mistake: mistakeFor(module),
+    decision: decisionFor(module),
+    contrast: contrastFor(module),
   };
 };

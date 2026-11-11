@@ -12,6 +12,7 @@ import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton } from "../components/UI";
 import { answersMatch } from "../utils/answer";
+import { expandExplanation } from "../utils/explanations";
 
 const filters = ["Все", "Слово", "Урок", "Грамматика", "Диктант"];
 const fallbackExplanation = (item) => {
@@ -40,7 +41,13 @@ export default function MistakesScreen({ onClose }) {
     [filter, mistakes],
   );
   const item = filtered[0];
-  const explanation = item && (item.explanation || fallbackExplanation(item));
+  const explanation =
+    item &&
+    expandExplanation(item, {
+      selected: answer,
+      topic: item.type,
+      explanation: item.explanation || fallbackExplanation(item),
+    });
   const noteId = item && `mistake-note-${item.id}`;
   const noteSaved = progress.notebook?.some((entry) => entry.id === noteId);
   const saveExplanation = () =>
@@ -84,7 +91,7 @@ export default function MistakesScreen({ onClose }) {
           <Text style={styles.headerTitle}>Тренировка ошибок</Text>
           <Text style={styles.counter}>{filtered.length}</Text>
         </View>
-        <View style={styles.practice}>
+        <ScrollView contentContainerStyle={styles.practice}>
           <Text style={styles.type}>{item.type}</Text>
           <Text style={styles.practicePrompt}>{item.prompt}</Text>
           <TextInput
@@ -120,7 +127,6 @@ export default function MistakesScreen({ onClose }) {
               </Pressable>
             </View>
           )}
-          <View style={{ flex: 1 }} />
           <PrimaryButton
             disabled={!answer.trim()}
             title={
@@ -135,7 +141,7 @@ export default function MistakesScreen({ onClose }) {
               checked ? (correct ? colors.mint : colors.orange) : colors.purple
             }
           />
-        </View>
+        </ScrollView>
       </View>
     );
 
@@ -218,7 +224,11 @@ export default function MistakesScreen({ onClose }) {
               <View style={styles.whyRow}>
                 <Ionicons name="bulb-outline" size={17} color={colors.orange} />
                 <Text style={styles.whyText}>
-                  {entry.explanation || fallbackExplanation(entry)}
+                  {expandExplanation(entry, {
+                    topic: entry.type,
+                    explanation:
+                      entry.explanation || fallbackExplanation(entry),
+                  })}
                 </Text>
               </View>
             </View>
@@ -319,7 +329,7 @@ const styles = StyleSheet.create({
     marginTop: 11,
   },
   answer: { color: colors.mint, fontWeight: "700", flex: 1 },
-  practice: { flex: 1, padding: 22 },
+  practice: { flexGrow: 1, padding: 22, paddingBottom: 35 },
   practicePrompt: {
     color: "white",
     fontSize: 29,

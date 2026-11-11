@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { speak } from "../utils/speech";
+import { expandExplanation } from "../utils/explanations";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
@@ -540,7 +541,17 @@ export function CommonMistakesScreen({ onClose }) {
             <Ionicons name="bulb" size={22} color={colors.orange} />
             <View style={{ flex: 1 }}>
               <Text style={s.correct}>{item.correct}</Text>
-              <Text style={s.rule}>{item.rule}</Text>
+              <Text style={s.rule}>
+                {expandExplanation(
+                  {
+                    prompt: item.wrong,
+                    answer: item.correct,
+                    type: "build",
+                    explanation: item.rule,
+                  },
+                  { selected, topic: item.topic },
+                )}
+              </Text>
             </View>
           </View>
         )}

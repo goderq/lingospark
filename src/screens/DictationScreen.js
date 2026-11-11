@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,6 +19,7 @@ import { dictations } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
+import { expandExplanation } from "../utils/explanations";
 
 const clean = (value) =>
   value
@@ -75,7 +77,10 @@ export default function DictationScreen({ onClose }) {
             </View>
             <Text style={styles.level}>{item.level}</Text>
           </View>
-          <View style={styles.content}>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.content}
+          >
             <Text style={styles.eyebrow}>ДИКТАНТ НА СЛУХ</Text>
             <Text style={styles.title}>Запиши фразу, которую услышишь</Text>
             <View style={styles.audioCard}>
@@ -154,10 +159,21 @@ export default function DictationScreen({ onClose }) {
                   {!correct && (
                     <Text style={styles.correctText}>{item.text}</Text>
                   )}
+                  <Text style={styles.explanationText}>
+                    {expandExplanation(
+                      {
+                        prompt: `Запиши на слух: ${item.translation}`,
+                        answer: item.text,
+                        type: "build",
+                        explanation:
+                          "В диктанте важно распознать не только знакомые слова, но и служебные формы, окончания и порядок слов в целой фразе.",
+                      },
+                      { selected: answer, topic: "Диктант на слух" },
+                    )}
+                  </Text>
                 </View>
               </View>
             )}
-            <View style={{ flex: 1 }} />
             <PrimaryButton
               title={checked ? "Следующий диктант" : "Проверить"}
               onPress={checked ? next : check}
@@ -170,7 +186,7 @@ export default function DictationScreen({ onClose }) {
                   : colors.purple
               }
             />
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </TouchableWithoutFeedback>
       {Platform.OS === "ios" && (
@@ -204,7 +220,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   level: { color: colors.orange, fontWeight: "900" },
-  content: { flex: 1, padding: 20, paddingBottom: 26 },
+  content: { padding: 20, paddingBottom: 30 },
   eyebrow: {
     color: colors.orange,
     fontSize: 11,
@@ -265,6 +281,7 @@ const styles = StyleSheet.create({
   },
   feedbackTitle: { fontSize: 16, fontWeight: "900" },
   correctText: { color: "white", fontWeight: "700", marginTop: 5 },
+  explanationText: { color: colors.textMuted, lineHeight: 21, marginTop: 12 },
   keyboardToolbar: {
     minHeight: 48,
     backgroundColor: colors.card,

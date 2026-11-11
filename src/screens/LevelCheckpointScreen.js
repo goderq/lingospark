@@ -7,6 +7,7 @@ import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
+import { expandExplanation } from "../utils/explanations";
 
 const levelIndex = { A1: 0, A2: 1, B1: 2, B2: 3, C1: 4 };
 export default function LevelCheckpointScreen({ level, onClose }) {
@@ -116,6 +117,16 @@ export default function LevelCheckpointScreen({ level, onClose }) {
           ),
         )}
         {selected && (
+          <View style={s.explanation}>
+            <Text style={s.explanationText}>
+              {expandExplanation(item, {
+                selected,
+                topic: `Контрольная ${level}`,
+              })}
+            </Text>
+          </View>
+        )}
+        {selected && (
           <PrimaryButton
             title={index === questions.length - 1 ? "Результат" : "Дальше"}
             onPress={next}
@@ -180,6 +191,13 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   optionText: { color: "white", fontSize: 16, fontWeight: "650" },
+  explanation: {
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 15,
+  },
+  explanationText: { color: colors.textMuted, lineHeight: 21 },
   correct: { borderColor: colors.mint },
   wrong: { borderColor: colors.orange },
   center: {

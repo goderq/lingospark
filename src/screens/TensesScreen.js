@@ -8,6 +8,7 @@ import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
 import { getTenseGuide } from "../data/tenseGuides";
+import { expandExplanation } from "../utils/explanations";
 
 const groupColor = (name) =>
   name.startsWith("Present")
@@ -248,6 +249,8 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
           </View>
           <Theory title="Когда используется" text={module.use} icon="bulb" />
           <Theory title="Слова-подсказки" text={module.markers} icon="flag" />
+          <Theory title="Как выбрать это время" text={guide.decision} icon="git-compare" />
+          <Theory title="С чем его не путать" text={guide.contrast} icon="swap-horizontal" />
           <Text style={styles.miniTitle}>Как построить предложение</Text>
           {guide.forms.map((form, formIndex) => (
             <View key={form} style={styles.formRow}>
@@ -347,7 +350,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
               <Text style={styles.optionText}>{option}</Text>
             </Pressable>
           ))}
-          {gateSelected && <View style={styles.explain}><Text style={[styles.explainTitle, { color: gateCorrect ? colors.mint : colors.orange }]}>{gateCorrect ? "Правильно!" : `Ответ: ${gateQuestion.answer}`}</Text><Text style={styles.explainText}>{gateQuestion.explanation}</Text></View>}
+          {gateSelected && <View style={styles.explain}><Text style={[styles.explainTitle, { color: gateCorrect ? colors.mint : colors.orange }]}>{gateCorrect ? "Правильно!" : `Ответ: ${gateQuestion.answer}`}</Text><Text style={styles.explainText}>{expandExplanation(gateQuestion, { selected: gateSelected, topic: module.name, formula: module.formula, use: module.use, markers: module.markers })}</Text></View>}
           {gateSelected && <PrimaryButton title={gateIndex === 1 ? (gateScore === 2 ? "Открыть практику" : "Повторить мини-тест") : "Следующий вопрос"} onPress={nextGate} color={gateCorrect ? colors.mint : colors.orange} />}
         </ScrollView>
       </View>
@@ -443,7 +446,15 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
               >
                 {correct ? "Правильно!" : `Ответ: ${question.answer}`}
               </Text>
-              <Text style={styles.explainText}>{question.explanation}</Text>
+              <Text style={styles.explainText}>
+                {expandExplanation(question, {
+                  selected,
+                  topic: module.name,
+                  formula: module.formula,
+                  use: module.use,
+                  markers: module.markers,
+                })}
+              </Text>
             </View>
           </View>
         )}

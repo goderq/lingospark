@@ -6,6 +6,7 @@ import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
+import { expandExplanation } from "../utils/explanations";
 
 function Header({ title, onClose }) {
   return (
@@ -156,7 +157,7 @@ export function ArticlesPrepositionsScreen({ onClose }) {
   const note = {
     id: `focus-${topic}-${index}-${item.answer}`,
     topic: track.title,
-    rule: item.explanation,
+    rule: expandExplanation(item, { topic: track.title }),
     example: `${item.prompt} → ${item.answer}`,
     level: track.level,
   };
@@ -197,7 +198,13 @@ export function ArticlesPrepositionsScreen({ onClose }) {
               >
                 {right ? "Правильно!" : `Ответ: ${item.answer}`}
               </Text>
-              <Text style={s.explainText}>{item.explanation}</Text>
+              <Text style={s.explainText}>
+                {expandExplanation(item, {
+                  selected,
+                  topic: track.title,
+                  formula: track.formula,
+                })}
+              </Text>
               <Pressable onPress={() => toggleNotebook(note)} style={s.save}>
                 <Ionicons
                   name={saved ? "bookmark" : "bookmark-outline"}

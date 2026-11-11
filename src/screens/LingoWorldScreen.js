@@ -18,6 +18,7 @@ import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { gradeAnswer } from "../utils/answer";
 import { balancedOptions } from "../utils/shuffle";
+import { expandExplanation } from "../utils/explanations";
 
 const homeShop = [
   {
@@ -980,7 +981,12 @@ function WorldMission({ location, onBack }) {
               {correct ? "Отличный ответ" : "Смысл понятен, но лучше так:"}
             </Text>
             {!correct && <Text style={s.correctAnswer}>{scene.answer}</Text>}
-            <Text style={s.explanation}>{scene.explanation}</Text>
+            <Text style={s.explanation}>
+              {expandExplanation(scene, {
+                selected: scene.type === "choice" ? selected : answer,
+                topic: location.title,
+              })}
+            </Text>
             {scene.consequence && (
               <Text style={s.consequence}>↳ {scene.consequence}</Text>
             )}

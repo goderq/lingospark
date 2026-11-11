@@ -111,7 +111,7 @@ import { lessons } from "./src/data/course";
 import { warmSpeech } from "./src/utils/speech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-instant-speech";
+const UPDATE_VERSION = "2026.11-deep-explanations";
 
 export default function App() {
   useEffect(() => {

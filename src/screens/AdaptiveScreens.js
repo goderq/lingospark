@@ -17,6 +17,7 @@ import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { gradeAnswer, analyzeAnswer } from "../utils/answer";
+import { expandExplanation } from "../utils/explanations";
 
 const random = (items) => [...items].sort(() => Math.random() - 0.5);
 const dateKey = (date = new Date()) => date.toISOString().slice(0, 10);
@@ -245,9 +246,15 @@ export function AdaptiveLessonScreen({ onClose }) {
                 Все слова есть, но порядок неестественный
               </Text>
             )}
-            {item.explanation && (
-              <Text style={styles.feedbackText}>{item.explanation}</Text>
-            )}
+            <Text style={styles.feedbackText}>
+              {expandExplanation(item, {
+                selected: answer,
+                topic: item.label,
+                formula: item.module?.formula,
+                use: item.module?.use,
+                markers: item.module?.markers,
+              })}
+            </Text>
           </View>
         )}
         <View style={{ flex: 1 }} />

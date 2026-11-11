@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { speak as speakNow } from "../utils/speech";
+import { expandExplanation } from "../utils/explanations";
 import * as Haptics from "expo-haptics";
 import {
   getWordCandidates,
@@ -771,6 +772,18 @@ export default function ReviewScreen() {
                     <Text style={styles.fullAnswer}>
                       {activeCard.fullTranslation}
                     </Text>
+                    <Text style={styles.explanationDetail}>
+                      {expandExplanation(
+                        {
+                          prompt: activeCard.english,
+                          answer: expected,
+                          type: englishToRussian ? "translate" : "build",
+                          explanation:
+                            "Здесь проверяется основное значение слова в выбранном направлении перевода. Связывай написание, произношение и значение как одну карточку.",
+                        },
+                        { selected: answer, topic: "Словарный повтор" },
+                      )}
+                    </Text>
                   </View>
                 </View>
                 <Pressable onPress={speak} style={styles.listen}>
@@ -1146,6 +1159,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   feedbackTitle: { fontSize: 17, fontWeight: "900" },
+  explanationDetail: { color: colors.textMuted, lineHeight: 21, marginTop: 12 },
   correctAnswer: {
     color: "white",
     fontSize: 19,
