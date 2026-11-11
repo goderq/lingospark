@@ -5,6 +5,8 @@ import { initLlama, releaseAllLlama } from "@pocketpalai/llama.rn";
 const MODEL_DIR = `${FileSystem.documentDirectory}lingospark-ai/`;
 const ACTIVE_MODEL_KEY = "@lingospark/local-ai-model-v1";
 const TUTOR_SESSIONS_KEY = "@lingospark/ai-tutor-sessions-v1";
+const AI_SETTINGS_KEY = "@lingospark/ai-settings-v1";
+const DOWNLOAD_RESUME_KEY = "@lingospark/ai-download-resume-v1";
 
 export const AI_MODELS = [
   {
@@ -54,6 +56,14 @@ export const AI_MODELS = [
 
 let context = null;
 let contextModelId = null;
+let engineDiagnostics = {
+  loadedModelId: null,
+  gpu: null,
+  reasonNoGPU: "",
+  tokensPerSecond: null,
+  generatedTokens: null,
+  lastDurationMs: null,
+};
 let activeDownload = null;
 let downloadState = {
   status: "idle",
@@ -82,6 +92,25 @@ export function subscribeToDownload(listener) {
 
 export const modelPath = (model) => `${MODEL_DIR}${model.filename}`;
 
+export async function getAiSettings() {
+  try {
+    const value = JSON.parse((await AsyncStorage.getItem(AI_SETTINGS_KEY)) || "{}");
+    return { economyMode: Boolean(value.economyMode) };
+  } catch {
+    return { economyMode: false };
+  }
+}
+
+export async function setAiSettings(changes) {
+  const next = { ...(await getAiSettings()), ...changes };
+  await AsyncStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+export function getEngineDiagnostics() {
+  return { ...engineDiagnostics };
+}
+
 async function ensureModelDirectory() {
   const info = await FileSystem.getInfoAsync(MODEL_DIR);
   if (!info.exists) {
@@ -89,14 +118,28 @@ async function ensureModelDirectory() {
   }
 }
 
+export async function verifyModelFile(model) {
+  const info = await FileSystem.getInfoAsync(modelPath(model), { size: true });
+  if (!info.exists) return { installed: false, verified: false, bytes: 0, reason: "Файл не найден" };
+  const bytes = info.size || 0;
+  if (bytes < model.size * 0.98) return { installed: false, verified: false, bytes, reason: "Файл загружен не полностью" };
+  try {
+    const header = await FileSystem.readAsStringAsync(modelPath(model), {
+      encoding: FileSystem.EncodingType.Base64,
+      position: 0,
+      length: 4,
+    });
+    const verified = header.replace(/=+$/, "") === "R0dVRg";
+    return { installed: verified, verified, bytes, reason: verified ? "" : "Неверный формат файла" };
+  } catch {
+    return { installed: false, verified: false, bytes, reason: "Не удалось проверить файл" };
+  }
+}
+
 export async function inspectModels() {
   await ensureModelDirectory();
   const entries = await Promise.all(
-    AI_MODELS.map(async (model) => {
-      const info = await FileSystem.getInfoAsync(modelPath(model), { size: true });
-      const complete = info.exists && (info.size || 0) >= model.size * 0.98;
-      return [model.id, { installed: complete, bytes: info.size || 0 }];
-    }),
+    AI_MODELS.map(async (model) => [model.id, await verifyModelFile(model)]),
   );
   return Object.fromEntries(entries);
 }
@@ -118,7 +161,7 @@ export async function getFreeSpace() {
   }
 }
 
-export async function downloadModel(model) {
+async function runDownload(model, resumeData = null) {
   await ensureModelDirectory();
   if (activeDownload) {
     if (activeDownload.modelId === model.id) return activeDownload.promise;
@@ -126,13 +169,13 @@ export async function downloadModel(model) {
   }
   const destination = modelPath(model);
   const existing = await FileSystem.getInfoAsync(destination);
-  if (existing.exists) await FileSystem.deleteAsync(destination, { idempotent: true });
+  if (!resumeData && existing.exists) await FileSystem.deleteAsync(destination, { idempotent: true });
 
   publishDownload({
     status: "downloading",
     modelId: model.id,
-    progress: 0,
-    written: 0,
+    progress: resumeData && existing.exists ? Math.min(0.99, (existing.size || 0) / model.size) : 0,
+    written: resumeData && existing.exists ? existing.size || 0 : 0,
     total: model.size,
     error: "",
   });
@@ -148,28 +191,30 @@ export async function downloadModel(model) {
         progress: Math.min(1, totalBytesWritten / total),
       });
     },
+    resumeData || undefined,
   );
   const promise = (async () => {
     try {
       const result = await task.downloadAsync();
       if (!result?.uri) throw new Error("Файл модели не был сохранён");
-      const info = await FileSystem.getInfoAsync(result.uri, { size: true });
-      if (!info.exists || (info.size || 0) < model.size * 0.98) {
+      const verification = await verifyModelFile(model);
+      if (!verification.verified) {
         await FileSystem.deleteAsync(destination, { idempotent: true });
-        throw new Error("Модель загрузилась не полностью. Попробуйте ещё раз.");
+        throw new Error(verification.reason || "Модель загрузилась не полностью. Попробуйте ещё раз.");
       }
+      await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
       await setActiveModelId(model.id);
       publishDownload({
         status: "completed",
         modelId: model.id,
         progress: 1,
-        written: info.size || model.size,
+        written: verification.bytes || model.size,
         total: model.size,
         error: "",
       });
       return result.uri;
     } catch (error) {
-      if (downloadState.status !== "cancelled") {
+      if (downloadState.status !== "cancelled" && downloadState.status !== "paused") {
         publishDownload({
           status: "error",
           error: error?.message || "Не удалось скачать модель",
@@ -182,6 +227,52 @@ export async function downloadModel(model) {
   })();
   activeDownload = { task, destination, modelId: model.id, promise };
   return promise;
+}
+
+export async function downloadModel(model) {
+  await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
+  return runDownload(model);
+}
+
+export async function pauseActiveModelDownload() {
+  if (!activeDownload || downloadState.status !== "downloading") return false;
+  const current = activeDownload;
+  try {
+    const paused = await current.task.pauseAsync();
+    if (!paused?.resumeData) return false;
+    await AsyncStorage.setItem(DOWNLOAD_RESUME_KEY, JSON.stringify({
+      modelId: current.modelId,
+      resumeData: paused.resumeData,
+      written: downloadState.written,
+      total: downloadState.total,
+    }));
+    publishDownload({ status: "paused", error: "" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function resumePendingModelDownload() {
+  if (activeDownload && downloadState.status === "downloading") return activeDownload.promise;
+  try {
+    const saved = JSON.parse((await AsyncStorage.getItem(DOWNLOAD_RESUME_KEY)) || "null");
+    const model = AI_MODELS.find((item) => item.id === saved?.modelId);
+    if (!model || !saved.resumeData) return null;
+    activeDownload = null;
+    publishDownload({
+      status: "paused",
+      modelId: model.id,
+      written: saved.written || 0,
+      total: saved.total || model.size,
+      progress: Math.min(0.99, (saved.written || 0) / (saved.total || model.size)),
+      error: "",
+    });
+    return runDownload(model, saved.resumeData);
+  } catch {
+    await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
+    return null;
+  }
 }
 
 export async function cancelModelDownload() {
@@ -198,6 +289,7 @@ export async function cancelModelDownload() {
   try {
     await current.task.pauseAsync();
   } catch {}
+  await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
   await FileSystem.deleteAsync(current.destination, { idempotent: true });
 }
 
@@ -230,6 +322,25 @@ export async function deleteTutorSession(sessionId) {
   return next;
 }
 
+export async function clearTutorSessions() {
+  await AsyncStorage.removeItem(TUTOR_SESSIONS_KEY);
+}
+
+export async function clearIncompleteModels() {
+  await ensureModelDirectory();
+  let freed = 0;
+  for (const model of AI_MODELS) {
+    if (activeDownload?.modelId === model.id) continue;
+    const check = await verifyModelFile(model);
+    if (check.bytes > 0 && !check.installed) {
+      freed += check.bytes;
+      await FileSystem.deleteAsync(modelPath(model), { idempotent: true });
+    }
+  }
+  await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
+  return freed;
+}
+
 export async function deleteModel(model) {
   if (contextModelId === model.id) await unloadModel();
   await FileSystem.deleteAsync(modelPath(model), { idempotent: true });
@@ -239,15 +350,16 @@ export async function deleteModel(model) {
 export async function loadModel(model, onProgress) {
   if (context && contextModelId === model.id) return context;
   await unloadModel();
-  const info = await FileSystem.getInfoAsync(modelPath(model), { size: true });
-  if (!info.exists || (info.size || 0) < model.size * 0.98) {
+  const verification = await verifyModelFile(model);
+  if (!verification.verified) {
     throw new Error("Сначала скачайте выбранную модель");
   }
+  const settings = await getAiSettings();
   context = await initLlama(
     {
       model: modelPath(model),
-      n_ctx: model.context,
-      n_batch: 256,
+      n_ctx: settings.economyMode ? Math.min(2048, model.context) : model.context,
+      n_batch: settings.economyMode ? 128 : 256,
       n_threads: 4,
       n_gpu_layers: 99,
       use_mmap: true,
@@ -257,6 +369,12 @@ export async function loadModel(model, onProgress) {
     (progress) => onProgress?.(Math.max(0, Math.min(1, progress / 100))),
   );
   contextModelId = model.id;
+  engineDiagnostics = {
+    ...engineDiagnostics,
+    loadedModelId: model.id,
+    gpu: context?.gpu ?? null,
+    reasonNoGPU: context?.reasonNoGPU || "",
+  };
   return context;
 }
 
@@ -267,11 +385,38 @@ export async function unloadModel() {
   } finally {
     context = null;
     contextModelId = null;
+    engineDiagnostics = { ...engineDiagnostics, loadedModelId: null, gpu: null, reasonNoGPU: "" };
   }
 }
 
 export async function stopGeneration() {
   if (context) await context.stopCompletion();
+}
+
+async function completeWithGuard(llama, options, onToken, timeoutMs = 90000) {
+  const startedAt = Date.now();
+  let timer;
+  try {
+    const result = await Promise.race([
+      llama.completion(options, onToken),
+      new Promise((_, reject) => {
+        timer = setTimeout(async () => {
+          try { await llama.stopCompletion(); } catch {}
+          reject(new Error("Ответ занял слишком много времени. Модель остановлена — попробуйте короче или включите экономичный режим."));
+        }, timeoutMs);
+      }),
+    ]);
+    const timings = result?.timings || {};
+    engineDiagnostics = {
+      ...engineDiagnostics,
+      tokensPerSecond: Number(timings.predicted_per_second || timings.tokens_per_second) || engineDiagnostics.tokensPerSecond,
+      generatedTokens: Number(timings.predicted_n || timings.generated_tokens) || null,
+      lastDurationMs: Date.now() - startedAt,
+    };
+    return result;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function systemPrompt(level, topic, analysis) {
@@ -297,7 +442,8 @@ export async function completeTutorMessage({ model, level, topic, messages, anal
     .filter((item) => item.role === "user" || item.role === "assistant")
     .slice(-10)
     .map(({ role, content }) => ({ role, content }));
-  return llama.completion(
+  return completeWithGuard(
+    llama,
     {
       messages: [{ role: "system", content: systemPrompt(level, topic, analysis) }, ...history],
       n_predict: model.id === "light" ? 180 : 260,
@@ -308,6 +454,7 @@ export async function completeTutorMessage({ model, level, topic, messages, anal
       stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
     },
     ({ token }) => onToken?.(token || ""),
+    90000,
   );
 }
 
@@ -366,7 +513,7 @@ export async function analyzeTutorConversation({ model, level, topic, messages }
     .slice(-16)
     .map((item) => `${item.role === "user" ? "Ученик" : "Преподаватель"}: ${item.content}`)
     .join("\n");
-  const result = await llama.completion({
+  const result = await completeWithGuard(llama, {
     messages: [
       {
         role: "system",
@@ -384,7 +531,7 @@ export async function analyzeTutorConversation({ model, level, topic, messages }
     top_p: 0.85,
     repeat_penalty: 1.05,
     stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
-  });
+  }, undefined, 150000);
   return parseAnalysis(result?.text);
 }
 
@@ -421,7 +568,8 @@ ${languageRule}
 ${correctionRule}
 ${lengthRule}
 Оставайся в роли, продвигай ситуацию по шагам и реагируй на смысл ответа ученика. Не описывай свои действия в скобках. Не используй markdown, списки и длинные лекции: ответ будет произнесён вслух. Никогда не проси настоящие персональные или платёжные данные.`;
-  return llama.completion(
+  return completeWithGuard(
+    llama,
     {
       messages: [{ role: "system", content: system }, ...history],
       n_predict: responseLength === "short" ? 90 : 170,
@@ -432,5 +580,6 @@ ${lengthRule}
       stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
     },
     ({ token }) => onToken?.(token || ""),
+    75000,
   );
 }

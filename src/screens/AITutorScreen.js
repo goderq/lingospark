@@ -24,6 +24,8 @@ import { speak, stopSpeech } from "../utils/speech";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import VoiceCoachScreen from "./VoiceCoachScreen";
+import AICenterScreen from "./AICenterScreen";
+import PronunciationLabScreen from "./PronunciationLabScreen";
 import {
   AI_MODELS,
   analyzeTutorConversation,
@@ -42,6 +44,7 @@ import {
   setActiveModelId,
   stopGeneration,
   subscribeToDownload,
+  unloadModel,
 } from "../services/localAi";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
@@ -80,7 +83,10 @@ export default function AITutorScreen({ onImmersiveChange }) {
     refresh(true).catch(() => setLoading(false));
   }, []);
 
-  useEffect(() => () => onImmersiveChange?.(false), []);
+  useEffect(() => () => {
+    onImmersiveChange?.(false);
+    unloadModel().catch(() => {});
+  }, []);
 
   if (loading) {
     return (
@@ -92,6 +98,12 @@ export default function AITutorScreen({ onImmersiveChange }) {
   }
 
   const activeModel = AI_MODELS.find((item) => item.id === activeId);
+  if (screen === "center") {
+    return <AICenterScreen onClose={() => setScreen("models")} onPronunciation={() => setScreen("pronunciation")} />;
+  }
+  if (screen === "pronunciation") {
+    return <PronunciationLabScreen onClose={() => setScreen("center")} />;
+  }
   if (screen === "voice" && activeModel) {
     return (
       <VoiceCoachScreen
@@ -121,6 +133,8 @@ export default function AITutorScreen({ onImmersiveChange }) {
       installed={installed}
       activeId={activeId}
       onRefresh={refresh}
+      onCenter={() => setScreen("center")}
+      onPronunciation={() => setScreen("pronunciation")}
       onStart={async (model) => {
         await setActiveModelId(model.id);
         setActiveId(model.id);
@@ -130,7 +144,7 @@ export default function AITutorScreen({ onImmersiveChange }) {
   );
 }
 
-function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
+function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation }) {
   const [download, setDownload] = useState(getDownloadState());
   const [freeSpace, setFreeSpace] = useState(null);
   const [error, setError] = useState("");
@@ -159,7 +173,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
       await downloadModel(model);
       await onRefresh();
     } catch (downloadError) {
-      if (!cancelledRef.current) {
+      if (!cancelledRef.current && getDownloadState().status !== "paused") {
         setError(downloadError?.message || "Не удалось скачать модель. Проверьте интернет и свободное место.");
       }
     } finally {
@@ -204,6 +218,9 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
           <Text style={styles.eyebrow}>РАБОТАЕТ НА IPHONE</Text>
           <Text style={styles.title}>ИИ-преподаватель</Text>
         </View>
+        <Pressable onPress={onCenter} style={styles.headerButton}>
+          <Ionicons name="options-outline" color="white" size={22} />
+        </Pressable>
       </View>
       <Text style={styles.lead}>
         Выбери и скачай модель один раз. После этого диалоги, исправления и объяснения работают без интернета.
@@ -216,6 +233,15 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
           <Text style={styles.smallMuted}>Сообщения не отправляются на сервер. Модель можно удалить в любой момент.</Text>
         </View>
       </View>
+
+      <Pressable onPress={onPronunciation} style={styles.pronunciationBanner}>
+        <View style={styles.pronunciationIcon}><Ionicons name="mic" size={25} color="white" /></View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.privacyTitle}>Лаборатория произношения</Text>
+          <Text style={styles.smallMuted}>Запиши фразу, сравни результат и пройди экзамен</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={21} color={colors.textMuted} />
+      </Pressable>
 
       <View style={styles.sectionRow}>
         <Text style={styles.sectionTitle}>Выбери мощность</Text>
@@ -969,6 +995,8 @@ const styles = StyleSheet.create({
   title: { color: "white", fontSize: 29, fontWeight: "900" },
   lead: { color: colors.textMuted, fontSize: 15, lineHeight: 22, marginTop: 18 },
   privacyCard: { flexDirection: "row", gap: 12, backgroundColor: "rgba(46,211,183,0.09)", borderColor: "rgba(46,211,183,0.22)", borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 18 },
+  pronunciationBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 18, padding: 14, marginTop: 12 },
+  pronunciationIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
   privacyTitle: { color: "white", fontSize: 14, fontWeight: "800", marginBottom: 4 },
   smallMuted: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 28, marginBottom: 12 },

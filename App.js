@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BackHandler, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, BackHandler, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -110,13 +110,23 @@ import {
 import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
 import { warmSpeech } from "./src/utils/speech";
+import {
+  pauseActiveModelDownload,
+  resumePendingModelDownload,
+} from "./src/services/localAi";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-voice-coach";
+const UPDATE_VERSION = "2026.11-ai-center";
 
 export default function App() {
   useEffect(() => {
     warmSpeech();
+    resumePendingModelDownload().catch(() => {});
+    const listener = AppState.addEventListener("change", (state) => {
+      if (state === "active") resumePendingModelDownload().catch(() => {});
+      else if (state === "background") pauseActiveModelDownload().catch(() => {});
+    });
+    return () => listener.remove();
   }, []);
   return (
     <SafeAreaProvider>
