@@ -387,3 +387,50 @@ export async function analyzeTutorConversation({ model, level, topic, messages }
   });
   return parseAnalysis(result?.text);
 }
+
+export async function completeVoiceCoachMessage({
+  model,
+  level,
+  scenario,
+  mode,
+  strictness,
+  responseLength,
+  messages,
+  onToken,
+}) {
+  const llama = await loadModel(model);
+  const history = messages
+    .filter((item) => item.role === "user" || item.role === "assistant")
+    .slice(-12)
+    .map(({ role, content }) => ({ role, content }));
+  const languageRule = mode === "english"
+    ? "Говори только по-английски. Не используй русский даже в объяснениях."
+    : "Сам диалог веди по-английски. Если ученик ошибся, после английского ответа добавь одно очень короткое объяснение в формате «РУССКИЙ КОММЕНТАРИЙ: ...».";
+  const correctionRule = strictness === "strict"
+    ? "Исправляй каждую заметную грамматическую или лексическую ошибку, но не прерывай ролевую сцену."
+    : "Исправляй только ошибки, которые мешают смыслу или часто повторяются. Не придирайся к допустимым вариантам.";
+  const lengthRule = responseLength === "short"
+    ? "Отвечай максимум двумя короткими предложениями и задавай один вопрос."
+    : "Отвечай 3–5 короткими предложениями и заканчивай одним естественным вопросом.";
+  const system = `Ты — голосовой преподаватель Lingo и одновременно персонаж ролевой сцены «${scenario.title}». Твоя роль: ${scenario.role}. Уровень ученика: ${level}.
+
+Ситуация: ${scenario.context}
+Цели ученика: ${scenario.goals.join("; ")}.
+
+${languageRule}
+${correctionRule}
+${lengthRule}
+Оставайся в роли, продвигай ситуацию по шагам и реагируй на смысл ответа ученика. Не описывай свои действия в скобках. Не используй markdown, списки и длинные лекции: ответ будет произнесён вслух. Никогда не проси настоящие персональные или платёжные данные.`;
+  return llama.completion(
+    {
+      messages: [{ role: "system", content: system }, ...history],
+      n_predict: responseLength === "short" ? 90 : 170,
+      temperature: 0.68,
+      top_k: 40,
+      top_p: 0.9,
+      repeat_penalty: 1.08,
+      stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
+    },
+    ({ token }) => onToken?.(token || ""),
+  );
+}

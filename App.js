@@ -112,7 +112,7 @@ import { lessons } from "./src/data/course";
 import { warmSpeech } from "./src/utils/speech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-ai-personal-lessons";
+const UPDATE_VERSION = "2026.11-voice-coach";
 
 export default function App() {
   useEffect(() => {
@@ -142,6 +142,7 @@ function AppContent() {
   const [tab, setTab] = useState("home");
   const [overlay, setOverlay] = useState(null);
   const [recentScreens, setRecentScreens] = useState([]);
+  const [aiImmersive, setAiImmersive] = useState(false);
   const [navigationReady, setNavigationReady] = useState(false);
   const serializeOverlay = (value) =>
     value
@@ -785,7 +786,7 @@ function AppContent() {
           />
         )}
         {tab === "review" && <ReviewScreen />}
-        {tab === "ai" && <AITutorScreen />}
+        {tab === "ai" && <AITutorScreen onImmersiveChange={setAiImmersive} />}
         {tab === "profile" && (
           <ProfileScreen
             onSettings={() => setOverlay({ type: "settings" })}
@@ -798,7 +799,7 @@ function AppContent() {
           />
         )}
       </View>
-      <TabBar tab={tab} setTab={setTab} />
+      {!aiImmersive && <TabBar tab={tab} setTab={setTab} />}
     </SafeAreaView>
   );
 }

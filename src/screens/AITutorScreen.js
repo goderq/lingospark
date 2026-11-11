@@ -23,6 +23,7 @@ import { ProgressBar } from "../components/UI";
 import { speak, stopSpeech } from "../utils/speech";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
+import VoiceCoachScreen from "./VoiceCoachScreen";
 import {
   AI_MODELS,
   analyzeTutorConversation,
@@ -59,7 +60,7 @@ function formatSpace(bytes) {
     : `${Math.round(bytes / 1024 ** 2)} МБ`;
 }
 
-export default function AITutorScreen() {
+export default function AITutorScreen({ onImmersiveChange }) {
   const [installed, setInstalled] = useState({});
   const [activeId, setActiveId] = useState(null);
   const [screen, setScreen] = useState("models");
@@ -79,6 +80,8 @@ export default function AITutorScreen() {
     refresh(true).catch(() => setLoading(false));
   }, []);
 
+  useEffect(() => () => onImmersiveChange?.(false), []);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -89,8 +92,28 @@ export default function AITutorScreen() {
   }
 
   const activeModel = AI_MODELS.find((item) => item.id === activeId);
+  if (screen === "voice" && activeModel) {
+    return (
+      <VoiceCoachScreen
+        model={activeModel}
+        onClose={() => {
+          onImmersiveChange?.(false);
+          setScreen("chat");
+        }}
+      />
+    );
+  }
   if (screen === "chat" && activeModel) {
-    return <TutorChat model={activeModel} onModels={() => setScreen("models")} />;
+    return (
+      <TutorChat
+        model={activeModel}
+        onModels={() => setScreen("models")}
+        onVoice={() => {
+          onImmersiveChange?.(true);
+          setScreen("voice");
+        }}
+      />
+    );
   }
 
   return (
@@ -276,7 +299,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart }) {
   );
 }
 
-function TutorChat({ model, onModels }) {
+function TutorChat({ model, onModels, onVoice }) {
   const { progress, toggleNotebook, addCustomWord } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
@@ -612,8 +635,8 @@ function TutorChat({ model, onModels }) {
           <Text style={styles.chatStatus}>{modelReady ? "Локально · без интернета" : `Запуск модели · ${progressLabel}`}</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={runAnalysis} style={styles.headerButton}>
-            <Ionicons name="analytics-outline" size={21} color={colors.white} />
+          <Pressable onPress={onVoice} style={[styles.headerButton, { backgroundColor: colors.purple }]}>
+            <Ionicons name="mic" size={21} color={colors.white} />
           </Pressable>
           <Pressable onPress={() => setHistoryOpen(true)} style={styles.headerButton}>
             <Ionicons name="time-outline" size={22} color={colors.white} />

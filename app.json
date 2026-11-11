@@ -2,7 +2,7 @@
   "expo": {
     "name": "LingoSpark",
     "slug": "lingospark",
-    "version": "1.8.0",
+    "version": "1.9.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lingospark.app",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "LingoSpark использует микрофон, чтобы вы могли записывать и сравнивать своё произношение.",
         "NSSpeechRecognitionUsageDescription": "LingoSpark распознаёт вашу английскую речь локально, чтобы ИИ-преподаватель мог поддерживать разговор.",
