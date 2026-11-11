@@ -466,7 +466,12 @@ function parseAnalysis(text) {
   const start = cleaned.indexOf("{");
   const end = cleaned.lastIndexOf("}");
   if (start < 0 || end <= start) throw new Error("ИИ не смог составить разбор. Попробуйте ещё раз.");
-  const parsed = JSON.parse(cleaned.slice(start, end + 1));
+  let parsed;
+  try {
+    parsed = JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    throw new Error("Разбор получился незавершённым");
+  }
   const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
   const list = (value, limit) => (Array.isArray(value) ? value.slice(0, limit) : []);
   return {
@@ -506,33 +511,116 @@ function parseAnalysis(text) {
   };
 }
 
+const ANALYSIS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "scores", "strengths", "mistakes", "words", "exercises"],
+  properties: {
+    summary: { type: "string" },
+    scores: {
+      type: "object",
+      additionalProperties: false,
+      required: ["grammar", "vocabulary", "fluency"],
+      properties: {
+        grammar: { type: "integer", minimum: 0, maximum: 100 },
+        vocabulary: { type: "integer", minimum: 0, maximum: 100 },
+        fluency: { type: "integer", minimum: 0, maximum: 100 },
+      },
+    },
+    strengths: { type: "array", maxItems: 3, items: { type: "string" } },
+    mistakes: {
+      type: "array",
+      maxItems: 4,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["original", "corrected", "explanation"],
+        properties: {
+          original: { type: "string" },
+          corrected: { type: "string" },
+          explanation: { type: "string" },
+        },
+      },
+    },
+    words: {
+      type: "array",
+      maxItems: 5,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["english", "russian", "example"],
+        properties: {
+          english: { type: "string" },
+          russian: { type: "string" },
+          example: { type: "string" },
+        },
+      },
+    },
+    exercises: {
+      type: "array",
+      maxItems: 4,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["prompt", "options", "answer", "explanation"],
+        properties: {
+          prompt: { type: "string" },
+          options: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } },
+          answer: { type: "string" },
+          explanation: { type: "string" },
+        },
+      },
+    },
+  },
+};
+
+async function requestConversationAnalysis({ llama, model, level, topic, transcript, compact = false }) {
+  const limits = compact
+    ? "Ответ максимально короткий: 1 сильная сторона, до 2 ошибок, 2 слова и 2 упражнения. Объяснение — одно короткое предложение."
+    : "Пиши компактно: до 3 сильных сторон, до 4 ошибок, до 5 слов и 3–4 упражнения. Без длинных объяснений.";
+  return completeWithGuard(llama, {
+    messages: [
+      {
+        role: "system",
+        content: `Ты анализируешь английскую речь ученика уровня ${level}. Тема: ${topic}. Оценивай только реплики ученика. Допустимые варианты не считай ошибками. Все объяснения и переводы пиши по-русски. ${limits}`,
+      },
+      {
+        role: "user",
+        content: `Разбери диалог и верни результат строго по заданной JSON-схеме. Поле answer должно точно совпадать с одним элементом options.\n\n${transcript}`,
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { strict: true, schema: ANALYSIS_SCHEMA },
+    },
+    n_predict: compact ? 700 : model.id === "light" ? 900 : 1150,
+    temperature: 0.18,
+    top_k: 25,
+    top_p: 0.82,
+    repeat_penalty: 1.05,
+    stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
+  }, undefined, compact ? 120000 : 170000);
+}
+
 export async function analyzeTutorConversation({ model, level, topic, messages }) {
   const llama = await loadModel(model);
   const transcript = messages
     .filter((item) => item.role === "user" || item.role === "assistant")
-    .slice(-16)
+    .slice(-12)
     .map((item) => `${item.role === "user" ? "Ученик" : "Преподаватель"}: ${item.content}`)
-    .join("\n");
-  const result = await completeWithGuard(llama, {
-    messages: [
-      {
-        role: "system",
-        content: `Ты анализируешь разговор ученика английского уровня ${level}. Тема: ${topic}. Оценивай только реплики ученика. Допустимые варианты английского не считай ошибками. Верни только один JSON-объект без markdown и дополнительного текста. Все объяснения и переводы пиши по-русски.`,
-      },
-      {
-        role: "user",
-        content: `Разбери этот диалог:\n${transcript}\n\nВерни JSON строго такой структуры:\n{"summary":"краткий итог","scores":{"grammar":0,"vocabulary":0,"fluency":0},"strengths":["сильная сторона"],"mistakes":[{"original":"фраза ученика","corrected":"правильная фраза","explanation":"объяснение"}],"words":[{"english":"полезное слово","russian":"перевод","example":"пример"}],"exercises":[{"prompt":"задание по ошибке или теме","options":["вариант 1","вариант 2","вариант 3","вариант 4"],"answer":"точная строка одного из options","explanation":"почему"}]}. Сделай 4–6 упражнений. Если ошибок мало, создай задания на улучшение словаря и естественность речи.`,
-      },
-    ],
-    response_format: { type: "json_object" },
-    n_predict: model.id === "light" ? 650 : 900,
-    temperature: 0.25,
-    top_k: 30,
-    top_p: 0.85,
-    repeat_penalty: 1.05,
-    stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
-  }, undefined, 150000);
-  return parseAnalysis(result?.text);
+    .join("\n")
+    .slice(-6000);
+  try {
+    const result = await requestConversationAnalysis({ llama, model, level, topic, transcript });
+    return parseAnalysis(result?.text);
+  } catch (firstError) {
+    try {
+      const retry = await requestConversationAnalysis({ llama, model, level, topic, transcript, compact: true });
+      return parseAnalysis(retry?.text);
+    } catch {
+      throw new Error("ИИ не успел закончить разбор. Попробуйте ещё раз — приложение автоматически сделает его короче.");
+    }
+  }
 }
 
 export async function completeVoiceCoachMessage({

@@ -585,7 +585,10 @@ function TutorChat({ model, onModels, onVoice }) {
       const result = await analyzeTutorConversation({ model, level, topic, messages });
       setAnalysis(result);
     } catch (analysisError) {
-      setError(analysisError?.message || "Не удалось разобрать разговор. Попробуйте ещё раз.");
+      const message = analysisError?.message || "";
+      setError(/json|parse|unexpected|незаверш/i.test(message)
+        ? "Разбор не успел завершиться. Нажми ещё раз — он будет создан в сокращённом формате."
+        : message || "Не удалось разобрать разговор. Попробуйте ещё раз.");
       setAnalysisOpen(false);
     } finally {
       setAnalyzing(false);
