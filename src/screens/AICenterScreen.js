@@ -39,7 +39,7 @@ const formatBytes = (bytes) => {
     : `${Math.round(bytes / 1024 ** 2)} МБ`;
 };
 
-export default function AICenterScreen({ onClose, onPronunciation }) {
+export default function AICenterScreen({ onClose, onPronunciation, onSpeechModels }) {
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [memoryGoal, setMemoryGoal] = useState("");
@@ -99,6 +99,12 @@ export default function AICenterScreen({ onClose, onPronunciation }) {
         <View style={styles.labIcon}><Ionicons name="mic" size={28} color="white" /></View>
         <View style={{ flex: 1 }}><Text style={styles.labTitle}>Лаборатория произношения</Text><Text style={styles.labText}>Пары звуков, запись голоса, оценка и экзамен</Text></View>
         <Ionicons name="chevron-forward" size={22} color="white" />
+      </Pressable>
+
+      <Pressable onPress={onSpeechModels} style={styles.speechCard}>
+        <View style={styles.speechIcon}><Ionicons name="hardware-chip-outline" size={25} color={colors.mint} /></View>
+        <View style={{ flex: 1 }}><Text style={styles.rowTitle}>Офлайн-модель речи</Text><Text style={styles.rowSub}>Whisper: лёгкая, обычная или продвинутая</Text></View>
+        <Ionicons name="download-outline" size={22} color={colors.mint} />
       </Pressable>
 
       <Text style={styles.section}>УСТРОЙСТВО И ДВИЖОК</Text>
@@ -190,6 +196,7 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.background }, content: { padding: 22, paddingBottom: 130 }, center: { flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center" },
   header: { flexDirection: "row", alignItems: "center", gap: 13, marginBottom: 22 }, round: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, title: { color: "white", fontWeight: "900", fontSize: 28 }, muted: { color: colors.textMuted, marginTop: 3 }, statusDot: { width: 11, height: 11, borderRadius: 6 },
   labCard: { backgroundColor: colors.purple, borderRadius: 24, padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }, labIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }, labTitle: { color: "white", fontSize: 18, fontWeight: "900" }, labText: { color: "#E9E3FF", marginTop: 4, lineHeight: 19 },
+  speechCard: { backgroundColor: colors.card, borderRadius: 19, borderWidth: 1, borderColor: `${colors.mint}44`, padding: 14, marginTop: 11, flexDirection: "row", alignItems: "center", gap: 12 }, speechIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: `${colors.mint}15`, alignItems: "center", justifyContent: "center" },
   section: { color: colors.textMuted, fontSize: 12, letterSpacing: 2, fontWeight: "900", marginTop: 27, marginBottom: 10 }, card: { backgroundColor: colors.card, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 17, gap: 15 }, row: { flexDirection: "row", alignItems: "center", gap: 11 }, rowTitle: { color: "white", fontSize: 15, fontWeight: "800", flex: 1 }, rowValue: { color: colors.textMuted, fontWeight: "700", maxWidth: "45%", textAlign: "right" }, rowSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, lineHeight: 17 },
   outlineButton: { borderWidth: 1, borderColor: `${colors.orange}66`, borderRadius: 14, padding: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }, outlineText: { color: colors.orange, fontWeight: "900" }, switchRow: { flexDirection: "row", alignItems: "center", gap: 14 }, notice: { backgroundColor: `${colors.purple}12`, padding: 12, borderRadius: 14, flexDirection: "row", gap: 9 }, noticeText: { flex: 1, color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   storageGrid: { flexDirection: "row", gap: 9 }, stat: { flex: 1, minHeight: 100, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 13, justifyContent: "center" }, statDot: { width: 9, height: 9, borderRadius: 5, marginBottom: 10 }, statValue: { color: "white", fontWeight: "900", fontSize: 16 }, modelRow: { marginTop: 9, backgroundColor: colors.card, borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }, modelMark: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center" }, actionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 12 },

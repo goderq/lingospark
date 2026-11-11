@@ -14,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { requestRecordingPermissionsAsync } from "expo-audio";
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -26,6 +27,7 @@ import { balancedOptions } from "../utils/shuffle";
 import VoiceCoachScreen from "./VoiceCoachScreen";
 import AICenterScreen from "./AICenterScreen";
 import PronunciationLabScreen from "./PronunciationLabScreen";
+import SpeechModelsScreen from "./SpeechModelsScreen";
 import AIDirectorScreen from "./AIDirectorScreen";
 import {
   AI_MODELS,
@@ -53,6 +55,13 @@ import {
   subscribeToDownload,
   unloadModel,
 } from "../services/localAi";
+import {
+  cancelSpeechRecording,
+  getReadySpeechModel,
+  startSpeechRecording,
+  stopSpeechRecording,
+  transcribeSpeechData,
+} from "../services/offlineSpeech";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
 const TOPICS = ["Свободный разговор", "Путешествия", "Работа", "Грамматика", "Экзамен"];
@@ -139,10 +148,13 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate }) {
     );
   }
   if (screen === "center") {
-    return <AICenterScreen onClose={() => setScreen("models")} onPronunciation={() => setScreen("pronunciation")} />;
+    return <AICenterScreen onClose={() => setScreen("models")} onPronunciation={() => setScreen("pronunciation")} onSpeechModels={() => setScreen("speechModels")} />;
+  }
+  if (screen === "speechModels") {
+    return <SpeechModelsScreen onClose={() => setScreen("center")} />;
   }
   if (screen === "pronunciation") {
-    return <PronunciationLabScreen onClose={() => setScreen("center")} />;
+    return <PronunciationLabScreen onClose={() => setScreen("center")} onSpeechModels={() => setScreen("speechModels")} />;
   }
   if (screen === "voice" && activeModel) {
     return (
@@ -395,6 +407,8 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
   const [loadProgress, setLoadProgress] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [listening, setListening] = useState(false);
+  const [speechModel, setSpeechModel] = useState(null);
+  const [speechTranscribing, setSpeechTranscribing] = useState(false);
   const [error, setError] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [openActionsId, setOpenActionsId] = useState(null);
@@ -403,6 +417,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
   const generationText = useRef("");
   const updateTimer = useRef(null);
   const historyReady = useRef(false);
+  const localSpeechRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -413,8 +428,11 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
       mounted = false;
       if (updateTimer.current) clearTimeout(updateTimer.current);
       stopSpeech();
+      cancelSpeechRecording().catch(() => {});
     };
   }, [model.id]);
+
+  useEffect(() => { getReadySpeechModel().then(setSpeechModel).catch(() => {}); }, []);
 
   useEffect(() => {
     loadTutorFeedback().then((items) => setFeedbackMap(Object.fromEntries(items.map((item) => [item.messageId, item])))).catch(() => {});
@@ -514,8 +532,30 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
 
   const startListening = async () => {
     setError("");
+    if (speechTranscribing) return;
+    if (listening && localSpeechRef.current) {
+      setListening(false); setSpeechTranscribing(true);
+      try {
+        const recording = await stopSpeechRecording();
+        localSpeechRef.current = false;
+        const result = await transcribeSpeechData(speechModel, recording.float32);
+        setInput(String(result?.result || "").trim());
+      } catch (speechError) {
+        localSpeechRef.current = false;
+        setError(speechError?.message || "Не удалось распознать речь.");
+      } finally { setSpeechTranscribing(false); }
+      return;
+    }
     if (listening) {
       ExpoSpeechRecognitionModule.stop();
+      return;
+    }
+    if (speechModel) {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) { setError("Разрешите доступ к микрофону в настройках iPhone."); return; }
+      setInput("");
+      try { startSpeechRecording(); localSpeechRef.current = true; setListening(true); }
+      catch (speechError) { setError(speechError?.message || "Не удалось начать запись."); }
       return;
     }
     const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -966,13 +1006,13 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
       ) : null}
 
       <View style={[styles.composer, { marginBottom: keyboardVisible ? 96 : 86 }]}>
-        <Pressable onPress={startListening} disabled={!modelReady || generating} style={[styles.micButton, listening && styles.micActive]}>
-          <Ionicons name={listening ? "stop" : "mic"} size={22} color="white" />
+        <Pressable onPress={startListening} disabled={!modelReady || generating || speechTranscribing} style={[styles.micButton, listening && styles.micActive]}>
+          {speechTranscribing ? <ActivityIndicator size="small" color="white" /> : <Ionicons name={listening ? "stop" : "mic"} size={22} color="white" />}
         </Pressable>
         <TextInput
           value={input}
           onChangeText={setInput}
-          placeholder={listening ? "Слушаю…" : "Напиши по-английски…"}
+          placeholder={speechTranscribing ? "Распознаю на iPhone…" : listening ? `Слушаю${speechModel ? " · Whisper" : ""}…` : "Напиши по-английски…"}
           placeholderTextColor={colors.textMuted}
           style={styles.input}
           maxLength={800}

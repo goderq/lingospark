@@ -1,6 +1,6 @@
 {
   "name": "lingospark-expo",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "main": "index.js",
   "scripts": {
@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.1.1",
+    "@fugood/react-native-audio-pcm-stream": "^1.1.4",
     "@pocketpalai/llama.rn": "^0.8.1-0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@supabase/supabase-js": "2.119.0",
+    "buffer": "^6.0.3",
     "expo": "~58.0.23",
     "expo-asset": "~58.0.20",
     "expo-audio": "~58.0.11",
@@ -38,7 +40,8 @@
     "react": "19.3.0",
     "react-native": "0.88.1",
     "react-native-safe-area-context": "^5.11.1",
-    "react-native-url-polyfill": "4.0.0"
+    "react-native-url-polyfill": "4.0.0",
+    "whisper.rn": "^0.7.4"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",

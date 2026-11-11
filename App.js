@@ -114,17 +114,27 @@ import {
   pauseActiveModelDownload,
   resumePendingModelDownload,
 } from "./src/services/localAi";
+import {
+  pauseSpeechModelDownload,
+  resumeSpeechModelDownload,
+} from "./src/services/offlineSpeech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-ai-actions";
+const UPDATE_VERSION = "2026.11-offline-speech";
 
 export default function App() {
   useEffect(() => {
     warmSpeech();
     resumePendingModelDownload().catch(() => {});
+    resumeSpeechModelDownload().catch(() => {});
     const listener = AppState.addEventListener("change", (state) => {
-      if (state === "active") resumePendingModelDownload().catch(() => {});
-      else if (state === "background") pauseActiveModelDownload().catch(() => {});
+      if (state === "active") {
+        resumePendingModelDownload().catch(() => {});
+        resumeSpeechModelDownload().catch(() => {});
+      } else if (state === "background") {
+        pauseActiveModelDownload().catch(() => {});
+        pauseSpeechModelDownload().catch(() => {});
+      }
     });
     return () => listener.remove();
   }, []);

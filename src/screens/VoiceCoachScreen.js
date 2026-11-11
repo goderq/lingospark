@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { requestRecordingPermissionsAsync } from "expo-audio";
 import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
@@ -24,6 +25,13 @@ import {
   saveTutorSession,
   stopGeneration,
 } from "../services/localAi";
+import {
+  cancelSpeechRecording,
+  getReadySpeechModel,
+  startSpeechRecording,
+  stopSpeechRecording,
+  transcribeSpeechData,
+} from "../services/offlineSpeech";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1"];
 
@@ -111,7 +119,9 @@ export default function VoiceCoachScreen({ model, onClose }) {
   const [partialReply, setPartialReply] = useState("");
   const [error, setError] = useState("");
   const [analysis, setAnalysis] = useState(null);
+  const [speechModel, setSpeechModel] = useState(null);
   const processingRef = useRef(false);
+  const localSpeechRef = useRef(false);
   const messagesRef = useRef([]);
   const scrollRef = useRef(null);
 
@@ -135,8 +145,11 @@ export default function VoiceCoachScreen({ model, onClose }) {
       } catch {}
       stopGeneration().catch(() => {});
       stopSpeech();
+      cancelSpeechRecording().catch(() => {});
     };
   }, [model.id]);
+
+  useEffect(() => { getReadySpeechModel().then(setSpeechModel).catch(() => {}); }, []);
 
   useSpeechRecognitionEvent("start", () => setStatus("listening"));
   useSpeechRecognitionEvent("end", () => {
@@ -163,6 +176,14 @@ export default function VoiceCoachScreen({ model, onClose }) {
     if (!modelReady || processingRef.current) return;
     setError("");
     await stopSpeech();
+    if (speechModel) {
+      const permission = await requestRecordingPermissionsAsync();
+      if (!permission.granted) { setError("Разреши микрофон в настройках iPhone."); return; }
+      setTranscript("");
+      try { startSpeechRecording(); localSpeechRef.current = true; setStatus("listening"); }
+      catch (speechError) { setError(speechError?.message || "Не удалось начать запись."); }
+      return;
+    }
     const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!permission.granted) {
       setError("Разреши микрофон и распознавание речи в настройках iPhone.");
@@ -184,6 +205,24 @@ export default function VoiceCoachScreen({ model, onClose }) {
       },
       iosVoiceProcessingEnabled: true,
     });
+  };
+
+  const stopListening = async () => {
+    if (!localSpeechRef.current) { ExpoSpeechRecognitionModule.stop(); return; }
+    setStatus("transcribing");
+    try {
+      const recording = await stopSpeechRecording();
+      localSpeechRef.current = false;
+      const result = await transcribeSpeechData(speechModel, recording.float32);
+      const text = String(result?.result || "").trim();
+      if (!text) { setStatus("ready"); setError("Речь не распознана. Попробуй произнести фразу чуть громче."); return; }
+      setTranscript(text);
+      await processUserSpeech(text);
+    } catch (speechError) {
+      localSpeechRef.current = false;
+      setStatus("ready");
+      setError(speechError?.message || "Не удалось распознать речь.");
+    }
   };
 
   const processUserSpeech = async (text) => {
@@ -340,6 +379,7 @@ export default function VoiceCoachScreen({ model, onClose }) {
     loading: "Запускаю модель…",
     ready: "Нажми и говори",
     listening: "Слушаю — закончи фразу",
+    transcribing: `Whisper распознаёт${speechModel ? ` · ${speechModel.title}` : ""}…`,
     thinking: "Lingo думает на iPhone…",
     speaking: "Lingo отвечает",
   }[status];
@@ -418,11 +458,11 @@ export default function VoiceCoachScreen({ model, onClose }) {
         )}
         <Text style={s.statusText}>{statusLabel}</Text>
         <Pressable
-          disabled={status === "thinking" || status === "speaking" || status === "loading"}
-          onPress={status === "listening" ? () => ExpoSpeechRecognitionModule.stop() : startListening}
+          disabled={status === "thinking" || status === "speaking" || status === "loading" || status === "transcribing"}
+          onPress={status === "listening" ? stopListening : startListening}
           style={[s.micOrb, status === "listening" && s.micListening, (status === "thinking" || status === "speaking") && s.micBusy]}
         >
-          {status === "thinking" ? <ActivityIndicator size="large" color="white" /> : (
+          {status === "thinking" || status === "transcribing" ? <ActivityIndicator size="large" color="white" /> : (
             <Ionicons name={status === "listening" ? "stop" : status === "speaking" ? "volume-high" : "mic"} size={42} color="white" />
           )}
         </Pressable>
