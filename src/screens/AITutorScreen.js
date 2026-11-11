@@ -681,18 +681,42 @@ function TutorChat({ model, onModels, onVoice }) {
       <View style={styles.chatHeader}>
         <View style={[styles.onlineDot, { backgroundColor: modelReady ? colors.mint : colors.orange }]} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.chatTitle}>Lingo · {model.title}</Text>
+          <Text numberOfLines={1} style={styles.chatTitle}>Lingo · {model.title}</Text>
           <Text style={styles.chatStatus}>{modelReady ? "Локально · без интернета" : `Запуск модели · ${progressLabel}`}</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={onVoice} style={[styles.headerButton, { backgroundColor: colors.purple }]}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Открыть голосовой разговор"
+            hitSlop={5}
+            pressRetentionOffset={16}
+            onPress={onVoice}
+            style={({ pressed }) => [styles.chatHeaderButton, styles.chatHeaderButtonPrimary, pressed && styles.chatHeaderButtonPressed]}
+          >
             <Ionicons name="mic" size={21} color={colors.white} />
+            <Text style={[styles.chatHeaderButtonText, { color: "white" }]}>Голос</Text>
           </Pressable>
-          <Pressable onPress={() => setHistoryOpen(true)} style={styles.headerButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Открыть историю разговоров"
+            hitSlop={5}
+            pressRetentionOffset={16}
+            onPress={() => setHistoryOpen(true)}
+            style={({ pressed }) => [styles.chatHeaderButton, pressed && styles.chatHeaderButtonPressed]}
+          >
             <Ionicons name="time-outline" size={22} color={colors.white} />
+            <Text style={styles.chatHeaderButtonText}>История</Text>
           </Pressable>
-          <Pressable onPress={onModels} style={styles.headerButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Открыть выбор модели"
+            hitSlop={5}
+            pressRetentionOffset={16}
+            onPress={onModels}
+            style={({ pressed }) => [styles.chatHeaderButton, pressed && styles.chatHeaderButtonPressed]}
+          >
             <Ionicons name="hardware-chip-outline" size={22} color={colors.white} />
+            <Text style={styles.chatHeaderButtonText}>Модель</Text>
           </Pressable>
         </View>
       </View>
@@ -1077,12 +1101,16 @@ const styles = StyleSheet.create({
   errorText: { color: "white", fontSize: 12, lineHeight: 17, flex: 1 },
   licenseText: { color: colors.textMuted, opacity: 0.7, textAlign: "center", fontSize: 10, marginTop: 8 },
   chatPage: { flex: 1, backgroundColor: colors.background },
-  chatHeader: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, borderBottomWidth: 1, borderColor: colors.border },
+  chatHeader: { minHeight: 74, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderBottomWidth: 1, borderColor: colors.border },
   onlineDot: { width: 10, height: 10, borderRadius: 5 },
   chatTitle: { color: "white", fontSize: 17, fontWeight: "900" },
   chatStatus: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
-  headerActions: { flexDirection: "row", gap: 7 },
+  headerActions: { flexDirection: "row", gap: 5 },
   headerButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  chatHeaderButton: { width: 54, height: 56, borderRadius: 17, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 2 },
+  chatHeaderButtonPrimary: { backgroundColor: colors.purple, borderColor: colors.purple },
+  chatHeaderButtonPressed: { opacity: 0.65, transform: [{ scale: 0.94 }] },
+  chatHeaderButtonText: { color: colors.textMuted, fontSize: 8, lineHeight: 10, fontWeight: "800" },
   optionsStrip: { borderBottomWidth: 1, borderColor: colors.border },
   chips: { paddingHorizontal: 14, paddingVertical: 10, gap: 7 },
   chip: { height: 34, minWidth: 44, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
