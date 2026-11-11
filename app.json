@@ -17,8 +17,8 @@
       "bundleIdentifier": "com.lingospark.app",
       "buildNumber": "16",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "LingoSpark использует микрофон, чтобы вы могли записывать и сравнивать своё произношение.",
-        "NSSpeechRecognitionUsageDescription": "LingoSpark распознаёт вашу английскую речь локально, чтобы ИИ-преподаватель мог поддерживать разговор.",
+        "NSMicrophoneUsageDescription": "Разрешите LingoSpark слышать вашу речь для разговорной практики.",
+        "NSSpeechRecognitionUsageDescription": "Разрешите LingoSpark локально преобразовывать английскую речь в текст.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -26,12 +26,10 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#7C5CFC"
-      }
-    },
-    "extra": {
-      "eas": {
-        "projectId": "7f33d965-f80c-4e1d-abf7-252be0c47ca5"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-font",
@@ -55,6 +53,12 @@
           "enableOpenCL": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3baff75e-7a73-494a-b44b-50074ee31916"
+      }
+    },
+    "owner": "qwetarhj"
   }
 }
