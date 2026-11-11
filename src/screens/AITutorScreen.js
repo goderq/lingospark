@@ -43,9 +43,11 @@ import {
   inspectModels,
   loadModel,
   loadTutorMemory,
+  loadTutorFeedback,
   loadTutorSessions,
   markTutorMissionCompleted,
   saveTutorSession,
+  saveTutorFeedback,
   setActiveModelId,
   stopGeneration,
   subscribeToDownload,
@@ -60,6 +62,14 @@ const DIALOGUE_MODES = [
   { id: "debate", title: "Дебаты", icon: "megaphone", hint: "Защищай мнение и отвечай на возражения" },
   { id: "story", title: "История", icon: "book", hint: "Продолжай сюжет через решения A или B" },
   { id: "strict", title: "Строгий", icon: "school", hint: "Каждая ошибка разбирается коротко и точно" },
+];
+const RESPONSE_ACTIONS = [
+  { id: "simpler", title: "Проще", icon: "contract", instruction: "Объясни этот ответ проще: короткие предложения, одна идея за раз и уровень ученика. Не меняй смысл." },
+  { id: "detail", title: "Подробнее", icon: "expand", instruction: "Объясни этот ответ подробнее, но без воды. Добавь причину и один полезный нюанс." },
+  { id: "example", title: "Пример", icon: "bulb", instruction: "Покажи два естественных примера по теме: один простой и один немного сложнее. Добавь русский перевод." },
+  { id: "exercise", title: "Задание", icon: "school", instruction: "Создай одно короткое задание по этому ответу. Сначала задай вопрос и не показывай правильный ответ." },
+  { id: "translate", title: "Перевод", icon: "language", instruction: "Дай точный русский перевод английской части ответа и кратко объясни естественные выражения." },
+  { id: "retry", title: "Иначе", icon: "refresh", instruction: "Ответь заново другим способом: не повторяй структуру, начало и вопрос из прежнего ответа." },
 ];
 
 const welcomeFor = (level, topic, modeId = "conversation") => ({
@@ -151,6 +161,7 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate }) {
         model={activeModel}
         onModels={() => setScreen("models")}
         onDirector={() => setScreen("director")}
+        onNavigate={onNavigate}
         onVoice={() => {
           onImmersiveChange?.(true);
           setScreen("voice");
@@ -366,7 +377,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
   );
 }
 
-function TutorChat({ model, onModels, onVoice, onDirector }) {
+function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
   const { progress, toggleNotebook, addCustomWord } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
@@ -386,6 +397,8 @@ function TutorChat({ model, onModels, onVoice, onDirector }) {
   const [listening, setListening] = useState(false);
   const [error, setError] = useState("");
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [openActionsId, setOpenActionsId] = useState(null);
+  const [feedbackMap, setFeedbackMap] = useState({});
   const scrollRef = useRef(null);
   const generationText = useRef("");
   const updateTimer = useRef(null);
@@ -402,6 +415,10 @@ function TutorChat({ model, onModels, onVoice, onDirector }) {
       stopSpeech();
     };
   }, [model.id]);
+
+  useEffect(() => {
+    loadTutorFeedback().then((items) => setFeedbackMap(Object.fromEntries(items.map((item) => [item.messageId, item])))).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -529,13 +546,20 @@ function TutorChat({ model, onModels, onVoice, onDirector }) {
     );
   };
 
-  const send = async () => {
-    const text = input.trim();
+  const submitMessage = async (rawText, options = {}) => {
+    const text = String(rawText || "").trim();
     if (!text || generating || !modelReady) return;
     Keyboard.dismiss();
-    setInput("");
+    if (options.kind !== "command") setInput("");
+    setOpenActionsId(null);
     setError("");
-    const userMessage = { id: `user-${Date.now()}`, role: "user", content: text };
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: text,
+      displayContent: options.displayContent || text,
+      kind: options.kind || "message",
+    };
     const nextMessages = [...messages, userMessage];
     setMessages([...nextMessages, { id: "streaming", role: "assistant", content: "" }]);
     setGenerating(true);
@@ -563,6 +587,7 @@ function TutorChat({ model, onModels, onVoice, onDirector }) {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: finalText || "Попробуем ещё раз.",
+        quality: result?.quality || null,
       };
       const completedMessages = [...nextMessages, assistantMessage];
       setMessages(completedMessages);
@@ -585,6 +610,34 @@ function TutorChat({ model, onModels, onVoice, onDirector }) {
       setGenerating(false);
     }
   };
+
+  const send = () => submitMessage(input);
+
+  const runResponseAction = (message, action) => {
+    const excerpt = String(message.content || "").slice(0, 1200);
+    submitMessage(`${action.instruction}\n\nОтвет Lingo, с которым нужно работать:\n${excerpt}`, {
+      kind: "command",
+      displayContent: action.title,
+    });
+  };
+
+  const recordFeedback = async (message, rating, reason = "") => {
+    const entry = { messageId: message.id, rating, reason, text: String(message.content || "").slice(0, 1200) };
+    const next = await saveTutorFeedback(entry);
+    setFeedbackMap(Object.fromEntries(next.map((item) => [item.messageId, item])));
+  };
+
+  const dislike = (message) => Alert.alert(
+    "Что не так с ответом?",
+    "Выбор сохранится только на iPhone и изменит следующие ответы Lingo.",
+    [
+      { text: "Неправильно", onPress: () => recordFeedback(message, "down", "wrong") },
+      { text: "Однотипно", onPress: () => recordFeedback(message, "down", "repetitive") },
+      { text: "Слишком сложно", onPress: () => recordFeedback(message, "down", "hard") },
+      { text: "Слишком легко", onPress: () => recordFeedback(message, "down", "easy") },
+      { text: "Отмена", style: "cancel" },
+    ],
+  );
 
   const stop = async () => {
     await stopGeneration();
@@ -643,7 +696,7 @@ function TutorChat({ model, onModels, onVoice, onDirector }) {
   };
 
   const runAnalysis = async () => {
-    const userCount = messages.filter((item) => item.role === "user").length;
+    const userCount = messages.filter((item) => item.role === "user" && item.kind !== "command").length;
     if (userCount < 2) {
       setError("Для разбора напиши или скажи хотя бы две фразы по-английски.");
       return;
@@ -839,32 +892,58 @@ function TutorChat({ model, onModels, onVoice, onDirector }) {
             <View key={message.id} style={[styles.messageRow, message.role === "user" && styles.messageRowUser]}>
               <View style={[styles.bubble, message.role === "user" ? styles.userBubble : styles.aiBubble]}>
                 {message.role === "assistant" ? <Text style={styles.lingoLabel}>✦ LINGO</Text> : null}
+                {message.role === "user" && message.kind === "command" ? <Text style={styles.commandLabel}>ДЕЙСТВИЕ С ОТВЕТОМ</Text> : null}
+                {message.role === "assistant" && message.quality ? (
+                  <View style={styles.qualityBadge}>
+                    <Ionicons name={message.quality.source === "grammar" ? "library" : "shield-checkmark"} size={12} color={message.quality.confidence === "high" ? colors.mint : colors.purple} />
+                    <Text style={styles.qualityText}>{message.quality.checked === "double" ? "Двойная проверка" : message.quality.checked === "regenerated" ? "Ответ исправлен проверкой" : message.quality.source === "grammar" ? "Опора на справочник" : "Проверено по контексту"}</Text>
+                  </View>
+                ) : null}
                 {message.id === "streaming" && !message.content ? (
                   <View style={styles.thinkingRow}>
                     <ActivityIndicator size="small" color={colors.purple} />
                     <Text style={styles.smallMuted}>Думаю на устройстве…</Text>
                   </View>
                 ) : (
-                  <Text style={styles.messageText}>{message.content}</Text>
+                  <Text style={styles.messageText}>{message.displayContent || message.content}</Text>
                 )}
-                {message.role === "assistant" && message.content ? (
-                  <View style={styles.bubbleActions}>
-                    <Pressable onPress={() => speakMessage(message.content)} style={styles.speakButton}>
-                      <Ionicons name="volume-medium" size={17} color={colors.purple} />
-                      <Text style={styles.speakText}>Озвучить</Text>
-                    </Pressable>
-                    {note ? (
-                      <Pressable onPress={() => toggleNotebook(note)} style={styles.speakButton}>
-                        <Ionicons name={saved ? "bookmark" : "bookmark-outline"} size={16} color={saved ? colors.orange : colors.textMuted} />
-                        <Text style={[styles.speakText, saved && { color: colors.orange }]}>{saved ? "Сохранено" : "В тетрадь"}</Text>
+                {message.role === "assistant" && message.content && message.id !== "streaming" ? (
+                  <>
+                    <View style={styles.bubbleActions}>
+                      <Pressable onPress={() => speakMessage(message.content)} style={styles.speakButton}>
+                        <Ionicons name="volume-medium" size={17} color={colors.purple} />
+                        <Text style={styles.speakText}>Озвучить</Text>
                       </Pressable>
-                    ) : null}
-                  </View>
+                      {note ? (
+                        <Pressable onPress={() => toggleNotebook(note)} style={styles.speakButton}>
+                          <Ionicons name={saved ? "bookmark" : "bookmark-outline"} size={16} color={saved ? colors.orange : colors.textMuted} />
+                          <Text style={[styles.speakText, saved && { color: colors.orange }]}>{saved ? "Сохранено" : "В тетрадь"}</Text>
+                        </Pressable>
+                      ) : null}
+                      {!message.id.startsWith("welcome") ? <Pressable onPress={() => setOpenActionsId((current) => current === message.id ? null : message.id)} style={styles.speakButton}><Ionicons name="options" size={16} color={openActionsId === message.id ? colors.mint : colors.textMuted} /><Text style={[styles.speakText, { color: openActionsId === message.id ? colors.mint : colors.textMuted }]}>Действия</Text></Pressable> : null}
+                    </View>
+                    {!message.id.startsWith("welcome") ? <View style={styles.feedbackRow}>
+                      <Text style={styles.feedbackLabel}>Полезный ответ?</Text>
+                      <Pressable hitSlop={8} onPress={() => recordFeedback(message, "up")} style={[styles.feedbackButton, feedbackMap[message.id]?.rating === "up" && styles.feedbackButtonUp]}><Ionicons name={feedbackMap[message.id]?.rating === "up" ? "thumbs-up" : "thumbs-up-outline"} size={15} color={feedbackMap[message.id]?.rating === "up" ? colors.mint : colors.textMuted} /></Pressable>
+                      <Pressable hitSlop={8} onPress={() => dislike(message)} style={[styles.feedbackButton, feedbackMap[message.id]?.rating === "down" && styles.feedbackButtonDown]}><Ionicons name={feedbackMap[message.id]?.rating === "down" ? "thumbs-down" : "thumbs-down-outline"} size={15} color={feedbackMap[message.id]?.rating === "down" ? colors.pink : colors.textMuted} /></Pressable>
+                    </View> : null}
+                    {openActionsId === message.id ? <View style={styles.responsePanel}>
+                      <Text style={styles.responsePanelTitle}>ИЗМЕНИТЬ ОТВЕТ</Text>
+                      <View style={styles.responseActionGrid}>{RESPONSE_ACTIONS.map((action) => <Pressable key={action.id} disabled={generating} onPress={() => runResponseAction(message, action)} style={styles.responseAction}><Ionicons name={action.icon} size={16} color={colors.purple} /><Text style={styles.responseActionText}>{action.title}</Text></Pressable>)}</View>
+                      <Text style={styles.responsePanelTitle}>ОТКРЫТЬ УПРАЖНЕНИЕ</Text>
+                      <View style={styles.toolGrid}>
+                        <Pressable onPress={() => onNavigate?.({ type: "tab", target: "review" })} style={styles.toolButton}><Ionicons name="library" size={16} color={colors.mint} /><Text style={styles.toolText}>Слова</Text></Pressable>
+                        <Pressable onPress={() => onNavigate?.({ type: "overlay", target: "tenses" })} style={styles.toolButton}><Ionicons name="time" size={16} color={colors.orange} /><Text style={styles.toolText}>Времена</Text></Pressable>
+                        <Pressable onPress={() => onNavigate?.({ type: "overlay", target: "grammarAcademy" })} style={styles.toolButton}><Ionicons name="school" size={16} color="#5EA8FF" /><Text style={styles.toolText}>Грамматика</Text></Pressable>
+                        <Pressable onPress={() => onNavigate?.({ type: "overlay", target: "dictation" })} style={styles.toolButton}><Ionicons name="headset" size={16} color={colors.pink} /><Text style={styles.toolText}>Диктант</Text></Pressable>
+                      </View>
+                    </View> : null}
+                  </>
                 ) : null}
               </View>
             </View>
           )})}
-          {messages.filter((item) => item.role === "user").length >= 2 ? (
+          {messages.filter((item) => item.role === "user" && item.kind !== "command").length >= 2 ? (
             <Pressable onPress={runAnalysis} style={styles.analysisBanner}>
               <View style={styles.analysisBannerIcon}>
                 <Ionicons name="school" size={23} color={colors.orange} />
@@ -1216,11 +1295,27 @@ const styles = StyleSheet.create({
   aiBubble: { backgroundColor: colors.card, borderTopLeftRadius: 6 },
   userBubble: { backgroundColor: colors.purple, borderTopRightRadius: 6 },
   lingoLabel: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1.2, marginBottom: 7 },
+  commandLabel: { color: "rgba(255,255,255,0.7)", fontSize: 8, fontWeight: "900", letterSpacing: 1.1, marginBottom: 5 },
+  qualityBadge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.cardLight, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4, marginBottom: 8 },
+  qualityText: { color: colors.textMuted, fontSize: 8, fontWeight: "800" },
   messageText: { color: "white", fontSize: 15, lineHeight: 21 },
   thinkingRow: { flexDirection: "row", gap: 9, alignItems: "center" },
   speakButton: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, alignSelf: "flex-start" },
   speakText: { color: colors.purple, fontSize: 11, fontWeight: "800" },
   bubbleActions: { flexDirection: "row", alignItems: "center", gap: 18 },
+  feedbackRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderColor: colors.border },
+  feedbackLabel: { color: colors.textMuted, fontSize: 9, flex: 1 },
+  feedbackButton: { width: 30, height: 28, borderRadius: 9, backgroundColor: colors.cardLight, alignItems: "center", justifyContent: "center" },
+  feedbackButtonUp: { backgroundColor: "rgba(46,211,183,0.12)", borderWidth: 1, borderColor: "rgba(46,211,183,0.25)" },
+  feedbackButtonDown: { backgroundColor: "rgba(255,92,138,0.12)", borderWidth: 1, borderColor: "rgba(255,92,138,0.25)" },
+  responsePanel: { marginTop: 10, backgroundColor: colors.cardLight, borderRadius: 15, padding: 10, gap: 8 },
+  responsePanelTitle: { color: colors.textMuted, fontSize: 8, fontWeight: "900", letterSpacing: 1.1 },
+  responseActionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  responseAction: { minWidth: "30%", flexGrow: 1, height: 36, borderRadius: 10, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 7 },
+  responseActionText: { color: "white", fontSize: 9, fontWeight: "800" },
+  toolGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  toolButton: { width: "48%", flexGrow: 1, height: 38, borderRadius: 10, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  toolText: { color: "white", fontSize: 9, fontWeight: "800" },
   chatError: { marginHorizontal: 14, marginBottom: 7, backgroundColor: "rgba(255,159,67,0.12)", borderRadius: 12, padding: 10, flexDirection: "row", gap: 8, alignItems: "center" },
   chatErrorText: { color: "white", fontSize: 11, lineHeight: 15, flex: 1 },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background },

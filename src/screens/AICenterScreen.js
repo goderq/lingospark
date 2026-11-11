@@ -17,6 +17,7 @@ import {
   AI_MODELS,
   addTutorMemoryGoal,
   clearIncompleteModels,
+  clearTutorFeedback,
   clearTutorMemory,
   clearTutorSessions,
   getAiSettings,
@@ -24,6 +25,7 @@ import {
   getFreeSpace,
   inspectModels,
   loadTutorMemory,
+  loadTutorFeedback,
   loadTutorSessions,
   removeTutorMemoryEntry,
   setAiSettings,
@@ -42,10 +44,10 @@ export default function AICenterScreen({ onClose, onPronunciation }) {
   const [busy, setBusy] = useState(false);
   const [memoryGoal, setMemoryGoal] = useState("");
   const refresh = useCallback(async () => {
-    const [models, freeSpace, sessions, settings, tutorMemory] = await Promise.all([
-      inspectModels(), getFreeSpace(), loadTutorSessions(), getAiSettings(), loadTutorMemory(),
+    const [models, freeSpace, sessions, settings, tutorMemory, feedback] = await Promise.all([
+      inspectModels(), getFreeSpace(), loadTutorSessions(), getAiSettings(), loadTutorMemory(), loadTutorFeedback(),
     ]);
-    setData({ models, freeSpace, sessions, settings, tutorMemory, engine: getEngineDiagnostics() });
+    setData({ models, freeSpace, sessions, settings, tutorMemory, feedback, engine: getEngineDiagnostics() });
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -74,6 +76,14 @@ export default function AICenterScreen({ onClose, onPronunciation }) {
     [
       { text: "Отмена", style: "cancel" },
       { text: "Очистить", style: "destructive", onPress: async () => { await clearTutorMemory(); await refresh(); } },
+    ],
+  );
+  const confirmClearFeedback = () => Alert.alert(
+    "Сбросить оценки ответов?",
+    "Lingo перестанет учитывать отметки «неправильно», «однотипно», «сложно» и «легко».",
+    [
+      { text: "Отмена", style: "cancel" },
+      { text: "Сбросить", style: "destructive", onPress: async () => { await clearTutorFeedback(); await refresh(); } },
     ],
   );
 
@@ -166,6 +176,7 @@ export default function AICenterScreen({ onClose, onPronunciation }) {
         <Pressable disabled={busy} onPress={async () => { setBusy(true); await clearIncompleteModels(); await refresh(); setBusy(false); }} style={styles.actionRow}><Ionicons name="sparkles-outline" size={22} color={colors.mint} /><View style={{ flex: 1 }}><Text style={styles.rowTitle}>Очистить незавершённые файлы</Text><Text style={styles.rowSub}>{partialBytes ? `Можно освободить ${formatBytes(partialBytes)}` : "Лишних файлов не найдено"}</Text></View><Ionicons name="chevron-forward" size={20} color={colors.textMuted} /></Pressable>
         <Pressable onPress={confirmClearHistory} style={styles.actionRow}><Ionicons name="trash-outline" size={22} color={colors.pink} /><View style={{ flex: 1 }}><Text style={styles.rowTitle}>Очистить историю ИИ</Text><Text style={styles.rowSub}>Не затрагивает курсы и словарь</Text></View><Ionicons name="chevron-forward" size={20} color={colors.textMuted} /></Pressable>
         <Pressable onPress={confirmClearMemory} style={styles.actionRow}><Ionicons name="bulb-outline" size={22} color={colors.orange} /><View style={{ flex: 1 }}><Text style={styles.rowTitle}>Очистить память преподавателя</Text><Text style={styles.rowSub}>Цели, ошибки, слова и разговорные миссии</Text></View><Ionicons name="chevron-forward" size={20} color={colors.textMuted} /></Pressable>
+        <Pressable onPress={confirmClearFeedback} style={styles.actionRow}><Ionicons name="thumbs-up-outline" size={22} color={colors.purple} /><View style={{ flex: 1 }}><Text style={styles.rowTitle}>Сбросить оценки ответов</Text><Text style={styles.rowSub}>{data.feedback.length ? `${data.feedback.length} локальных оценок влияют на стиль Lingo` : "Оценок пока нет"}</Text></View><Ionicons name="chevron-forward" size={20} color={colors.textMuted} /></Pressable>
       </View>
     </ScrollView>
   );

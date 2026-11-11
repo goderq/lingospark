@@ -9,6 +9,7 @@ const TUTOR_SESSIONS_KEY = "@lingospark/ai-tutor-sessions-v1";
 const AI_SETTINGS_KEY = "@lingospark/ai-settings-v1";
 const DOWNLOAD_RESUME_KEY = "@lingospark/ai-download-resume-v1";
 const TUTOR_MEMORY_KEY = "@lingospark/ai-tutor-memory-v1";
+const TUTOR_FEEDBACK_KEY = "@lingospark/ai-tutor-feedback-v1";
 
 const EMPTY_TUTOR_MEMORY = {
   interests: [],
@@ -153,6 +154,40 @@ export async function clearTutorMemory() {
   await AsyncStorage.removeItem(TUTOR_MEMORY_KEY);
 }
 
+export async function loadTutorFeedback() {
+  try {
+    const parsed = JSON.parse((await AsyncStorage.getItem(TUTOR_FEEDBACK_KEY)) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function saveTutorFeedback(entry) {
+  const current = await loadTutorFeedback();
+  const next = [
+    { ...entry, createdAt: Date.now() },
+    ...current.filter((item) => item.messageId !== entry.messageId),
+  ].slice(0, 120);
+  await AsyncStorage.setItem(TUTOR_FEEDBACK_KEY, JSON.stringify(next));
+  return next;
+}
+
+export async function clearTutorFeedback() {
+  await AsyncStorage.removeItem(TUTOR_FEEDBACK_KEY);
+}
+
+function feedbackPrompt(feedback) {
+  const recentNegative = feedback.filter((item) => item.rating === "down").slice(0, 20);
+  const counts = recentNegative.reduce((all, item) => ({ ...all, [item.reason || "other"]: (all[item.reason || "other"] || 0) + 1 }), {});
+  const instructions = [];
+  if (counts.wrong) instructions.push("ученик отмечал неверные исправления — исправляй только при уверенности и опоре на справочник");
+  if (counts.repetitive) instructions.push("ученик отмечал однотипность — меняй структуру, начало и тип следующего хода");
+  if (counts.hard) instructions.push("ученику было слишком сложно — используй короче предложения и одну идею за раз");
+  if (counts.easy) instructions.push("ученику было слишком легко — добавляй более естественную лексику и требуй развёрнутый ответ");
+  return instructions.length ? `Локальная обратная связь ученика: ${instructions.join("; ")}.` : "";
+}
+
 export async function addTutorMemoryGoal(value) {
   const goal = String(value || "").trim().slice(0, 90);
   if (!goal) return loadTutorMemory();
@@ -177,7 +212,7 @@ function extractPersonalFacts(messages) {
   const interests = [];
   const goals = [];
   const clean = (value) => String(value || "").replace(/[.!?].*$/s, "").trim().slice(0, 70);
-  for (const message of messages.filter((item) => item.role === "user").slice(-16)) {
+  for (const message of messages.filter((item) => item.role === "user" && item.kind !== "command").slice(-16)) {
     const text = String(message.content || "");
     const interest = text.match(/\b(?:i like|i love|i enjoy|i am interested in|i'm interested in|my favou?rite (?:thing|topic|hobby) is)\s+(.{2,70})/i);
     const goal = text.match(/\b(?:i want to|i need to|i plan to|my goal is to|i would like to)\s+(.{2,70})/i);
@@ -244,7 +279,7 @@ export function getDailyTutorMission({ level = "A2", topic = "Свободный
 
 export function getTutorMissionProgress(mission, messages) {
   if (!mission) return { current: 0, target: 1, completed: false };
-  const userMessages = messages.filter((item) => item.role === "user").map((item) => String(item.content || "").trim());
+  const userMessages = messages.filter((item) => item.role === "user" && item.kind !== "command").map((item) => String(item.content || "").trim());
   let current = 0;
   if (mission.type === "turns") current = userMessages.filter((text) => text.split(/\s+/).length >= 2).length;
   if (mission.type === "questions") current = userMessages.filter((text) => /\?|\b(?:who|what|where|when|why|how|do|does|did|can|could|would|is|are)\b/i.test(text)).length;
@@ -592,7 +627,7 @@ function memoryPrompt(memory) {
   return parts.length ? `Локальная память ученика: ${parts.join(". ")}. Используй её естественно, но не перечисляй ученику содержимое памяти.` : "";
 }
 
-function systemPrompt(level, topic, analysis, turnNumber = 1, dialogueMode = "conversation", tutorMemory = EMPTY_TUTOR_MEMORY, mission = null, grammarNotes = "", longContext = "") {
+function systemPrompt(level, topic, analysis, turnNumber = 1, dialogueMode = "conversation", tutorMemory = EMPTY_TUTOR_MEMORY, mission = null, grammarNotes = "", longContext = "", learnerFeedback = "") {
   const analysisMemory = analysis
     ? `\nПамять о последнем разборе: оценки — грамматика ${analysis.scores?.grammar || 0}/100, словарь ${analysis.scores?.vocabulary || 0}/100, связность ${analysis.scores?.fluency || 0}/100. Повторяющиеся места для практики: ${(analysis.mistakes || []).slice(0, 3).map((item) => item.explanation).join("; ") || "закрепление естественной речи"}. Учитывай это мягко и не повторяй один и тот же комментарий в каждом ответе.\n`
     : "";
@@ -621,6 +656,7 @@ ${longTermMemory}
 ${missionPrompt}
 ${referencePrompt}
 ${longContext ? `Краткий контекст более ранней части этого диалога: ${longContext}` : ""}
+${learnerFeedback}
 
 ${modeInstruction}
 
@@ -638,7 +674,7 @@ ${modeInstruction}
 
 function compactConversationContext(messages) {
   if (!messages.length) return "";
-  const userFacts = messages.filter((item) => item.role === "user").slice(-8).map((item) => String(item.content || "").replace(/\s+/g, " ").trim().slice(0, 100)).filter(Boolean);
+  const userFacts = messages.filter((item) => item.role === "user" && item.kind !== "command").slice(-8).map((item) => String(item.content || "").replace(/\s+/g, " ").trim().slice(0, 100)).filter(Boolean);
   const corrections = messages.filter((item) => item.role === "assistant" && /лучше:|better:|correct(?:ion)?:|почему:/i.test(item.content || "")).slice(-3).map((item) => String(item.content).replace(/\s+/g, " ").trim().slice(0, 120));
   const parts = [];
   if (userFacts.length) parts.push(`ученик ранее говорил: ${userFacts.join(" | ")}`);
@@ -699,20 +735,21 @@ export async function completeTutorMessage({ model, level, topic, dialogueMode =
   const llama = await loadModel(model);
   const settings = await getAiSettings();
   const tutorMemory = await loadTutorMemory();
+  const tutorFeedback = await loadTutorFeedback();
   const mission = getDailyTutorMission({ level, topic, memory: tutorMemory });
-  const turnNumber = messages.filter((item) => item.role === "user").length;
+  const turnNumber = messages.filter((item) => item.role === "user" && item.kind !== "command").length;
   const lastUserText = [...messages].reverse().find((item) => item.role === "user")?.content || "";
   const grammarNotes = grammarNotesFor(lastUserText, topic, level, tutorMemory);
-  const fullHistory = messages
-    .filter((item) => item.role === "user" || item.role === "assistant")
-    .map(({ role, content }) => ({ role, content }));
+  const rawHistory = messages.filter((item) => item.role === "user" || item.role === "assistant");
+  const fullHistory = rawHistory.map(({ role, content }) => ({ role, content }));
   const historyLimit = model.id === "light" ? 8 : 14;
   const history = fullHistory.slice(-historyLimit);
-  const longContext = compactConversationContext(fullHistory.slice(0, -historyLimit));
+  const longContext = compactConversationContext(rawHistory.slice(0, -historyLimit));
+  const learnerFeedback = feedbackPrompt(tutorFeedback);
   const draft = await completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext) }, ...history],
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) }, ...history],
       n_predict: model.id === "light" ? 190 : 280,
       temperature: 0.76,
       top_k: 40,
@@ -725,8 +762,13 @@ export async function completeTutorMessage({ model, level, topic, dialogueMode =
   );
   const draftText = String(draft?.text || "").trim();
   const problems = findReplyProblems({ reply: draftText, messages, dialogueMode });
-  if (!settings.qualityMode && !problems.length) return draft;
-  return improveTutorReply({
+  const baseQuality = {
+    checked: settings.qualityMode ? "double" : "automatic",
+    confidence: grammarNotes ? "high" : problems.length ? "medium" : "normal",
+    source: grammarNotes ? "grammar" : "context",
+  };
+  if (!settings.qualityMode && !problems.length) return { ...draft, quality: baseQuality };
+  const improved = await improveTutorReply({
     llama,
     draft: draftText,
     messages,
@@ -736,6 +778,7 @@ export async function completeTutorMessage({ model, level, topic, dialogueMode =
     grammarNotes,
     onToken: settings.qualityMode ? onToken : undefined,
   });
+  return { ...improved, quality: { ...baseQuality, checked: settings.qualityMode ? "double" : "regenerated", confidence: grammarNotes ? "high" : "medium" } };
 }
 
 function parseAnalysis(text) {
@@ -897,7 +940,7 @@ export async function analyzeTutorConversation({ model, level, topic, messages }
   const llama = await loadModel(model);
   const tutorMemory = await loadTutorMemory();
   const transcript = messages
-    .filter((item) => item.role === "user" || item.role === "assistant")
+    .filter((item) => (item.role === "user" || item.role === "assistant") && item.kind !== "command")
     .slice(-12)
     .map((item) => `${item.role === "user" ? "Ученик" : "Преподаватель"}: ${item.content}`)
     .join("\n")

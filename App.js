@@ -116,7 +116,7 @@ import {
 } from "./src/services/localAi";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-ai-director";
+const UPDATE_VERSION = "2026.11-ai-actions";
 
 export default function App() {
   useEffect(() => {
