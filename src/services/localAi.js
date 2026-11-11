@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { initLlama, releaseAllLlama } from "@pocketpalai/llama.rn";
+import { findGrammarKnowledge, formatGrammarKnowledge } from "../data/aiGrammarKnowledge";
 
 const MODEL_DIR = `${FileSystem.documentDirectory}lingospark-ai/`;
 const ACTIVE_MODEL_KEY = "@lingospark/local-ai-model-v1";
@@ -107,9 +108,9 @@ export const modelPath = (model) => `${MODEL_DIR}${model.filename}`;
 export async function getAiSettings() {
   try {
     const value = JSON.parse((await AsyncStorage.getItem(AI_SETTINGS_KEY)) || "{}");
-    return { economyMode: Boolean(value.economyMode) };
+    return { economyMode: Boolean(value.economyMode), qualityMode: Boolean(value.qualityMode) };
   } catch {
-    return { economyMode: false };
+    return { economyMode: false, qualityMode: false };
   }
 }
 
@@ -150,6 +151,24 @@ async function saveTutorMemory(memory) {
 
 export async function clearTutorMemory() {
   await AsyncStorage.removeItem(TUTOR_MEMORY_KEY);
+}
+
+export async function addTutorMemoryGoal(value) {
+  const goal = String(value || "").trim().slice(0, 90);
+  if (!goal) return loadTutorMemory();
+  const memory = await loadTutorMemory();
+  return saveTutorMemory({ ...memory, goals: uniqueRecent([goal, ...memory.goals], 10) });
+}
+
+export async function removeTutorMemoryEntry(section, key) {
+  if (!["goals", "interests", "recurringMistakes", "usefulWords"].includes(section)) return loadTutorMemory();
+  const memory = await loadTutorMemory();
+  const current = memory[section] || [];
+  const next = current.filter((item) => {
+    if (typeof item === "string") return item !== key;
+    return (item.key || item.english || item.corrected) !== key;
+  });
+  return saveTutorMemory({ ...memory, [section]: next });
 }
 
 const uniqueRecent = (values, limit) => [...new Set(values.filter(Boolean).map((item) => String(item).trim()))].slice(0, limit);
@@ -551,24 +570,14 @@ async function completeWithGuard(llama, options, onToken, timeoutMs = 90000) {
   }
 }
 
-const GRAMMAR_REFERENCE = [
-  { test: /\b(?:article|articles)\b/i, rule: "Артикль a/an используется с одним исчисляемым предметом; the указывает на уже известный или конкретный предмет." },
-  { test: /\b(?:did|yesterday|last|ago|past)\b/i, rule: "После did используется начальная форма глагола: Did you go?, не Did you went? В утвердительном Past Simple используется V2." },
-  { test: /\b(?:have|has|already|yet|ever|never|since|for)\b/i, rule: "Present Perfect: have/has + V3. Since обозначает начальную точку, for — длительность." },
-  { test: /\b(?:will|tomorrow|future|going to)\b/i, rule: "Will подходит для решения в момент речи и прогноза; be going to — для намерения или прогноза по видимым признакам." },
-  { test: /\b(?:if|would|conditional)\b/i, rule: "В First Conditional: if + Present, will + verb. Во Second Conditional: if + Past, would + verb." },
-  { test: /\b(?:question|who|what|where|when|why|how)\b/i, rule: "Обычный вопрос: вопросительное слово + вспомогательный глагол + подлежащее + смысловой глагол." },
-  { test: /\b(?:can|could|should|must|modal)\b/i, rule: "После модального глагола используется начальная форма без to: can go, should study." },
-  { test: /\b(?:he|she|it|does)\b/i, rule: "В Present Simple после he/she/it глагол получает -s; после does снова используется начальная форма." },
-  { test: /\b(?:much|many|few|little|countable)\b/i, rule: "Many/few используются с исчисляемыми во множественном числе; much/little — с неисчисляемыми." },
-];
-
-function grammarNotesFor(text, topic) {
-  const matches = GRAMMAR_REFERENCE.filter((item) => item.test.test(text)).slice(0, 2);
-  if (!matches.length && topic === "Грамматика") {
-    return "Базовый порядок утверждения: подлежащее + глагол + дополнение. Не объявляй вариант ошибкой, если он грамматически допустим и сохраняет смысл.";
-  }
-  return matches.map((item) => item.rule).join(" ");
+function grammarNotesFor(text, topic, level = "A2", tutorMemory = EMPTY_TUTOR_MEMORY) {
+  return formatGrammarKnowledge(findGrammarKnowledge({
+    text,
+    topic,
+    level,
+    memoryMistakes: tutorMemory.recurringMistakes,
+    limit: 3,
+  }));
 }
 
 function memoryPrompt(memory) {
@@ -626,18 +635,68 @@ ${modeInstruction}
 9. Никогда не проси настоящие персональные или платёжные данные и не утверждай, что имеешь доступ к интернету. Ты работаешь на устройстве.`;
 }
 
+function normalizedWords(text) {
+  return String(text || "").toLowerCase().replace(/[^a-zа-яё0-9\s]/gi, " ").split(/\s+/).filter((word) => word.length > 2);
+}
+
+function replySimilarity(left, right) {
+  const a = new Set(normalizedWords(left));
+  const b = new Set(normalizedWords(right));
+  if (!a.size || !b.size) return 0;
+  const intersection = [...a].filter((word) => b.has(word)).length;
+  return intersection / Math.max(a.size, b.size);
+}
+
+function findReplyProblems({ reply, messages, dialogueMode }) {
+  const text = String(reply || "").trim();
+  const problems = [];
+  if (text.length < 12) problems.push("ответ слишком короткий или пустой");
+  if (text.length > 2400) problems.push("ответ слишком длинный для учебного диалога");
+  if (/```|<\|im_|<\|end|\{\s*"(?:role|content)"/i.test(text)) problems.push("в ответ попал технический текст");
+  const previous = messages.filter((item) => item.role === "assistant").slice(-3);
+  if (previous.some((item) => normalizedWords(item.content).length > 8 && replySimilarity(text, item.content) > 0.72)) problems.push("ответ слишком похож на недавнюю реплику");
+  const lastUser = [...messages].reverse().find((item) => item.role === "user")?.content || "";
+  if (normalizedWords(lastUser).length <= 2 && !/[?？]/.test(text)) problems.push("непонятная короткая реплика ученика была додумана без уточнения");
+  if (dialogueMode === "story" && !/\bA[).:]|\bB[).:]|выбор|choice|what (?:do|would) you/i.test(text)) problems.push("история не оставляет ученику выбора");
+  return problems;
+}
+
+async function improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes, onToken }) {
+  const context = messages.slice(-8).map((item) => `${item.role === "user" ? "Ученик" : "Lingo"}: ${item.content}`).join("\n");
+  const result = await completeWithGuard(llama, {
+    messages: [
+      {
+        role: "system",
+        content: `Ты — скрытый редактор ответа преподавателя английского. Верни только итоговую реплику Lingo без комментариев о проверке. Сохрани смысл диалога, но убери повторы, выдуманные исправления, технический текст и готовые ответы на задания. Уровень ученика: ${level}. Режим: ${dialogueMode}. ${grammarNotes ? `Используй только подходящие правила из памятки: ${grammarNotes}` : "Не объявляй грамматическую ошибку, если не уверен."}`,
+      },
+      {
+        role: "user",
+        content: `Контекст:\n${context}\n\nЧерновик:\n${draft}\n\nПроблемы для проверки: ${problems.length ? problems.join("; ") : "проверь точность, естественность и отсутствие повторов"}. Перепиши только если это улучшит ответ.`,
+      },
+    ],
+    n_predict: 300,
+    temperature: 0.35,
+    top_k: 30,
+    top_p: 0.85,
+    repeat_penalty: 1.15,
+    stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
+  }, ({ token }) => onToken?.(token || ""), 100000);
+  return String(result?.text || "").trim() ? result : { ...result, text: draft };
+}
+
 export async function completeTutorMessage({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken }) {
   const llama = await loadModel(model);
+  const settings = await getAiSettings();
   const tutorMemory = await loadTutorMemory();
   const mission = getDailyTutorMission({ level, topic, memory: tutorMemory });
   const turnNumber = messages.filter((item) => item.role === "user").length;
   const lastUserText = [...messages].reverse().find((item) => item.role === "user")?.content || "";
-  const grammarNotes = grammarNotesFor(lastUserText, topic);
+  const grammarNotes = grammarNotesFor(lastUserText, topic, level, tutorMemory);
   const history = messages
     .filter((item) => item.role === "user" || item.role === "assistant")
     .slice(model.id === "light" ? -8 : -14)
     .map(({ role, content }) => ({ role, content }));
-  return completeWithGuard(
+  const draft = await completeWithGuard(
     llama,
     {
       messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes) }, ...history],
@@ -648,9 +707,22 @@ export async function completeTutorMessage({ model, level, topic, dialogueMode =
       repeat_penalty: 1.13,
       stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
     },
-    ({ token }) => onToken?.(token || ""),
+    settings.qualityMode ? undefined : ({ token }) => onToken?.(token || ""),
     90000,
   );
+  const draftText = String(draft?.text || "").trim();
+  const problems = findReplyProblems({ reply: draftText, messages, dialogueMode });
+  if (!settings.qualityMode && !problems.length) return draft;
+  return improveTutorReply({
+    llama,
+    draft: draftText,
+    messages,
+    level,
+    dialogueMode,
+    problems,
+    grammarNotes,
+    onToken: settings.qualityMode ? onToken : undefined,
+  });
 }
 
 function parseAnalysis(text) {
@@ -780,7 +852,7 @@ const ANALYSIS_SCHEMA = {
   },
 };
 
-async function requestConversationAnalysis({ llama, model, level, topic, transcript, compact = false }) {
+async function requestConversationAnalysis({ llama, model, level, topic, transcript, grammarNotes = "", compact = false }) {
   const limits = compact
     ? "Ответ максимально короткий: 1 сильная сторона, до 2 ошибок, 2 слова и 2 упражнения. Объяснение — одно короткое предложение."
     : "Пиши компактно: до 3 сильных сторон, до 4 ошибок, до 5 слов и 3–4 упражнения. Без длинных объяснений.";
@@ -788,7 +860,7 @@ async function requestConversationAnalysis({ llama, model, level, topic, transcr
     messages: [
       {
         role: "system",
-        content: `Ты анализируешь английскую речь ученика уровня ${level}. Тема: ${topic}. Оценивай только реплики ученика. Допустимые варианты не считай ошибками. Все объяснения и переводы пиши по-русски. ${limits}`,
+        content: `Ты анализируешь английскую речь ученика уровня ${level}. Тема: ${topic}. Оценивай только реплики ученика. Допустимые варианты не считай ошибками. Все объяснения и переводы пиши по-русски. ${grammarNotes ? `Проверенная локальная справка:\n${grammarNotes}\nИспользуй только относящиеся к фразе правила и не выдумывай новые.` : "Если не уверен в исправлении, не добавляй его."} ${limits}`,
       },
       {
         role: "user",
@@ -810,19 +882,21 @@ async function requestConversationAnalysis({ llama, model, level, topic, transcr
 
 export async function analyzeTutorConversation({ model, level, topic, messages }) {
   const llama = await loadModel(model);
+  const tutorMemory = await loadTutorMemory();
   const transcript = messages
     .filter((item) => item.role === "user" || item.role === "assistant")
     .slice(-12)
     .map((item) => `${item.role === "user" ? "Ученик" : "Преподаватель"}: ${item.content}`)
     .join("\n")
     .slice(-6000);
+  const grammarNotes = grammarNotesFor(transcript, topic, level, tutorMemory);
   let analysis;
   try {
-    const result = await requestConversationAnalysis({ llama, model, level, topic, transcript });
+    const result = await requestConversationAnalysis({ llama, model, level, topic, transcript, grammarNotes });
     analysis = parseAnalysis(result?.text);
   } catch (firstError) {
     try {
-      const retry = await requestConversationAnalysis({ llama, model, level, topic, transcript, compact: true });
+      const retry = await requestConversationAnalysis({ llama, model, level, topic, transcript, grammarNotes, compact: true });
       analysis = parseAnalysis(retry?.text);
     } catch {
       throw new Error("ИИ не успел закончить разбор. Попробуйте ещё раз — приложение автоматически сделает его короче.");
@@ -848,7 +922,7 @@ export async function completeVoiceCoachMessage({
   const tutorMemory = await loadTutorMemory();
   const lastUserText = [...messages].reverse().find((item) => item.role === "user")?.content || "";
   const memoryContext = memoryPrompt(tutorMemory);
-  const grammarContext = grammarNotesFor(lastUserText, scenario.title);
+  const grammarContext = grammarNotesFor(lastUserText, scenario.title, level, tutorMemory);
   const history = messages
     .filter((item) => item.role === "user" || item.role === "assistant")
     .slice(-12)
