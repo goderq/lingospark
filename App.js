@@ -108,11 +108,15 @@ import {
 } from "./src/screens/PremiumScreens";
 import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
+import { warmSpeech } from "./src/utils/speech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-cloud-restore-fix";
+const UPDATE_VERSION = "2026.11-instant-speech";
 
 export default function App() {
+  useEffect(() => {
+    warmSpeech();
+  }, []);
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />

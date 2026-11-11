@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -290,7 +290,7 @@ export function VocabularyScreen({ onClose }) {
     return (
       <Pressable onPress={() => setExpanded(opened ? null : word.id)} style={s.wordRow}>
         <Pressable
-          onPress={() => Speech.speak(word.english, { language: progress.settings?.accent || "en-US", rate: progress.settings?.speechRate || 0.78 })}
+          onPress={() => speak(word.english, { language: progress.settings?.accent || "en-US", rate: progress.settings?.speechRate || 0.78 })}
           style={s.sound}
         >
           <Ionicons name="volume-high" size={20} color={colors.purple} />
@@ -668,7 +668,7 @@ export function PronunciationScreen({ onClose }) {
           <Text style={s.wordRussian}>{phrases[index][1]}</Text>
           <Pressable
             onPress={() =>
-              Speech.speak(phrase, { language: "en-US", rate: 0.75 })
+              speak(phrase, { language: "en-US", rate: 0.75 })
             }
             style={s.listen}
           >

@@ -13,7 +13,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import * as Haptics from "expo-haptics";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar, XPBadge } from "../components/UI";
@@ -167,7 +167,7 @@ export default function LessonScreen({ lesson, onClose }) {
       );
     }
     if (progress.settings?.voiceFeedback) {
-      Speech.speak(
+      speak(
         result
           ? "Correct"
           : evaluation.status === "close"
@@ -333,7 +333,7 @@ export default function LessonScreen({ lesson, onClose }) {
             <Text style={styles.dialogueLine}>{step.line}</Text>
             <Pressable
               onPress={() =>
-                Speech.speak(step.line, { language: "en-US", rate: 0.78 })
+                speak(step.line, { language: "en-US", rate: 0.78 })
               }
             >
               <Ionicons name="volume-high" size={21} color={colors.purple} />
@@ -452,7 +452,7 @@ export default function LessonScreen({ lesson, onClose }) {
         </Text>
         <Pressable
           onPress={() =>
-            Speech.speak(exercise.speak, { language: "en-US", rate: 0.82 })
+            speak(exercise.speak, { language: "en-US", rate: 0.82 })
           }
           style={styles.listen}
         >

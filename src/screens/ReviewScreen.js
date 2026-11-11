@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak as speakNow } from "../utils/speech";
 import * as Haptics from "expo-haptics";
 import {
   getWordCandidates,
@@ -532,7 +532,7 @@ export default function ReviewScreen() {
     if (mode === "listening")
       setTimeout(
         () =>
-          Speech.speak(activeCard.english, {
+          speakNow(activeCard.english, {
             language: progress.settings?.accent || "en-US",
             rate: progress.settings?.speechRate || 0.8,
           }),
@@ -552,7 +552,7 @@ export default function ReviewScreen() {
   };
 
   const speak = () =>
-    Speech.speak(activeCard.english, {
+    speakNow(activeCard.english, {
       language: progress.settings?.accent || "en-US",
       rate: progress.settings?.speechRate || 0.8,
     });

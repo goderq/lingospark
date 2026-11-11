@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import { worldLocations } from "../data/lingoWorld";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
@@ -923,7 +923,7 @@ function WorldMission({ location, onBack }) {
           </View>
           <Pressable
             onPress={() =>
-              Speech.speak(sceneLine, { language: "en-GB", rate: 0.78 })
+              speak(sceneLine, { language: "en-GB", rate: 0.78 })
             }
             style={s.speak}
           >

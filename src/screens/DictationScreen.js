@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import * as Haptics from "expo-haptics";
 import { dictations } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
@@ -36,7 +36,7 @@ export default function DictationScreen({ onClose }) {
   const [speed, setSpeed] = useState(0.82);
   const item = dictations[index];
   const play = (rate = speed) =>
-    Speech.speak(item.text, { language: "en-US", rate });
+    speak(item.text, { language: "en-US", rate });
   const check = () => {
     Keyboard.dismiss();
     const result = clean(answer) === clean(item.text);

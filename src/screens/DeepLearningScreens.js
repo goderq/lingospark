@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import { RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync, useAudioPlayer, useAudioRecorder, useAudioRecorderState } from "expo-audio";
 import { vocabularyTopics } from "../data/megaPractice";
 import {
@@ -162,7 +162,7 @@ export function SpacedRepetitionScreen({ onClose }) {
           <Text style={s.flashWord}>{item.english}</Text>
           <Pressable
             onPress={() =>
-              Speech.speak(item.english, { language: "en-US", rate: 0.7 })
+              speak(item.english, { language: "en-US", rate: 0.7 })
             }
             style={s.sound}
           >
@@ -333,7 +333,7 @@ export function BranchingDialoguesScreen({ onClose }) {
           <Text style={s.speechText}>{node.line}</Text>
           <Pressable
             onPress={() =>
-              Speech.speak(node.line, { language: "en-US", rate: 0.74 })
+              speak(node.line, { language: "en-US", rate: 0.74 })
             }
           >
             <Ionicons name="volume-high" size={21} color={colors.purple} />
@@ -419,7 +419,7 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
           <View style={s.audioBox}>
             <Pressable
               onPress={() =>
-                Speech.speak(item.text, { language: "en-US", rate: 0.72 })
+                speak(item.text, { language: "en-US", rate: 0.72 })
               }
               style={s.play}
             >
@@ -553,7 +553,7 @@ export function IeltsScreen({ onClose }) {
             <Text style={s.speakingPrompt}>{speaking.prompt}</Text>
             <Pressable
               onPress={() =>
-                Speech.speak(speaking.prompt, { language: "en-US", rate: 0.72 })
+                speak(speaking.prompt, { language: "en-US", rate: 0.72 })
               }
               style={s.listenButton}
             >

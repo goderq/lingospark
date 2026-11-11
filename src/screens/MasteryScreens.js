@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Speech from 'expo-speech';
+import { speak } from '../utils/speech';
 import { lessons } from '../data/course';
 import { grammarQuestions, placementQuestions } from '../data/practice';
 import { useProgress } from '../store/ProgressContext';
@@ -41,7 +41,7 @@ const irregularVerbs = irregularVerbPack;
 export function IrregularVerbsScreen({ onClose }) {
   const [quiz, setQuiz] = useState(false); const [index, setIndex] = useState(0); const [selected, setSelected] = useState(''); const [score, setScore] = useState(0); const [done, setDone] = useState(false); const [seed] = useState(() => Math.floor(Math.random() * 2147483647));
   const deck = useMemo(() => [...irregularVerbs].sort(() => Math.random() - .5).slice(0, 10), [quiz]);
-  if (!quiz) return <View style={styles.container}><Header title="Неправильные глаголы" onClose={onClose} /><ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>100 важных глаголов</Text><Text style={styles.subtitle}>Три формы, перевод и произношение</Text><PrimaryButton title="Начать тренировку из 10 вопросов" onPress={() => setQuiz(true)} />{irregularVerbs.map((verb) => <Pressable key={verb.id} onPress={() => Speech.speak(`${verb.base}, ${verb.past}, ${verb.participle}`, { language: 'en-US', rate: .68 })} style={styles.verb}><View style={{ flex: 1 }}><Text style={styles.verbForms}>{verb.base} · {verb.past} · {verb.participle}</Text><Text style={styles.cardText}>{verb.russian}</Text></View><Ionicons name="volume-high" size={20} color={colors.purple} /></Pressable>)}</ScrollView></View>;
+  if (!quiz) return <View style={styles.container}><Header title="Неправильные глаголы" onClose={onClose} /><ScrollView contentContainerStyle={styles.content}><Text style={styles.title}>100 важных глаголов</Text><Text style={styles.subtitle}>Три формы, перевод и произношение</Text><PrimaryButton title="Начать тренировку из 10 вопросов" onPress={() => setQuiz(true)} />{irregularVerbs.map((verb) => <Pressable key={verb.id} onPress={() => speak(`${verb.base}, ${verb.past}, ${verb.participle}`, { language: 'en-US', rate: .68 })} style={styles.verb}><View style={{ flex: 1 }}><Text style={styles.verbForms}>{verb.base} · {verb.past} · {verb.participle}</Text><Text style={styles.cardText}>{verb.russian}</Text></View><Ionicons name="volume-high" size={20} color={colors.purple} /></Pressable>)}</ScrollView></View>;
   if (done) return <View style={styles.container}><Header title="Неправильные глаголы" onClose={onClose} /><View style={styles.result}><Text style={styles.resultEmoji}>📚</Text><Text style={styles.resultTitle}>{score}/10</Text><Text style={styles.subtitle}>Формы глаголов становятся увереннее</Text><View style={{ width: '100%' }}><PrimaryButton title="К списку глаголов" onPress={() => { setQuiz(false); setIndex(0); setSelected(''); setScore(0); setDone(false); }} /></View></View></View>;
   const verb = deck[index]; const answer = `${verb.past} · ${verb.participle}`; const distractors = irregularVerbs.filter((item) => item.id !== verb.id).slice((index * 3) % 20, (index * 3) % 20 + 3).map((item) => `${item.past} · ${item.participle}`); const options = [answer, ...distractors];
   const choose = (option) => { if (selected) return; setSelected(option); if (option === answer) setScore((value) => value + 1); };

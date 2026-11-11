@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
@@ -222,7 +222,7 @@ export function SettingsScreen({ onClose }) {
     ...progress.settings,
   };
   const sample = () =>
-    Speech.speak("Practice makes progress", {
+    speak("Practice makes progress", {
       language: settings.accent,
       rate: settings.speechRate,
     });
@@ -624,7 +624,7 @@ export function PacksScreen({ onClose }) {
           </Text>
         </Pressable>
         <Pressable
-          onPress={() => Speech.speak(word[0], { language: "en-US" })}
+          onPress={() => speak(word[0], { language: "en-US" })}
           style={s.listen}
         >
           <Ionicons name="volume-high" size={21} color={pack.color} />
@@ -653,7 +653,7 @@ export function ShadowingScreen({ onClose }) {
   const accent = progress.settings?.accent || "en-US";
   const rate = progress.settings?.speechRate || 0.78;
   const listen = (text = line.parts[part]) =>
-    Speech.speak(text, { language: accent, rate });
+    speak(text, { language: accent, rate });
   const start = async () => {
     const permission = await requestRecordingPermissionsAsync();
     if (!permission.granted) return Alert.alert("Разрешите микрофон");

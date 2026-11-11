@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Speech from 'expo-speech';
+import { speak } from '../utils/speech';
 import { useProgress } from '../store/ProgressContext';
 import { colors } from '../theme';
 import { PrimaryButton, ProgressBar } from '../components/UI';
@@ -37,7 +37,7 @@ export default function MissionsScreen({ onClose }) {
   const step = mission.steps[index]; const correct = selected === step.answer;
   const choose = (option) => { if (selected) return; setSelected(option); if (option === step.answer) setScore((value) => value + 1); };
   const next = () => { if (index === mission.steps.length - 1) { const finalScore = score; const finalEnding = finalScore >= 4 ? 2 : finalScore >= 2 ? 1 : 0; recordMission(mission.id, finalEnding, finalScore); setDone(true); } else { setIndex((value) => value + 1); setSelected(''); } };
-  return <View style={styles.container}><Header title={mission.title} onClose={reset} /><ScrollView contentContainerStyle={styles.content}><ProgressBar value={(index + 1) / mission.steps.length} color={mission.color} /><View style={styles.bubble}><Text style={[styles.speaker, { color: mission.color }]}>{step.speaker}</Text><Text style={styles.line}>{step.line}</Text><Pressable onPress={() => Speech.speak(step.line, { language: 'en-US', rate: .76 })}><Ionicons name="volume-high" size={20} color={mission.color} /></Pressable></View><Text style={styles.prompt}>{step.prompt}</Text>{balancedOptions(step.options, step.answer, index, seed).map((option) => <Pressable key={option} onPress={() => choose(option)} style={[styles.option, selected && option === step.answer && { borderColor: colors.mint }, selected === option && option !== step.answer && { borderColor: colors.orange }]}><Text style={styles.optionText}>{option}</Text></Pressable>)}{selected && <PrimaryButton title={index === 3 ? 'Узнать концовку' : 'Продолжить историю'} onPress={next} color={correct ? colors.mint : colors.orange} />}</ScrollView></View>;
+  return <View style={styles.container}><Header title={mission.title} onClose={reset} /><ScrollView contentContainerStyle={styles.content}><ProgressBar value={(index + 1) / mission.steps.length} color={mission.color} /><View style={styles.bubble}><Text style={[styles.speaker, { color: mission.color }]}>{step.speaker}</Text><Text style={styles.line}>{step.line}</Text><Pressable onPress={() => speak(step.line, { language: 'en-US', rate: .76 })}><Ionicons name="volume-high" size={20} color={mission.color} /></Pressable></View><Text style={styles.prompt}>{step.prompt}</Text>{balancedOptions(step.options, step.answer, index, seed).map((option) => <Pressable key={option} onPress={() => choose(option)} style={[styles.option, selected && option === step.answer && { borderColor: colors.mint }, selected === option && option !== step.answer && { borderColor: colors.orange }]}><Text style={styles.optionText}>{option}</Text></Pressable>)}{selected && <PrimaryButton title={index === 3 ? 'Узнать концовку' : 'Продолжить историю'} onPress={next} color={correct ? colors.mint : colors.orange} />}</ScrollView></View>;
 }
 
 function Header({ title, onClose }) { return <View style={styles.header}><Pressable onPress={onClose} style={styles.back}><Ionicons name="chevron-back" size={24} color="white" /></Pressable><Text style={styles.headerTitle}>{title}</Text><View style={{ width: 40 }} /></View>; }

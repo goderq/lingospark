@@ -217,6 +217,11 @@ export function StreakCalendarScreen({ onClose }) {
 export function WhatsNewScreen({ onClose }) {
   const updates = [
     [
+      "volume-high",
+      "Озвучивание без очереди",
+      "Голосовой движок запускается заранее, а новое нажатие звучит сразу вместо ожидания предыдущей фразы.",
+    ],
+    [
       "cloud-download",
       "Надёжное восстановление",
       "После переустановки облачная копия загружается первой и новый пустой профиль больше не может стереть занятия.",
@@ -327,9 +332,9 @@ export function WhatsNewScreen({ onClose }) {
       <Header title="Что нового" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.newEmoji}>✨</Text>
-        <Text style={s.title}>Облако стало надёжнее</Text>
+        <Text style={s.title}>Звук стал быстрее</Text>
         <Text style={s.newSubtitle}>
-          Прогресс правильно возвращается после удаления и повторной установки.
+          Слова, фразы и диктанты начинают звучать почти сразу после нажатия.
         </Text>
         {updates.map(([icon, title, text]) => (
           <View key={title} style={s.update}>

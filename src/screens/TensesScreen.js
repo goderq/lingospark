@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import { tenseModules } from "../data/advancedCourse";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
@@ -266,7 +266,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
             <Text style={styles.exampleText}>{module.example}</Text>
             <Pressable
               onPress={() =>
-                Speech.speak(module.example, {
+                speak(module.example, {
                   language: progress.settings?.accent || "en-US",
                   rate: progress.settings?.speechRate || 0.78,
                 })

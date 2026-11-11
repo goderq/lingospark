@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Speech from "expo-speech";
+import { speak } from "../utils/speech";
 import { vocabularyTopics } from "../data/megaPractice";
 import { extendedVocabularyTopics } from "../data/growthContent";
 import { ieltsReading, ieltsListening } from "../data/deepLearning";
@@ -106,7 +106,7 @@ export function WrittenVocabularyScreen({ onClose }) {
         {item.direction === "en-ru" && (
           <Pressable
             onPress={() =>
-              Speech.speak(item.english, { language: "en-US", rate: 0.7 })
+              speak(item.english, { language: "en-US", rate: 0.7 })
             }
             style={s.listen}
           >
@@ -452,7 +452,7 @@ export function FullIeltsMockScreen({ onClose }) {
           <View style={s.audio}>
             <Pressable
               onPress={() =>
-                Speech.speak(item.audio, { language: "en-US", rate: 0.72 })
+                speak(item.audio, { language: "en-US", rate: 0.72 })
               }
             >
               <Ionicons name="play-circle" size={55} color={colors.orange} />
