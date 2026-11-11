@@ -933,6 +933,9 @@ function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onA
 
 function MiniLesson({ exercises }) {
   const [selected, setSelected] = useState({});
+  useEffect(() => {
+    setSelected({});
+  }, [exercises]);
   if (!exercises.length) {
     return (
       <View style={styles.noMistakes}>
@@ -941,25 +944,33 @@ function MiniLesson({ exercises }) {
       </View>
     );
   }
-  const finished = exercises.every((_, index) => selected[index]);
+  const finished = exercises.every((_, index) => Object.prototype.hasOwnProperty.call(selected, index));
   const score = exercises.filter((item, index) => selected[index] === item.answer).length;
   return (
     <View style={{ gap: 12 }}>
       {exercises.map((exercise, index) => {
         const choice = selected[index];
-        const options = balancedOptions(exercise.options, exercise.answer, index, exercise.prompt);
+        const hasChoice = Object.prototype.hasOwnProperty.call(selected, index);
+        const cleanKey = (value) => String(value || "").toLowerCase().replace(/[^a-zа-яё0-9]+/gi, " ").trim();
+        const promptKey = cleanKey(exercise.prompt);
+        const answerKey = cleanKey(exercise.answer);
+        const promptRevealsAnswer = answerKey.length > 5 && (promptKey === answerKey || promptKey.includes(answerKey));
+        const visiblePrompt = promptRevealsAnswer
+          ? "Выбери английскую фразу, которая лучше всего подходит к ситуации:"
+          : exercise.prompt;
+        const options = balancedOptions(exercise.options, exercise.answer, index, visiblePrompt);
         return (
           <View key={`${exercise.prompt}-${index}`} style={styles.exerciseCard}>
             <Text style={styles.exerciseCount}>ЗАДАНИЕ {index + 1} ИЗ {exercises.length}</Text>
-            <Text style={styles.exercisePrompt}>{exercise.prompt}</Text>
+            <Text style={styles.exercisePrompt}>{visiblePrompt}</Text>
             <View style={{ gap: 8 }}>
               {options.map((option) => {
-                const correct = choice && option === exercise.answer;
-                const wrong = choice === option && option !== exercise.answer;
+                const correct = hasChoice && option === exercise.answer;
+                const wrong = hasChoice && choice === option && option !== exercise.answer;
                 return (
                   <Pressable
                     key={option}
-                    disabled={Boolean(choice)}
+                    disabled={hasChoice}
                     onPress={() => setSelected((current) => ({ ...current, [index]: option }))}
                     style={[styles.exerciseOption, correct && styles.exerciseCorrect, wrong && styles.exerciseWrong]}
                   >
@@ -970,7 +981,7 @@ function MiniLesson({ exercises }) {
                 );
               })}
             </View>
-            {choice ? <Text style={styles.exerciseExplain}>{exercise.explanation}</Text> : null}
+            {hasChoice ? <Text style={styles.exerciseExplain}>{exercise.explanation}</Text> : null}
           </View>
         );
       })}

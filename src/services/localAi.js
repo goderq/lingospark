@@ -419,38 +419,48 @@ async function completeWithGuard(llama, options, onToken, timeoutMs = 90000) {
   }
 }
 
-function systemPrompt(level, topic, analysis) {
+function systemPrompt(level, topic, analysis, turnNumber = 1) {
   const memory = analysis
     ? `\nПамять о последнем разборе: оценки — грамматика ${analysis.scores?.grammar || 0}/100, словарь ${analysis.scores?.vocabulary || 0}/100, связность ${analysis.scores?.fluency || 0}/100. Повторяющиеся места для практики: ${(analysis.mistakes || []).slice(0, 3).map((item) => item.explanation).join("; ") || "закрепление естественной речи"}. Учитывай это мягко и не повторяй один и тот же комментарий в каждом ответе.\n`
     : "";
-  return `Ты — Lingo, доброжелательный преподаватель английского в приложении LingoSpark. Ученик говорит по-русски и учит английский на уровне ${level}. Тема занятия: ${topic}.${memory}
+  const dialogueMoves = [
+    "Продолжи ситуацию конкретным уточняющим вопросом, связанным с последней репликой ученика.",
+    "Добавь небольшой неожиданный поворот или новую деталь и предложи ученику отреагировать.",
+    "Попроси ученика выбрать между двумя естественными вариантами и объяснить выбор.",
+    "Задай ролевую мини-ситуацию на одну реплику. Не давай готовый ответ заранее.",
+    "Спроси мнение или личный пример по теме, не повторяя предыдущий вопрос.",
+  ];
+  const currentMove = dialogueMoves[Math.max(0, turnNumber - 1) % dialogueMoves.length];
+  return `Ты — Lingo, живой и внимательный преподаватель английского в приложении LingoSpark. Ученик говорит по-русски и учит английский на уровне ${level}. Тема занятия: ${topic}.${memory}
 
 Правила:
-1. Веди живой учебный диалог, а не просто отвечай на вопросы.
-2. Если ученик пишет по-английски, сначала коротко отреагируй на смысл. Затем исправь только реальные ошибки и объясни их простым русским языком.
-3. Показывай исправленную английскую фразу. Не придирайся к допустимому порядку слов и вариантам английского.
-4. Подстраивай лексику и длину предложений под ${level}. На A1–A2 объясняй преимущественно по-русски; на B1–C1 постепенно увеличивай долю английского.
-5. Завершай ответ одним вопросом или небольшим заданием, чтобы разговор продолжался.
-6. Не выдумывай правила. Если не уверен, честно скажи об этом.
-7. Ответ должен быть компактным: обычно 3–7 предложений. Используй понятные абзацы без таблиц.
-8. Никогда не проси персональные данные и не утверждай, что имеешь доступ к интернету. Ты работаешь полностью на устройстве.`;
+1. Реагируй именно на смысл последней реплики и учитывай факты из предыдущих сообщений. Не начинай каждый ответ с Sure, Great, Of course или похвалы.
+2. Если реплика ученика состоит из одного-двух слов или непонятна, не додумывай за него: предложи естественную полную фразу и задай один уточняющий вопрос.
+3. Исправляй только реальные ошибки. Сначала поддержи смысл разговора, затем коротко покажи «Лучше: ...» и объясни по-русски. Если ошибки нет, не создавай раздел с исправлением.
+4. Не повторяй уже заданный вопрос, одинаковую конструкцию ответа или одну и ту же похвалу в соседних сообщениях.
+5. Текущий ход разговора: ${currentMove}
+6. Не отвечай за ученика и не показывай готовую реплику, если просишь его выполнить задание. Можно дать только короткую подсказку или начало фразы.
+7. Подстраивай лексику под ${level}. На A1–A2 используй больше русского в объяснениях; на B1–C1 веди основную беседу по-английски.
+8. Обычно пиши 2–6 предложений. Чередуй вопрос, ролевую ситуацию, выбор, мнение и небольшую языковую задачу.
+9. Никогда не проси настоящие персональные или платёжные данные и не утверждай, что имеешь доступ к интернету. Ты работаешь на устройстве.`;
 }
 
 export async function completeTutorMessage({ model, level, topic, messages, analysis, onToken }) {
   const llama = await loadModel(model);
+  const turnNumber = messages.filter((item) => item.role === "user").length;
   const history = messages
     .filter((item) => item.role === "user" || item.role === "assistant")
-    .slice(-10)
+    .slice(model.id === "light" ? -8 : -14)
     .map(({ role, content }) => ({ role, content }));
   return completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis) }, ...history],
-      n_predict: model.id === "light" ? 180 : 260,
-      temperature: 0.65,
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber) }, ...history],
+      n_predict: model.id === "light" ? 190 : 280,
+      temperature: 0.76,
       top_k: 40,
       top_p: 0.9,
-      repeat_penalty: 1.08,
+      repeat_penalty: 1.13,
       stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
     },
     ({ token }) => onToken?.(token || ""),
@@ -500,8 +510,19 @@ function parseAnalysis(text) {
       .map((item) => {
         const answer = String(item?.answer || "").trim();
         const options = [...new Set(list(item?.options, 4).map(String).filter(Boolean))];
+        const rawPrompt = String(item?.prompt || "").trim();
+        const normalizeExerciseText = (value) => String(value || "")
+          .toLowerCase()
+          .replace(/[^a-zа-яё0-9]+/gi, " ")
+          .trim();
+        const promptKey = normalizeExerciseText(rawPrompt);
+        const answerKey = normalizeExerciseText(answer);
+        const revealsAnswer = answerKey.length > 5
+          && (promptKey === answerKey || promptKey.includes(answerKey));
         return {
-          prompt: String(item?.prompt || ""),
+          prompt: revealsAnswer || !rawPrompt
+            ? "Выбери английскую фразу, которая лучше всего подходит к ситуации:"
+            : rawPrompt,
           options: options.includes(answer) ? options : [answer, ...options].filter(Boolean).slice(0, 4),
           answer,
           explanation: String(item?.explanation || ""),
@@ -516,7 +537,7 @@ const ANALYSIS_SCHEMA = {
   additionalProperties: false,
   required: ["summary", "scores", "strengths", "mistakes", "words", "exercises"],
   properties: {
-    summary: { type: "string" },
+    summary: { type: "string", description: "Короткий итог разговора на русском" },
     scores: {
       type: "object",
       additionalProperties: false,
@@ -564,10 +585,10 @@ const ANALYSIS_SCHEMA = {
         additionalProperties: false,
         required: ["prompt", "options", "answer", "explanation"],
         properties: {
-          prompt: { type: "string" },
+          prompt: { type: "string", description: "Вопрос или инструкция на русском. Не повторяет и не содержит правильный ответ" },
           options: { type: "array", minItems: 2, maxItems: 4, items: { type: "string" } },
-          answer: { type: "string" },
-          explanation: { type: "string" },
+          answer: { type: "string", description: "Точное совпадение с одним элементом options" },
+          explanation: { type: "string", description: "Объяснение, которое показывается только после выбора" },
         },
       },
     },
@@ -586,7 +607,7 @@ async function requestConversationAnalysis({ llama, model, level, topic, transcr
       },
       {
         role: "user",
-        content: `Разбери диалог и верни результат строго по заданной JSON-схеме. Поле answer должно точно совпадать с одним элементом options.\n\n${transcript}`,
+        content: `Разбери диалог и верни результат строго по заданной JSON-схеме. В каждом упражнении prompt — вопрос или инструкция на русском, а не правильная английская фраза. Никогда не вставляй answer в prompt. Поле answer должно точно совпадать с одним элементом options. Варианты должны быть правдоподобными, но только один — лучший.\n\n${transcript}`,
       },
     ],
     response_format: {
