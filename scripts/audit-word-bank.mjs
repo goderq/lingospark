@@ -17,6 +17,8 @@ for (const [index, [english, translation, transcription, stableId]] of bank.entr
   if (/[|<>{}=]/.test(translation) || /[a-z]{2,}/i.test(translation))
     errors.push(`${english}: contaminated translation: ${translation}`);
   if (translation.length > 720) errors.push(`${english}: translation too long`);
+  if (translation.split(";").length > 3)
+    errors.push(`${english}: too many meanings`);
   if (transcription && transcription.length > 45) errors.push(`${english}: transcription too long`);
 }
 for (const [english, expected] of Object.entries(wordOverrides)) {

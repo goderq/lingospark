@@ -147,9 +147,12 @@ for (const [sourceIndex, sourceEntry] of existing.entries()) {
   const transcription = newTranscription && newTranscription.length <= 45 && !/[<!>{}=]/.test(newTranscription)
     ? newTranscription
     : oldTranscription === "[]" ? "" : oldTranscription;
+  const selectedTranslations = override
+    ? unique([primary, ...alternatives]).slice(0, 3)
+    : [primary];
   result.push([
     english,
-    unique([primary, ...alternatives]).slice(0, 9).join("; "),
+    selectedTranslations.join("; "),
     transcription,
     stableIndex,
   ]);
