@@ -25,6 +25,7 @@ import {
   gradeAnswer,
 } from "../utils/answer";
 import { expandExplanation } from "../utils/explanations";
+import { courseConversationTopics } from "../data/courseSupplement";
 
 export default function LessonScreen({ lesson, onClose }) {
   const {
@@ -115,27 +116,30 @@ export default function LessonScreen({ lesson, onClose }) {
     [current, accepted],
   );
   const usefulPhrase =
-    lesson.exercises.find((item) => item.speak)?.speak ||
-    lesson.exercises[0].answer;
+    [...lesson.exercises]
+      .reverse()
+      .find((item) => /[a-z]/i.test(item.speak || "") && !/[а-яё]/i.test(item.speak || ""))
+      ?.speak || "I learned a useful English phrase";
+  const conversationTopic = courseConversationTopics[lesson.id] || "English communication";
   const dialogueSteps = [
     {
       speaker: "Partner",
-      line: `What did you practise in “${lesson.title}”?`,
-      answer: `I practised ${lesson.title.toLowerCase()} today.`,
+      line: `What did you practise in the ${conversationTopic} lesson?`,
+      answer: `I practised ${conversationTopic} today.`,
       options: [
-        `I practised ${lesson.title.toLowerCase()} today.`,
-        "I do not practise anything.",
-        "The lesson was a lesson.",
+        `I practised ${conversationTopic} today.`,
+        `I skipped the ${conversationTopic} lesson.`,
+        `I forgot what ${conversationTopic} means.`,
       ],
     },
     {
       speaker: "Partner",
-      line: "Can you give me one useful phrase from the lesson?",
+      line: `Which phrase would be useful for ${conversationTopic}?`,
       answer: usefulPhrase,
       options: [
         usefulPhrase,
-        "I have no useful phrase.",
-        "English phrase is here.",
+        `I am practise ${conversationTopic}.`,
+        `English ${conversationTopic} are easy.`,
       ],
     },
   ];

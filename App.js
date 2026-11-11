@@ -120,7 +120,7 @@ import {
 } from "./src/services/offlineSpeech";
 
 const NAV_KEY = "@lingospark/navigation-v1";
-const UPDATE_VERSION = "2026.11-offline-speech";
+const UPDATE_VERSION = "2026.11-course-overhaul";
 
 export default function App() {
   useEffect(() => {

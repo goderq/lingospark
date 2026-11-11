@@ -217,6 +217,21 @@ export function StreakCalendarScreen({ onClose }) {
 export function WhatsNewScreen({ onClose }) {
   const updates = [
     [
+      "shuffle",
+      "Все 446 заданий проверены",
+      "Убраны повторяющиеся вопросы: дополнительные задания каждого из 43 курсов теперь используют отдельные тематические фразы.",
+    ],
+    [
+      "language",
+      "Один язык в ответе",
+      "Смешанный русско-английский ответ больше не засчитывается. При этом е и ё по-прежнему считаются одной буквой.",
+    ],
+    [
+      "shield-checkmark",
+      "Автопроверка курсов",
+      "Перед каждым релизом приложение проверяет уникальность вопросов, вариантов и правильных ответов во всём каталоге.",
+    ],
+    [
       "waveform",
       "Офлайн-распознавание Whisper",
       "Скачай речевую модель один раз: запись и распознавание английской речи выполняются прямо на iPhone без сервера.",
@@ -497,9 +512,9 @@ export function WhatsNewScreen({ onClose }) {
       <Header title="Что нового" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
         <Text style={s.newEmoji}>✨</Text>
-        <Text style={s.title}>Теперь можно говорить с Lingo</Text>
+        <Text style={s.title}>Курсы стали разнообразнее</Text>
         <Text style={s.newSubtitle}>
-          Проходи голосовые сценарии, слушай ответы и получай персональный разбор прямо на iPhone.
+          Все 43 курса пересмотрены: меньше повторов, больше живых фраз и точнее проверка переводов.
         </Text>
         {updates.map(([icon, title, text]) => (
           <View key={title} style={s.update}>

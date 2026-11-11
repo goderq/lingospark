@@ -8,6 +8,25 @@ export const normalizeAnswer = (value = '') => `${value}`
 
 const tokens = (value) => normalizeAnswer(value).split(' ').filter(Boolean);
 const isRussian = (value) => /[а-яё]/i.test(value);
+const hasLatin = (value) => /[a-z]/i.test(value);
+const hasCyrillic = (value) => /[а-яё]/i.test(value);
+
+// A translation must stay in the language requested by the exercise. This
+// prevents bilingual strings such as "I agree — я согласен" from being
+// accepted, even if one half matches an allowed variant exactly.
+export const answerUsesExpectedScript = (actual, expected) => {
+  const actualHasLatin = hasLatin(actual);
+  const actualHasCyrillic = hasCyrillic(actual);
+  const expectedHasLatin = hasLatin(expected);
+  const expectedHasCyrillic = hasCyrillic(expected);
+  if (expectedHasLatin && !expectedHasCyrillic) {
+    return actualHasLatin && !actualHasCyrillic;
+  }
+  if (expectedHasCyrillic && !expectedHasLatin) {
+    return actualHasCyrillic && !actualHasLatin;
+  }
+  return true;
+};
 const NEGATIONS = new Set(['не', 'ни', 'нет', 'никогда', 'нельзя', 'без']);
 const PREPOSITIONS = new Set([
   'в', 'во', 'на', 'к', 'ко', 'с', 'со', 'из', 'от', 'до', 'для', 'о', 'об',
@@ -69,6 +88,7 @@ const flexibleRussianOrder = (actual, expected) => {
 export const answersMatch = (actual, expected) => {
   const normalizedActual = normalizeAnswer(actual);
   const normalizedExpected = normalizeAnswer(expected);
+  if (!answerUsesExpectedScript(normalizedActual, normalizedExpected)) return false;
   if (normalizedActual === normalizedExpected) return true;
   if (isRussian(normalizedActual) && isRussian(normalizedExpected)) {
     return flexibleRussianOrder(normalizedActual, normalizedExpected);
@@ -159,8 +179,11 @@ export const gradeAnswer = (actual, variants = []) => {
     return { status: 'correct', analysis: analyzeAnswer(actual, exactVariant) };
   }
   const analysis = closestAnswerAnalysis(actual, accepted);
+  const expectedScriptMatches = accepted.some((variant) =>
+    answerUsesExpectedScript(actual, variant));
   return {
     status:
+      expectedScriptMatches &&
       !analysis.criticalMismatch && !analysis.unnaturalOrder && analysis.score >= 0.68
         ? 'close'
         : 'wrong',

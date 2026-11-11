@@ -12,7 +12,7 @@ const expandedLessonBase = [
     choice('te7', 'Самая вежливая просьба в поддержку:', 'Could you help me troubleshoot this issue?', ['Fix it now', 'Your app is bad', 'Do troubleshooting']),
   ]},
   { id: 'environment', unit: 18, difficulty: 'B2', title: 'Экология', subtitle: 'Климат и устойчивое развитие', icon: 'leaf', color: '#2ECC71', xp: 92, exercises: [
-    choice('ev1', '“Renewable energy” — это...', 'возобновляемая энергия', ['ядерные отходы', 'ископаемое топливо', 'электросеть']),
+    choice('ev1', '“Biodiversity loss” — это...', 'утрата биоразнообразия', ['ядерные отходы', 'рост лесов', 'очистка воды']),
     choice('ev2', 'Companies should reduce their carbon ___.', 'footprint', ['step', 'shadow', 'mark']),
     translate('ev3', 'Переведи: Sea levels are continuing to rise', 'Уровень моря продолжает повышаться', 'Sea levels are continuing to rise'),
     choice('ev4', '“Single-use plastic” означает...', 'одноразовый пластик', ['переработанный пластик', 'прочный пластик', 'биоматериал']),
@@ -48,7 +48,7 @@ const expandedLessonBase = [
     choice('me7', 'Нейтральная академическая формулировка:', 'The available evidence remains inconclusive.', ['Nobody knows anything', 'The evidence is bad', 'It cannot be true']),
   ]},
   { id: 'relationships', unit: 20, difficulty: 'B1', title: 'Отношения и общение', subtitle: 'Границы, поддержка и конфликты', icon: 'people', color: '#FF7EB6', xp: 84, exercises: [
-    choice('re1', '“We get along well” означает...', 'Мы хорошо ладим', ['Мы часто спорим', 'Мы давно знакомы', 'Мы живём вместе']),
+    choice('re1', '“We see eye to eye” означает...', 'Мы придерживаемся одного мнения', ['Мы часто спорим', 'Мы давно знакомы', 'Мы избегаем разговора']),
     choice('re2', 'It helps to talk things ___.', 'through', ['overly', 'away', 'down']),
     translate('re3', 'Переведи: I did not mean to hurt your feelings', 'Я не хотел задеть твои чувства', 'I did not mean to hurt your feelings'),
     choice('re4', 'Вежливо обозначить границу:', 'I’m not comfortable discussing that.', ['Do not ask me', 'That is none of your business', 'Stop this topic']),
