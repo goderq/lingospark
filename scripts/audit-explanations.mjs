@@ -6,6 +6,7 @@ import {
   expandExplanation,
   getExplanationExamples,
   getExplanationSections,
+  getRelevantReinforcement,
 } from '../src/utils/explanations.js';
 
 const entries = [
@@ -54,6 +55,18 @@ for (const lesson of lessons) {
       `${lesson.title}: missing individual explanation for “${item.prompt}”`,
     );
     if (item.type !== 'choice') continue;
+    const unrelatedNextQuestion = {
+      id: 'unrelated',
+      type: 'choice',
+      prompt: 'Совершенно другая тема',
+      options: ['One', 'Two'],
+      answer: 'One',
+    };
+    const reinforcement = getRelevantReinforcement(item, unrelatedNextQuestion);
+    assert.equal(reinforcement.sourceId, item.id, `${lesson.title}: reinforcement changed the source question`);
+    assert.equal(reinforcement.answer, item.answer, `${lesson.title}: reinforcement changed the answer`);
+    assert.ok(reinforcement.prompt.includes(item.prompt), `${lesson.title}: reinforcement lost the original meaning`);
+    assert.ok(!reinforcement.prompt.includes(unrelatedNextQuestion.prompt), `${lesson.title}: unrelated next question leaked into reinforcement`);
     for (const option of item.options.filter((value) => value !== item.answer)) {
       const optionExplanation = item.optionExplanations?.[option];
       assert.ok(

@@ -7,6 +7,7 @@ import {
   explainSelectedOption,
   getExplanationExamples,
   getExplanationSections,
+  getRelevantReinforcement,
 } from "../utils/explanations";
 
 const detailIds = new Set(["rule", "steps", "memory", "check"]);
@@ -39,16 +40,20 @@ export default function ExplanationCard({
   const why = sections.find((section) => section.id === "why")?.text;
   const details = sections.filter((section) => detailIds.has(section.id));
   const color = accentColor || (correct ? colors.mint : colors.orange);
+  const relevantReinforcement = useMemo(
+    () => getRelevantReinforcement(item, Boolean(reinforcement)),
+    [item, reinforcement],
+  );
   const practiceOptions = useMemo(
-    () => reinforcement?.type === "choice"
+    () => relevantReinforcement?.type === "choice"
       ? balancedOptions(
-          reinforcement.options,
-          reinforcement.answer,
+          relevantReinforcement.options,
+          relevantReinforcement.answer,
           0,
-          String(reinforcement.id || reinforcement.prompt).length * 7919,
+          String(relevantReinforcement.id || relevantReinforcement.prompt).length * 7919,
         )
       : [],
-    [reinforcement],
+    [relevantReinforcement],
   );
 
   useEffect(() => {
@@ -158,7 +163,7 @@ export default function ExplanationCard({
       )}
 
       <View style={styles.footer}>
-        {!!reinforcement && reinforcement.type === "choice" && (
+        {!!relevantReinforcement && (
           <Pressable
             onPress={() => {
               setPracticeOpen((value) => !value);
@@ -178,13 +183,13 @@ export default function ExplanationCard({
         )}
       </View>
 
-      {practiceOpen && reinforcement?.type === "choice" && (
+      {practiceOpen && relevantReinforcement?.type === "choice" && (
         <View style={styles.practice}>
-          <Text style={styles.practiceLabel}>НОВОЕ ЗАДАНИЕ ДЛЯ ЗАКРЕПЛЕНИЯ</Text>
-          <Text style={styles.practicePrompt}>{reinforcement.prompt}</Text>
+          <Text style={styles.practiceLabel}>ЗАКРЕПЛЕНИЕ ЭТОГО ЖЕ НАВЫКА</Text>
+          <Text style={styles.practicePrompt}>{relevantReinforcement.prompt}</Text>
           {practiceOptions.map((option) => {
             const answered = Boolean(practiceSelected);
-            const right = option === reinforcement.answer;
+            const right = option === relevantReinforcement.answer;
             const chosen = option === practiceSelected;
             return (
               <Pressable
@@ -204,11 +209,11 @@ export default function ExplanationCard({
           {!!practiceSelected && (
             <Text style={[
               styles.practiceResult,
-              { color: practiceSelected === reinforcement.answer ? colors.mint : colors.orange },
+              { color: practiceSelected === relevantReinforcement.answer ? colors.mint : colors.orange },
             ]}>
-              {practiceSelected === reinforcement.answer
+              {practiceSelected === relevantReinforcement.answer
                 ? "Верно — правило закреплено."
-                : `Ответ: ${reinforcement.answer}. Сравни его со своим вариантом и попробуй объяснить отличие.`}
+                : `Ответ: ${relevantReinforcement.answer}. Сравни его со своим вариантом и попробуй объяснить отличие.`}
             </Text>
           )}
         </View>

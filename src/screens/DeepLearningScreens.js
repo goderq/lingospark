@@ -874,7 +874,7 @@ export function SmartCoachScreen({ onClose }) {
             >
               {right ? "Верно!" : `Правильно: ${item.answer}`}
             </Text>
-            <ExplanationCard item={{ ...item, type: useMistakes ? 'translate' : 'choice' }} selected={useMistakes ? answer : selected} correct={right} context={{ topic: 'Персональный урок' }} showStatus={false} reinforcement={!useMistakes && deck.length > 1 ? { ...deck[(index + 1) % deck.length], type: 'choice' } : null} accentColor={colors.purple} />
+            <ExplanationCard item={{ ...item, type: useMistakes ? 'translate' : 'choice' }} selected={useMistakes ? answer : selected} correct={right} context={{ topic: 'Персональный урок' }} showStatus={false} reinforcement={!useMistakes} accentColor={colors.purple} />
           </View>
         )}
         <PrimaryButton

@@ -277,7 +277,7 @@ export function CareerCoursesScreen({ onClose }) {
           ),
         )}
         {selected && (
-          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: track.title }} reinforcement={{ ...track.exercises[(index + 1) % track.exercises.length], type: 'choice' }} accentColor={colors.purple} />
+          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: track.title }} reinforcement accentColor={colors.purple} />
         )}
         {selected && (
           <PrimaryButton
@@ -487,7 +487,7 @@ export function FullIeltsMockScreen({ onClose }) {
           ),
         )}
         {selected && (
-          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: `IELTS ${item.section}` }} reinforcement={{ ...deck[(index + 1) % deck.length], type: 'choice' }} accentColor={colors.orange} />
+          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: `IELTS ${item.section}` }} reinforcement accentColor={colors.orange} />
         )}
         {selected && (
           <PrimaryButton

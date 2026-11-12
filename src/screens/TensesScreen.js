@@ -350,7 +350,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
               <Text style={styles.optionText}>{option}</Text>
             </Pressable>
           ))}
-          {gateSelected && <ExplanationCard item={{ ...gateQuestion, type: "choice" }} selected={gateSelected} correct={gateCorrect} context={{ topic: module.name, formula: module.formula, use: module.use, markers: module.markers }} reinforcement={{ ...module.exercises[Math.min(2 + gateIndex, module.exercises.length - 1)], type: "choice" }} accentColor={groupColor(module.name)} />}
+          {gateSelected && <ExplanationCard item={{ ...gateQuestion, type: "choice" }} selected={gateSelected} correct={gateCorrect} context={{ topic: module.name, formula: module.formula, use: module.use, markers: module.markers }} reinforcement accentColor={groupColor(module.name)} />}
           {gateSelected && <PrimaryButton title={gateIndex === 1 ? (gateScore === 2 ? "Открыть практику" : "Повторить мини-тест") : "Следующий вопрос"} onPress={nextGate} color={gateCorrect ? colors.mint : colors.orange} />}
         </ScrollView>
       </View>
@@ -441,10 +441,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
               use: module.use,
               markers: module.markers,
             }}
-            reinforcement={{
-              ...module.exercises[(index + 1) % module.exercises.length],
-              type: "choice",
-            }}
+            reinforcement
             accentColor={groupColor(module.name)}
           />
         )}

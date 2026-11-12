@@ -120,13 +120,7 @@ export default function LessonScreen({ lesson, onClose }) {
     () => closestAnswerAnalysis(current, accepted),
     [current, accepted],
   );
-  const reinforcement = useMemo(() => {
-    for (let offset = 1; offset < lesson.exercises.length; offset += 1) {
-      const candidate = lesson.exercises[(index + offset) % lesson.exercises.length];
-      if (candidate.type === "choice" && candidate.id !== exercise.id) return candidate;
-    }
-    return null;
-  }, [exercise.id, index, lesson.exercises]);
+  const reinforcement = exercise.type === "choice";
   const usefulPhrase =
     [...lesson.exercises]
       .reverse()

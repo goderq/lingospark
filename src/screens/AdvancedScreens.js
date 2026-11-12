@@ -481,10 +481,7 @@ export function WeeklyExamScreen({ onClose }) {
             selected={selected}
             correct={selected === question.answer}
             context={{ topic: "Недельный экзамен" }}
-            reinforcement={{
-              ...questions[(index + 1) % questions.length],
-              type: "choice",
-            }}
+            reinforcement
             accentColor={colors.orange}
           />
         )}
