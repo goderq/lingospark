@@ -63,15 +63,15 @@ for (const lesson of lessons) {
       answer: 'One',
     };
     const reinforcement = getRelevantReinforcement(item, unrelatedNextQuestion);
+    assert.ok(reinforcement, `${lesson.title}: missing linked task for ${item.id}`);
     assert.equal(reinforcement.sourceId, item.id, `${lesson.title}: reinforcement changed the source question`);
     if (reinforcement.isNew) {
       assert.notEqual(reinforcement.prompt, item.prompt);
       assert.ok(reinforcement.skill && reinforcement.explanation);
       assert.ok(reinforcement.options.includes(reinforcement.answer));
-    } else {
-      assert.equal(reinforcement.answer, item.answer);
-      assert.ok(reinforcement.prompt.includes(item.prompt));
     }
+    assert.ok(reinforcement.isNew, `${item.id}: original question reused`);
+    assert.ok(!/^(Повтори этот же смысл|Закрепи эту же конструкцию):/u.test(reinforcement.prompt), `${item.id}: original prompt copied with a prefix`);
     assert.ok(!reinforcement.prompt.includes(unrelatedNextQuestion.prompt), `${lesson.title}: unrelated next question leaked into reinforcement`);
     for (const option of item.options.filter((value) => value !== item.answer)) {
       const optionExplanation = item.optionExplanations?.[option];

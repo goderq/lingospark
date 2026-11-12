@@ -150,21 +150,9 @@ export function getRelevantReinforcement(item = {}, enabled = true, context = {}
   if (linked && linked.prompt !== item.prompt) {
     return { ...linked, id: `${item.id || item.prompt}-linked`, sourceId: item.id || null, isNew: true };
   }
-  const answer = clean(item.answer);
-  const options = [...new Set((item.options || []).map(clean).filter(Boolean))];
-  if (!answer || options.length < 2 || !options.includes(answer)) return null;
-  const prompt = clean(item.prompt);
-  const prefix = prompt.includes("___")
-    ? "Закрепи эту же конструкцию"
-    : "Повтори этот же смысл";
-  return {
-    id: `${item.id || prompt}-reinforcement`,
-    type: "choice",
-    prompt: `${prefix}: ${prompt}`,
-    options,
-    answer,
-    sourceId: item.id || null,
-  };
+  // Never disguise the original question as a new task by adding a prefix.
+  // A section without a reviewed linked task simply has no reinforcement button.
+  return null;
 }
 
 export function expandExplanation(item = {}, context = {}) {

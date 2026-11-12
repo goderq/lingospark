@@ -1,9 +1,42 @@
+import { reinforcementSituations } from './reinforcementScenarios.js';
 // Explicit source bindings prevent unrelated questions from entering practice.
 const task = (skill, prompt, answer, wrong, explanation) => ({
   skill, prompt, answer, options: [answer, ...wrong], explanation, type: "choice",
 });
 
+// Change lexical surroundings without changing subject agreement, time markers,
+// negation or the tested gap. These are reviewed singular/plural equivalents.
+const practiceVocabulary = [
+  [/\bcoffee\b/gi, 'tea'], [/\btrain\b/gi, 'bus'],
+  [/\breport\b/gi, 'essay'], [/\breports\b/gi, 'essays'],
+  [/\bLondon\b/g, 'Madrid'], [/\bBerlin\b/g, 'Rome'],
+  [/\bCanada\b/g, 'Japan'], [/\bEnglish\b/g, 'Spanish'],
+  [/\bcinema\b/gi, 'theatre'], [/\bfilm\b/gi, 'show'],
+  [/\bbook\b/gi, 'magazine'], [/\bbooks\b/gi, 'magazines'],
+  [/\bbridge\b/gi, 'school'], [/\bemail\b/gi, 'message'],
+  [/\bflat\b/gi, 'house'], [/\bdog\b/gi, 'cat'],
+  [/\bchildren\b/gi, 'students'], [/\bshop\b/gi, 'museum'],
+  [/\bpresentation\b/gi, 'speech'], [/\bproject\b/gi, 'assignment'],
+  [/\bhomework\b/gi, 'coursework'], [/\bdinner\b/gi, 'lunch'],
+  [/\bAnna\b/g, 'Emma'], [/\bJohn\b/g, 'David'],
+];
+
+function varyGap(item, context) {
+  if (!item.prompt?.includes('___') || !item.options?.includes(item.answer)) return null;
+  for (const [pattern, replacement] of practiceVocabulary) {
+    const prompt = item.prompt.replace(pattern, replacement);
+    if (prompt === item.prompt) continue;
+    return {
+      type: 'choice', skill: context.topic || 'Грамматическая конструкция',
+      prompt, answer: item.answer, options: [...item.options],
+      explanation: `${item.explanation || item.hint || 'Сохрани грамматическую форму, которую требует окружение пропуска.'} Здесь меняется предмет или место, но временные маркеры и грамматическая связь остаются прежними.`,
+    };
+  }
+  return null;
+}
+
 export const courseReinforcement = {
+  'mega-greetings-2': task("Представить друга", "Представь нового друга Макса своим коллегам.", "This is my friend Max", ["Let me introduce myself", "Where are you from?", "It was nice meeting you"], "Чтобы представить другого человека, используем This is…: This is my friend Max — это мой друг Макс. Let me introduce myself относится к представлению себя, а не друга."),
   g1: task("Приветствие", "Ты встретил друга утром. Как поздороваться?", "Hi!", ["Goodbye!", "Thank you!"], "Hi — дружеское приветствие, как и Hello. Goodbye говорят при прощании, Thank you — когда благодарят."),
   g2: task("Имя собеседника", "Как спросить имя нового одноклассника?", "What's your name?", ["Where do you live?", "How old are you?"], "What's — сокращение What is. Слово name показывает, что вопрос об имени; where — о месте, how old — о возрасте."),
   c2: task("Счёт в кафе", "Ты закончил ужин и хочешь оплатить заказ. Что попросить?", "The bill, please.", ["The menu, please.", "A table, please."], "The bill — счёт к оплате. Menu нужно для выбора блюд, а table — столик."),
@@ -36,6 +69,19 @@ export const tenseReinforcement = {
 export function findReinforcement(item, context = {}) {
   const source = courseReinforcement[item.id];
   if (source) return source;
+  const situation = reinforcementSituations[item.id];
+  if (situation && item.options?.includes(item.answer)) {
+    return {
+      type: 'choice',
+      skill: context.topic || 'Применение фразы',
+      prompt: situation,
+      answer: item.answer,
+      options: [...item.options],
+      explanation: item.explanation || `В этой ситуации подходит «${item.answer}». ${item.hint || 'Сопоставь намерение говорящего с выбранной фразой.'}`,
+    };
+  }
+  const gapVariant = varyGap(item, context);
+  if (gapVariant) return gapVariant;
   // Exact topic matching only: never infer a grammar skill from broad words.
   if (context.formula && tenseReinforcement[context.topic]) {
     if (/^(for|since)$/i.test(item.answer)) {
