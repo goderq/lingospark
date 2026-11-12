@@ -1,4 +1,5 @@
 import compactWordBank from "./wordBank.json";
+import { wordLearningDetails } from "./wordLearningData";
 
 export const wordLevels = ["A1", "A2", "B1", "B2", "C1"];
 
@@ -26,6 +27,7 @@ export const extendedWordBank = compactWordBank.map(
       .map((value) => value.replace(/\([^)]*\)/g, "").trim())
       .filter(Boolean);
     const fullTranslation = variants.slice(0, 3).join("; ");
+    const learning = wordLearningDetails(english, fullTranslation);
     return {
       id: `bank-${stableIndex ?? index}`,
       english,
@@ -37,6 +39,7 @@ export const extendedWordBank = compactWordBank.map(
       level,
       emoji: emojiForLevel[level],
       frequency: index + 1,
+      ...learning,
     };
   },
 );

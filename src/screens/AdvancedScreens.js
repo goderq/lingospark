@@ -302,7 +302,9 @@ export function VocabularyScreen({ onClose }) {
           {opened && (
             <>
               {!!word.transcription && <Text style={s.wordTranscription}>{word.transcription}</Text>}
+              {!!word.partOfSpeech && <Text style={s.wordPart}>{word.partOfSpeech}</Text>}
               {!!word.example && <Text style={s.wordExample}>{word.example}</Text>}
+              {!!word.exampleRu && <Text style={s.wordExampleRu}>{word.exampleRu}</Text>}
               <Text style={s.wordStatus}>
                 {stats[word.id]
                   ? `Изучается · верно ${stats[word.id].correct || 0} из ${stats[word.id].total || 0}`
@@ -855,6 +857,7 @@ const s = StyleSheet.create({
   wordLevel: { color: colors.mint, fontSize: 8, fontWeight: "900", backgroundColor: "rgba(46,211,183,.12)", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 7 },
   wordRussian: { color: colors.textMuted, marginTop: 3 },
   wordTranscription: { color: colors.purple, fontSize: 11, marginTop: 6 },
+  wordPart: { color: colors.mint, fontSize: 9, fontWeight: "800", marginTop: 5 },
   wordStatus: { color: colors.orange, fontSize: 9, marginTop: 7 },
   wordActions: { gap: 10, paddingLeft: 4 },
   wordExample: {
@@ -863,6 +866,7 @@ const s = StyleSheet.create({
     fontStyle: "italic",
     marginTop: 5,
   },
+  wordExampleRu: { color: colors.textMuted, fontSize: 10, marginTop: 3 },
   center: {
     flex: 1,
     alignItems: "center",

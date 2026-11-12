@@ -53,6 +53,10 @@ import TenseChallengeScreen from "./src/screens/TenseChallengeScreen";
 import LearningHubScreen, {
   LearningAnalyticsScreen,
 } from "./src/screens/LearningHubScreen";
+import {
+  ExamCenterScreen,
+  GrammarCenterScreen,
+} from "./src/screens/LearningCentersScreen";
 import SentenceBuilderScreen from "./src/screens/SentenceBuilderScreen";
 import C1ExamScreen from "./src/screens/C1ExamScreen";
 import SkillSprintScreen from "./src/screens/SkillSprintScreen";
@@ -190,6 +194,8 @@ function AppContent() {
       review: "Слова",
       profile: "Профиль",
       learningHub: "Каталог",
+      grammarCenter: "Центр грамматики",
+      examCenter: "Центр экзаменов",
       settings: "Настройки",
       tenses: "Времена",
       adaptive: "Урок для тебя",
@@ -503,6 +509,24 @@ function AppContent() {
         <LearningHubScreen
           onClose={() => setOverlay(null)}
           onLesson={(lesson) => setOverlay({ type: "lesson", lesson })}
+          onNavigate={(type) => setOverlay({ type })}
+        />
+      </SafeAreaView>
+    );
+  if (overlay?.type === "grammarCenter")
+    return (
+      <SafeAreaView style={styles.safe}>
+        <GrammarCenterScreen
+          onClose={() => setOverlay({ type: "learningHub" })}
+          onNavigate={(type) => setOverlay({ type })}
+        />
+      </SafeAreaView>
+    );
+  if (overlay?.type === "examCenter")
+    return (
+      <SafeAreaView style={styles.safe}>
+        <ExamCenterScreen
+          onClose={() => setOverlay({ type: "learningHub" })}
           onNavigate={(type) => setOverlay({ type })}
         />
       </SafeAreaView>

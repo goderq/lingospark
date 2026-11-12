@@ -18,6 +18,20 @@ import { ProgressBar } from "../components/UI";
 
 const tools = [
   {
+    id: "grammarCenter",
+    title: "Центр грамматики",
+    subtitle: "Единый маршрут: правила, времена и практика A1–C1",
+    icon: "school",
+    color: "#7C5CFC",
+  },
+  {
+    id: "examCenter",
+    title: "Центр экзаменов",
+    subtitle: "Проверки A1–C1, IELTS и сохранённые результаты",
+    icon: "ribbon",
+    color: "#FF5C8A",
+  },
+  {
     id: "lingoWorld",
     title: "Английская жизнь",
     subtitle: "Открытый мир A1–C1 · 20 глав · 68 сцен",
@@ -325,10 +339,7 @@ export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
       "knowledgeMap",
     ],
     Грамматика: [
-      "grammarAcademy",
-      "tenses",
-      "sentenceBuilder",
-      "irregular",
+      "grammarCenter",
       "notebook",
     ],
     Практика: [
@@ -341,9 +352,7 @@ export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
       "workEnglish",
     ],
     Экзамены: [
-      "levelExams",
-      "ielts",
-      "c1Exam",
+      "examCenter",
       "analytics",
     ],
   };

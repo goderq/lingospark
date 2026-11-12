@@ -633,9 +633,13 @@ export default function ReviewScreen() {
               {!!activeCard.transcription && (
                 <Text style={styles.transcription}>{activeCard.transcription}</Text>
               )}
+              {!!activeCard.partOfSpeech && (
+                <Text style={styles.partOfSpeech}>{activeCard.partOfSpeech}</Text>
+              )}
               <View style={styles.divider} />
               <Text style={styles.russianWord}>{activeCard.fullTranslation}</Text>
               {!!activeCard.example && <Text style={styles.wordExample}>{activeCard.example}</Text>}
+              {!!activeCard.exampleRu && <Text style={styles.wordExampleRu}>{activeCard.exampleRu}</Text>}
               <Pressable onPress={speak} style={styles.speakButton}>
                 <Ionicons name="volume-high" size={21} color="white" />
                 <Text style={styles.speakText}>Послушать</Text>
@@ -1067,6 +1071,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   transcription: { color: "rgba(255,255,255,.7)", fontSize: 15, marginTop: 7 },
+  partOfSpeech: {
+    color: "rgba(255,255,255,.82)",
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginTop: 7,
+  },
   divider: {
     width: 55,
     height: 2,
@@ -1087,6 +1099,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginTop: 12,
+  },
+  wordExampleRu: {
+    color: "rgba(255,255,255,.64)",
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    marginTop: 3,
   },
   editTranslation: { backgroundColor: colors.card, padding: 14, borderRadius: 18, marginTop: 11 },
   editLabel: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
