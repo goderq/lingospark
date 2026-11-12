@@ -62,6 +62,7 @@ const initial = {
   fullIeltsBest: 0,
   courseCheckpoints: {},
   lessonResults: {},
+  ruleMastery: {},
   notebook: [],
   lessonDraft: null,
   favorites: [],
@@ -423,14 +424,52 @@ export function ProgressProvider({ children }) {
       };
     });
 
-  const recordExercise = (exercise, isCorrect) => {
+  const recordExercise = (exercise, isCorrect, context = {}) => {
     setProgress((old) => {
       const mistakeId = `lesson-${exercise.id}`;
+      const previousMistake = (old.mistakes || []).find(
+        (item) => item.id === mistakeId,
+      );
       const remaining = (old.mistakes || []).filter(
         (item) => item.id !== mistakeId,
       );
+      const ruleKey = context.ruleId || exercise.ruleId || `exercise-${exercise.id}`;
+      const previousRule = old.ruleMastery?.[ruleKey] || {
+        attempts: 0,
+        correct: 0,
+        streak: 0,
+      };
+      const attempts = previousRule.attempts + 1;
+      const correctAnswers = previousRule.correct + (isCorrect ? 1 : 0);
+      const streak = isCorrect ? previousRule.streak + 1 : 0;
+      const intervalDays = isCorrect
+        ? [1, 3, 7, 14, 30][Math.min(streak - 1, 4)]
+        : 0;
+      const nextReviewAt = dateKey(new Date(Date.now() + intervalDays * 86400000));
+      const ruleMastery = {
+        ...(old.ruleMastery || {}),
+        [ruleKey]: {
+          id: ruleKey,
+          topic: context.topic || exercise.topic || exercise.type || "Практика",
+          level: context.level || exercise.level || "",
+          prompt: exercise.prompt,
+          answer: exercise.answer,
+          explanation:
+            exercise.explanation ||
+            exercise.hint ||
+            "Сравни смысл задания с правильной формой и повтори ответ вслух.",
+          attempts,
+          correct: correctAnswers,
+          streak,
+          accuracy: Math.round((correctAnswers / attempts) * 100),
+          mastered: streak >= 3 && correctAnswers / attempts >= 0.8,
+          nextReviewAt,
+          lastAttemptAt: Date.now(),
+        },
+      };
       return {
         ...old,
+        ruleMastery,
         mistakes: isCorrect
           ? remaining
           : [
@@ -443,6 +482,12 @@ export function ProgressProvider({ children }) {
                   exercise.explanation ||
                   exercise.hint ||
                   "Сравни смысл задания с правильной формой и повтори ответ вслух.",
+                selected: context.selected || "",
+                topic: context.topic || exercise.topic || "Практика",
+                level: context.level || exercise.level || "",
+                ruleId: ruleKey,
+                nextReviewAt,
+                attempts: (previousMistake?.attempts || 0) + 1,
                 date: dateKey(),
               },
               ...remaining,

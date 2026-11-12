@@ -28,7 +28,6 @@ import PlacementScreen from "./src/screens/PlacementScreen";
 import GrammarScreen from "./src/screens/GrammarScreen";
 import StoriesScreen from "./src/screens/StoriesScreen";
 import WordGameScreen from "./src/screens/WordGameScreen";
-import AITutorScreen from "./src/screens/AITutorScreen";
 import {
   ActivityScreen,
   PlanScreen,
@@ -108,6 +107,8 @@ import {
 } from "./src/screens/PremiumScreens";
 import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
+
+const AITutorScreen = React.lazy(() => import("./src/screens/AITutorScreen"));
 
 const NAV_KEY = "@lingospark/navigation-v1";
 export default function App() {
@@ -769,15 +770,19 @@ function AppContent() {
           />
         )}
         {tab === "review" && <ReviewScreen />}
-        {tab === "ai" && <AITutorScreen onImmersiveChange={setAiImmersive} onNavigate={({ type, target }) => {
-          setAiImmersive(false);
-          if (type === "tab") {
-            setOverlay(null);
-            setTab(target);
-          } else {
-            setOverlay({ type: target });
-          }
-        }} />}
+        {tab === "ai" && (
+          <React.Suspense fallback={<LoadingScreen />}>
+            <AITutorScreen onImmersiveChange={setAiImmersive} onNavigate={({ type, target }) => {
+              setAiImmersive(false);
+              if (type === "tab") {
+                setOverlay(null);
+                setTab(target);
+              } else {
+                setOverlay({ type: target });
+              }
+            }} />
+          </React.Suspense>
+        )}
         {tab === "profile" && (
           <ProfileScreen
             onSettings={() => setOverlay({ type: "settings" })}

@@ -13,6 +13,7 @@ import { colors } from "../theme";
 import { PrimaryButton } from "../components/UI";
 import { answersMatch } from "../utils/answer";
 import { expandExplanation } from "../utils/explanations";
+import ExplanationCard from "../components/ExplanationCard";
 
 const filters = ["Все", "Слово", "Урок", "Грамматика", "Диктант"];
 const fallbackExplanation = (item) => {
@@ -28,6 +29,13 @@ const fallbackExplanation = (item) => {
 export default function MistakesScreen({ onClose }) {
   const { progress, resolveMistake, toggleNotebook } = useProgress();
   const mistakes = progress.mistakes || [];
+  const rules = useMemo(
+    () => Object.values(progress.ruleMastery || {}).sort(
+      (first, second) => second.lastAttemptAt - first.lastAttemptAt,
+    ),
+    [progress.ruleMastery],
+  );
+  const masteredRules = rules.filter((rule) => rule.mastered).length;
   const [filter, setFilter] = useState("Все");
   const [training, setTraining] = useState(false);
   const [answer, setAnswer] = useState("");
@@ -114,17 +122,15 @@ export default function MistakesScreen({ onClose }) {
                   ? "Верно! Ошибка будет удалена"
                   : `Правильно: ${item.answer}`}
               </Text>
-              <Text style={styles.explanation}>{explanation}</Text>
-              <Pressable onPress={saveExplanation} style={styles.saveRule}>
-                <Ionicons
-                  name={noteSaved ? "bookmark" : "bookmark-outline"}
-                  size={18}
-                  color={colors.purple}
-                />
-                <Text style={styles.saveRuleText}>
-                  {noteSaved ? "Сохранено в тетради" : "Сохранить объяснение"}
-                </Text>
-              </Pressable>
+              <ExplanationCard
+                item={{ ...item, type: "translate" }}
+                selected={answer}
+                correct={correct}
+                context={{ topic: item.type }}
+                showStatus={false}
+                saved={noteSaved}
+                onSave={saveExplanation}
+              />
             </View>
           )}
           <PrimaryButton
@@ -159,6 +165,37 @@ export default function MistakesScreen({ onClose }) {
         <Text style={styles.subtitle}>
           Выбери категорию и повтори только то, что пока не получается
         </Text>
+        {!!rules.length && (
+          <View style={styles.masteryCard}>
+            <View style={styles.masteryTop}>
+              <View>
+                <Text style={styles.masteryEyebrow}>ИСТОРИЯ ПРАВИЛ</Text>
+                <Text style={styles.masteryTitle}>
+                  Освоено {masteredRules} из {rules.length}
+                </Text>
+              </View>
+              <Ionicons name="school" size={26} color={colors.purple} />
+            </View>
+            {rules.slice(0, 5).map((rule) => (
+              <View key={rule.id} style={styles.ruleRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.ruleTopic}>{rule.topic}</Text>
+                  <Text style={styles.ruleMeta}>
+                    {rule.accuracy}% · серия {rule.streak} · повтор {rule.nextReviewAt}
+                  </Text>
+                </View>
+                <View style={[
+                  styles.ruleStatus,
+                  { backgroundColor: `${rule.mastered ? colors.mint : colors.orange}22` },
+                ]}>
+                  <Text style={{ color: rule.mastered ? colors.mint : colors.orange, fontWeight: "900", fontSize: 10 }}>
+                    {rule.mastered ? "ОСВОЕНО" : "УЧУ"}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -221,14 +258,13 @@ export default function MistakesScreen({ onClose }) {
                 />
                 <Text style={styles.answer}>{entry.answer}</Text>
               </View>
+              {!!entry.selected && (
+                <Text style={styles.previousAnswer}>Твой ответ: {entry.selected}</Text>
+              )}
               <View style={styles.whyRow}>
                 <Ionicons name="bulb-outline" size={17} color={colors.orange} />
                 <Text style={styles.whyText}>
-                  {expandExplanation(entry, {
-                    topic: entry.type,
-                    explanation:
-                      entry.explanation || fallbackExplanation(entry),
-                  })}
+                  {entry.explanation || fallbackExplanation(entry)}
                 </Text>
               </View>
             </View>
@@ -271,6 +307,22 @@ const styles = StyleSheet.create({
     marginTop: 7,
     marginBottom: 2,
   },
+  masteryCard: {
+    backgroundColor: colors.card,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(124,92,252,.35)",
+    padding: 16,
+    gap: 11,
+    marginVertical: 5,
+  },
+  masteryTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  masteryEyebrow: { color: colors.purple, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
+  masteryTitle: { color: "white", fontSize: 18, fontWeight: "900", marginTop: 4 },
+  ruleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
+  ruleTopic: { color: "white", fontWeight: "800", fontSize: 13 },
+  ruleMeta: { color: colors.textMuted, fontSize: 10, marginTop: 3 },
+  ruleStatus: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6 },
   filters: { gap: 8, paddingVertical: 6 },
   filter: {
     borderRadius: 15,
@@ -329,6 +381,7 @@ const styles = StyleSheet.create({
     marginTop: 11,
   },
   answer: { color: colors.mint, fontWeight: "700", flex: 1 },
+  previousAnswer: { color: colors.pink, fontSize: 12, marginTop: 7 },
   practice: { flexGrow: 1, padding: 22, paddingBottom: 35 },
   practicePrompt: {
     color: "white",

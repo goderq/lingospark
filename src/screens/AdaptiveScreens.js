@@ -23,7 +23,7 @@ const random = (items) => [...items].sort(() => Math.random() - 0.5);
 const dateKey = (date = new Date()) => date.toISOString().slice(0, 10);
 
 export function AdaptiveLessonScreen({ onClose }) {
-  const { progress, resolveMistake, recordReview, recordGrammar } =
+  const { progress, resolveMistake, recordReview, recordGrammar, recordExercise } =
     useProgress();
   const [index, setIndex] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -44,6 +44,18 @@ export function AdaptiveLessonScreen({ onClose }) {
       answer: item.answer,
     }));
     const today = dateKey();
+    const weakRules = Object.values(progress.ruleMastery || {})
+      .filter((rule) => !rule.mastered && (!rule.nextReviewAt || rule.nextReviewAt <= today))
+      .sort((first, second) => first.accuracy - second.accuracy || first.lastAttemptAt - second.lastAttemptAt)
+      .map((rule) => ({
+        id: `adaptive-rule-${rule.id}`,
+        type: "rule",
+        ruleId: rule.id,
+        label: `${rule.level ? `${rule.level} · ` : ""}${rule.topic}`,
+        prompt: rule.prompt,
+        answer: rule.answer,
+        explanation: rule.explanation,
+      }));
     const dueWords = reviewWords
       .filter(
         (word) =>
@@ -80,11 +92,12 @@ export function AdaptiveLessonScreen({ onClose }) {
       })),
     );
     const priority = [
-      ...random(mistakes).slice(0, 5),
+      ...mistakes.slice(0, 4),
+      ...weakRules.slice(0, 4),
       ...random(dueWords).slice(0, 4),
       ...random(tensePool).slice(0, 6),
     ];
-    return random(priority).slice(0, 12);
+    return random(priority).slice(0, 14);
   }, []);
   const item = deck[index];
   const analysis = analyzeAnswer(answer, item?.answer || "");
@@ -107,6 +120,17 @@ export function AdaptiveLessonScreen({ onClose }) {
           answer: item.answer,
         },
         right,
+      );
+    if (item.type === "rule")
+      recordExercise(
+        {
+          id: `adaptive-${item.ruleId}`,
+          prompt: item.prompt,
+          answer: item.answer,
+          explanation: item.explanation,
+        },
+        right,
+        { ruleId: item.ruleId, topic: item.label, selected: answer },
       );
   };
   const restart = () => {

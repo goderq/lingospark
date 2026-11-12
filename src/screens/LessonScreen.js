@@ -52,6 +52,12 @@ export default function LessonScreen({ lesson, onClose }) {
   const [conversationStep, setConversationStep] = useState(0);
   const [conversationChoice, setConversationChoice] = useState("");
   const [conversationScore, setConversationScore] = useState(0);
+  const [lessonMistakes, setLessonMistakes] = useState([]);
+  const [remediation, setRemediation] = useState(false);
+  const [remediationIndex, setRemediationIndex] = useState(0);
+  const [remediationAnswer, setRemediationAnswer] = useState("");
+  const [remediationChecked, setRemediationChecked] = useState(false);
+  const [remediationCorrect, setRemediationCorrect] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [resultAccuracy, setResultAccuracy] = useState(0);
   const [resultCorrect, setResultCorrect] = useState(0);
@@ -165,8 +171,17 @@ export default function LessonScreen({ lesson, onClose }) {
     setCorrect(result);
     if (result) setCorrectCount((value) => value + 1);
     setChecked(true);
-    recordExercise(exercise, result);
+    recordExercise(exercise, result, {
+      selected: current,
+      topic: lesson.title,
+      level: lesson.difficulty,
+      ruleId: `course-${lesson.id}`,
+    });
     if (evaluation.status === "wrong") {
+      setLessonMistakes((items) => [
+        ...items.filter((item) => item.exercise.id !== exercise.id),
+        { exercise, selected: current },
+      ]);
       const nextLives = Math.max(0, lives - 1);
       setLives(nextLives);
       saveLessonDraft(lesson.id, index, nextLives);
@@ -194,7 +209,8 @@ export default function LessonScreen({ lesson, onClose }) {
   };
   const advance = () => {
     if (index === lesson.exercises.length - 1) {
-      setConversation(true);
+      if (lessonMistakes.length) setRemediation(true);
+      else setConversation(true);
       return;
     }
     saveLessonDraft(lesson.id, index + 1, lives);
@@ -205,6 +221,32 @@ export default function LessonScreen({ lesson, onClose }) {
     setChecked(false);
     setCorrect(false);
     setAnswerGrade(null);
+  };
+  const checkRemediation = () => {
+    const item = lessonMistakes[remediationIndex]?.exercise;
+    if (!item) return;
+    const right = [item.answer, ...(item.answers || [])].some((answer) =>
+      answersMatch(remediationAnswer, answer),
+    );
+    setRemediationCorrect(right);
+    setRemediationChecked(true);
+    recordExercise(item, right, {
+      selected: remediationAnswer,
+      topic: lesson.title,
+      level: lesson.difficulty,
+      ruleId: `course-${lesson.id}`,
+    });
+  };
+  const advanceRemediation = () => {
+    if (remediationIndex === lessonMistakes.length - 1) {
+      setRemediation(false);
+      setConversation(true);
+      return;
+    }
+    setRemediationIndex((value) => value + 1);
+    setRemediationAnswer("");
+    setRemediationChecked(false);
+    setRemediationCorrect(false);
   };
   const advanceConversation = () => {
     const gained =
@@ -245,6 +287,12 @@ export default function LessonScreen({ lesson, onClose }) {
     setConversationStep(0);
     setConversationChoice("");
     setConversationScore(0);
+    setLessonMistakes([]);
+    setRemediation(false);
+    setRemediationIndex(0);
+    setRemediationAnswer("");
+    setRemediationChecked(false);
+    setRemediationCorrect(false);
   };
   const requestClose = () => {
     saveLessonDraft(lesson.id, index, lives);
@@ -315,6 +363,86 @@ export default function LessonScreen({ lesson, onClose }) {
         <PrimaryButton title="Забрать награду" onPress={onClose} />
       </Animated.View>
     );
+
+  if (remediation) {
+    const review = lessonMistakes[remediationIndex];
+    const reviewItem = review?.exercise;
+    return (
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.container}
+      >
+        <View style={styles.top}>
+          <Pressable onPress={requestClose} style={styles.close}>
+            <Ionicons name="close" size={23} color={colors.textMuted} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <ProgressBar
+              value={(remediationIndex + 1) / lessonMistakes.length}
+              color={colors.orange}
+            />
+          </View>
+          <Text style={styles.remediationCount}>
+            {remediationIndex + 1}/{lessonMistakes.length}
+          </Text>
+        </View>
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          contentContainerStyle={styles.content}
+        >
+          <Text style={[styles.kind, { color: colors.orange }]}>МИНИ-УРОК ПО ОШИБКЕ</Text>
+          <Text style={styles.remediationTitle}>{reviewItem.prompt}</Text>
+          <View style={styles.comparisonCard}>
+            <Text style={styles.comparisonLabel}>ТВОЙ ОТВЕТ</Text>
+            <Text style={styles.comparisonWrong}>{review.selected || "Ответ не дан"}</Text>
+            <Text style={styles.comparisonLabel}>ПРАВИЛЬНАЯ ФОРМА</Text>
+            <Text style={styles.comparisonRight}>{reviewItem.answer}</Text>
+          </View>
+          <ExplanationCard
+            item={reviewItem}
+            selected={review.selected}
+            correct={false}
+            context={{ topic: lesson.title }}
+            accentColor={colors.orange}
+          />
+          <Text style={styles.retryLabel}>Теперь напиши правильный ответ самостоятельно</Text>
+          <TextInput
+            value={remediationAnswer}
+            onChangeText={setRemediationAnswer}
+            editable={!remediationChecked}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="done"
+            onSubmitEditing={Keyboard.dismiss}
+            placeholder="Правильный ответ…"
+            placeholderTextColor={colors.textMuted}
+            style={styles.remediationInput}
+          />
+          {remediationChecked && (
+            <Text
+              style={[
+                styles.remediationResult,
+                { color: remediationCorrect ? colors.mint : colors.orange },
+              ]}
+            >
+              {remediationCorrect
+                ? "Верно — правило закреплено и отмечено в истории."
+                : `Пока нет. Запомни форму: ${reviewItem.answer}`}
+            </Text>
+          )}
+        </ScrollView>
+        <View style={styles.bottom}>
+          <PrimaryButton
+            disabled={!remediationAnswer.trim()}
+            title={remediationChecked ? "Следующий разбор" : "Проверить себя"}
+            onPress={remediationChecked ? advanceRemediation : checkRemediation}
+            color={remediationChecked && remediationCorrect ? colors.mint : colors.orange}
+          />
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
 
   if (conversation) {
     const step = dialogueSteps[conversationStep];
@@ -912,6 +1040,42 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginTop: 15,
   },
+  remediationCount: { color: colors.orange, fontWeight: "900", fontSize: 12 },
+  remediationTitle: {
+    color: "white",
+    fontSize: 27,
+    lineHeight: 35,
+    fontWeight: "900",
+    marginTop: 14,
+  },
+  comparisonCard: {
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    padding: 16,
+    marginTop: 18,
+    gap: 6,
+  },
+  comparisonLabel: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+    marginTop: 4,
+  },
+  comparisonWrong: { color: colors.pink, fontSize: 16, fontWeight: "700" },
+  comparisonRight: { color: colors.mint, fontSize: 17, fontWeight: "800" },
+  retryLabel: { color: "white", fontWeight: "800", marginTop: 20, marginBottom: 9 },
+  remediationInput: {
+    minHeight: 62,
+    color: "white",
+    fontSize: 17,
+    backgroundColor: colors.card,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+  },
+  remediationResult: { fontWeight: "800", lineHeight: 21, marginTop: 12 },
   dialogueBubble: {
     backgroundColor: colors.card,
     borderRadius: 24,
