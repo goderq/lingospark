@@ -6,7 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { ProgressProvider, useProgress } from "./src/store/ProgressContext";
 import { AuthProvider, useAuth } from "./src/store/AuthContext";
-import { CloudSyncProvider } from "./src/store/CloudSyncContext";
+import { CloudSyncProvider, useCloudSync } from "./src/store/CloudSyncContext";
 import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
@@ -16,7 +16,6 @@ import {
   NotebookScreen,
   ArticlesPrepositionsScreen,
 } from "./src/screens/StudyToolsScreens";
-import ReviewScreen from "./src/screens/ReviewScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
 import AuthScreen from "./src/screens/AuthScreen";
 import PhrasebookScreen from "./src/screens/PhrasebookScreen";
@@ -28,14 +27,6 @@ import PlacementScreen from "./src/screens/PlacementScreen";
 import GrammarScreen from "./src/screens/GrammarScreen";
 import StoriesScreen from "./src/screens/StoriesScreen";
 import WordGameScreen from "./src/screens/WordGameScreen";
-import {
-  ActivityScreen,
-  PlanScreen,
-  PronunciationScreen,
-  RewardsScreen,
-  VocabularyScreen,
-  WeeklyExamScreen,
-} from "./src/screens/AdvancedScreens";
 import {
   BackupScreen,
   CommonMistakesScreen,
@@ -64,10 +55,6 @@ import {
   LevelProgressScreen,
   StreakCalendarScreen,
 } from "./src/screens/InterfaceExpansionScreens";
-import {
-  BookmarksScreen,
-  SmartSearchScreen,
-} from "./src/screens/SmartLearningScreens";
 import LingoWorldScreen from "./src/screens/LingoWorldScreen";
 import {
   AdaptiveLessonScreen,
@@ -112,6 +99,20 @@ import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
 
 const AITutorScreen = React.lazy(() => import("./src/screens/AITutorScreen"));
+const ReviewScreen = React.lazy(() => import("./src/screens/ReviewScreen"));
+const DiagnosticsScreen = React.lazy(() => import("./src/screens/DiagnosticsScreen"));
+const lazyNamed = (loader, name) =>
+  React.lazy(() => loader().then((module) => ({ default: module[name] })));
+const advancedScreens = () => import("./src/screens/AdvancedScreens");
+const smartLearningScreens = () => import("./src/screens/SmartLearningScreens");
+const ActivityScreen = lazyNamed(advancedScreens, "ActivityScreen");
+const PlanScreen = lazyNamed(advancedScreens, "PlanScreen");
+const PronunciationScreen = lazyNamed(advancedScreens, "PronunciationScreen");
+const RewardsScreen = lazyNamed(advancedScreens, "RewardsScreen");
+const VocabularyScreen = lazyNamed(advancedScreens, "VocabularyScreen");
+const WeeklyExamScreen = lazyNamed(advancedScreens, "WeeklyExamScreen");
+const BookmarksScreen = lazyNamed(smartLearningScreens, "BookmarksScreen");
+const SmartSearchScreen = lazyNamed(smartLearningScreens, "SmartSearchScreen");
 
 const NAV_KEY = "@lingospark/navigation-v1";
 export default function App() {
@@ -121,7 +122,9 @@ export default function App() {
       <AuthProvider>
         <ProgressProvider>
           <CloudSyncProvider>
-            <AppContent />
+            <React.Suspense fallback={<LoadingScreen />}>
+              <AppContent />
+            </React.Suspense>
           </CloudSyncProvider>
         </ProgressProvider>
       </AuthProvider>
@@ -130,17 +133,24 @@ export default function App() {
 }
 
 function AppContent() {
-  const { ready, progress } = useProgress();
+  const { ready, progress, finishOnboarding } = useProgress();
   const {
     ready: authReady,
     user,
     guestMode,
   } = useAuth();
+  const { isRestoring: cloudRestoring } = useCloudSync();
   const [tab, setTab] = useState("home");
   const [overlay, setOverlay] = useState(null);
   const [recentScreens, setRecentScreens] = useState([]);
   const [aiImmersive, setAiImmersive] = useState(false);
   const [navigationReady, setNavigationReady] = useState(false);
+  const accountName = user?.user_metadata?.display_name?.trim() || "";
+  useEffect(() => {
+    if (user && !cloudRestoring && !progress.onboarded && accountName) {
+      finishOnboarding(accountName, progress.dailyGoal || 30);
+    }
+  }, [user?.id, cloudRestoring, progress.onboarded, accountName]);
   const serializeOverlay = (value) =>
     value
       ? value.type === "lesson"
@@ -197,6 +207,7 @@ function AppContent() {
       grammarCenter: "Центр грамматики",
       examCenter: "Центр экзаменов",
       settings: "Настройки",
+      diagnostics: "Диагностика",
       tenses: "Времена",
       adaptive: "Урок для тебя",
       dictation: "Диктант",
@@ -238,8 +249,10 @@ function AppContent() {
     return () => subscription.remove();
   }, [overlay]);
   if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
-  if (!progress.onboarded) return <OnboardingScreen />;
   if (!user && !guestMode) return <AuthScreen />;
+  if (user && (cloudRestoring || (!progress.onboarded && accountName)))
+    return <LoadingScreen />;
+  if (!progress.onboarded) return <OnboardingScreen />;
   if (overlay?.type === "account")
     return (
       <SafeAreaView style={styles.safe}>
@@ -440,6 +453,12 @@ function AppContent() {
     return (
       <SafeAreaView style={styles.safe}>
         <SettingsScreen onClose={() => setOverlay(null)} />
+      </SafeAreaView>
+    );
+  if (overlay?.type === "diagnostics")
+    return (
+      <SafeAreaView style={styles.safe}>
+        <DiagnosticsScreen onClose={() => setOverlay(null)} />
       </SafeAreaView>
     );
   if (overlay?.type === "commonMistakes")
@@ -808,6 +827,7 @@ function AppContent() {
             onLevels={() => setOverlay({ type: "levelProgress" })}
             onStreak={() => setOverlay({ type: "streakCalendar" })}
             onAccount={() => setOverlay({ type: "account" })}
+            onDiagnostics={() => setOverlay({ type: "diagnostics" })}
           />
         )}
       </View>

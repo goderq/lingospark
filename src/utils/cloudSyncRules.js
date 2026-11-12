@@ -131,4 +131,15 @@ function chooseInitialProgressSource({
   return localTime > cloudTime ? "local" : "cloud";
 }
 
-module.exports = { chooseInitialProgressSource, learningProgressScore };
+function chooseAccountBootstrap({ localOwner, userId, cloud, ...progressState }) {
+  if (localOwner && userId && localOwner !== userId) {
+    return cloud && objectSize(cloud) ? "cloud" : "clean";
+  }
+  return chooseInitialProgressSource({ cloud, ...progressState });
+}
+
+module.exports = {
+  chooseAccountBootstrap,
+  chooseInitialProgressSource,
+  learningProgressScore,
+};

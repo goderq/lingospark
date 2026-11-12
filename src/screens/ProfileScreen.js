@@ -22,6 +22,7 @@ export default function ProfileScreen({
   onLevels,
   onStreak,
   onAccount,
+  onDiagnostics,
 }) {
   const { progress, reset } = useProgress();
   const { user, signOut } = useAuth();
@@ -141,6 +142,12 @@ export default function ProfileScreen({
         <Ionicons name="chevron-forward" size={21} color={colors.textMuted} />
       </Pressable>
       <View style={styles.profileLinks}>
+        <ProfileLink
+          icon="pulse"
+          title="Диагностика приложения"
+          detail="Облако · локальные модели · учебные данные"
+          onPress={onDiagnostics}
+        />
         <ProfileLink
           icon="book"
           title="Офлайн-словарь"

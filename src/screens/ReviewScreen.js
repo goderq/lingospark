@@ -637,7 +637,12 @@ export default function ReviewScreen() {
                 <Text style={styles.partOfSpeech}>{activeCard.partOfSpeech}</Text>
               )}
               <View style={styles.divider} />
-              <Text style={styles.russianWord}>{activeCard.fullTranslation}</Text>
+              <Text style={styles.russianWord}>{activeCard.russian}</Text>
+              {!!activeCard.translations?.length && (
+                <Text style={styles.otherMeanings}>
+                  Другие значения: {activeCard.translations.join(" · ")}
+                </Text>
+              )}
               {!!activeCard.example && <Text style={styles.wordExample}>{activeCard.example}</Text>}
               {!!activeCard.exampleRu && <Text style={styles.wordExampleRu}>{activeCard.exampleRu}</Text>}
               <Pressable onPress={speak} style={styles.speakButton}>
@@ -1106,6 +1111,13 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: "center",
     marginTop: 3,
+  },
+  otherMeanings: {
+    color: "rgba(255,255,255,.62)",
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: "center",
+    marginTop: 7,
   },
   editTranslation: { backgroundColor: colors.card, padding: 14, borderRadius: 18, marginTop: 11 },
   editLabel: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1 },

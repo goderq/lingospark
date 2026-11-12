@@ -303,6 +303,9 @@ export function VocabularyScreen({ onClose }) {
             <>
               {!!word.transcription && <Text style={s.wordTranscription}>{word.transcription}</Text>}
               {!!word.partOfSpeech && <Text style={s.wordPart}>{word.partOfSpeech}</Text>}
+              {!!word.translations?.length && (
+                <Text style={s.wordMeanings}>Другие значения: {word.translations.join(" · ")}</Text>
+              )}
               {!!word.example && <Text style={s.wordExample}>{word.example}</Text>}
               {!!word.exampleRu && <Text style={s.wordExampleRu}>{word.exampleRu}</Text>}
               <Text style={s.wordStatus}>
@@ -858,6 +861,7 @@ const s = StyleSheet.create({
   wordRussian: { color: colors.textMuted, marginTop: 3 },
   wordTranscription: { color: colors.purple, fontSize: 11, marginTop: 6 },
   wordPart: { color: colors.mint, fontSize: 9, fontWeight: "800", marginTop: 5 },
+  wordMeanings: { color: colors.textMuted, fontSize: 10, lineHeight: 15, marginTop: 5 },
   wordStatus: { color: colors.orange, fontSize: 9, marginTop: 7 },
   wordActions: { gap: 10, paddingLeft: 4 },
   wordExample: {

@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const {
+  chooseAccountBootstrap,
   chooseInitialProgressSource,
   learningProgressScore,
 } = require("../src/utils/cloudSyncRules");
@@ -62,5 +63,25 @@ assert.equal(
   "local",
   "a new account must upload its local progress",
 );
+assert.equal(
+  chooseAccountBootstrap({
+    localOwner: "first-account",
+    userId: "second-account",
+    local: learned,
+    cloud: { ...learned, totalXP: 300 },
+  }),
+  "cloud",
+  "switching accounts must not upload the previous user's local progress",
+);
+assert.equal(
+  chooseAccountBootstrap({
+    localOwner: "first-account",
+    userId: "new-account",
+    local: learned,
+    cloud: null,
+  }),
+  "clean",
+  "a new second account must start clean instead of inheriting local progress",
+);
 
-console.log("cloud sync rules: 5 scenarios passed");
+console.log("cloud sync rules: 7 scenarios passed");
