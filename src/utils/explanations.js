@@ -80,6 +80,27 @@ export const explainSelectedOption = (item, context = {}) => {
   return `«${selected}» может выглядеть правдоподобно, но меняет значение или звучит неестественно в этой ситуации. Точный вариант здесь — «${answer}».`;
 };
 
+export function getAlternativeExplanations(item = {}) {
+  // In build tasks options are word tiles, not competing complete answers.
+  if (item.type === 'build' || item.type === 'translate') return [];
+  return (item.options || []).filter((option) => option !== item.answer).map((option) => ({
+    title: `Почему не «${option}»`,
+    text: explainSelectedOption(item, { selected: option }),
+  }));
+}
+
+export function getAssemblyExplanation(item = {}) {
+  if (item.type !== 'build') return null;
+  const answer = clean(item.answer);
+  const words = answer.split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  const nameStatement = answer.match(/^My name is (.+)$/i);
+  if (nameStatement) {
+    return `My name — «моё имя»: My относится к слову name и стоит перед ним.\nIs — форма глагола be, связывает My name с именем.\n${nameStatement[1]} — имя, которое ты называешь.\nПорядок: My name → is → ${nameStatement[1]}.\nВсе эти слова нужны для полной фразы. Они не являются неправильными вариантами ответа.`;
+  }
+  return `Правильная последовательность: ${words.join(' → ')}.\nКаждая плитка — часть предложения, а не отдельный ответ на весь вопрос. Читай слова вместе: «${answer}».\n${clean(item.hint) ? `Подсказка к сборке: ${clean(item.hint)}.\n` : ''}Проверь порядок по готовой фразе, сохрани служебные слова и повторяющиеся слова, если они встречаются в ответе несколько раз.`;
+}
+
 const breakdownFor = (item) => {
   const prompt = clean(item?.prompt);
   const answer = clean(item?.answer);

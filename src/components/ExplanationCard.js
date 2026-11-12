@@ -9,6 +9,8 @@ import {
   getExplanationExamples,
   getExplanationSections,
   getRelevantReinforcement,
+  getAlternativeExplanations,
+  getAssemblyExplanation,
 } from "../utils/explanations";
 
 const detailIds = new Set(["rule", "steps", "memory", "check"]);
@@ -42,6 +44,8 @@ export default function ExplanationCard({
   const why = sections.find((section) => section.id === "why")?.text;
   const details = sections.filter((section) => detailIds.has(section.id));
   const color = accentColor || (correct ? colors.mint : colors.orange);
+  const alternatives = useMemo(() => getAlternativeExplanations(item), [item]);
+  const assemblyExplanation = useMemo(() => getAssemblyExplanation(item), [item]);
   const relevantReinforcement = useMemo(
     () => getRelevantReinforcement(item, Boolean(reinforcement), context),
     [item, reinforcement, context],
@@ -102,10 +106,10 @@ export default function ExplanationCard({
           active={examplesOpen}
           onPress={() => setExamplesOpen((value) => !value)}
         />
-        {!!item.options?.length && (
+        {(alternatives.length > 0 || assemblyExplanation) && (
           <Action
             icon="list-circle-outline"
-            title="Другие варианты"
+            title={assemblyExplanation ? "Порядок слов" : "Другие варианты"}
             active={alternativesOpen}
             onPress={() => setAlternativesOpen((value) => !value)}
           />
@@ -137,14 +141,20 @@ export default function ExplanationCard({
           color={color}
         />
       ))}
-      {alternativesOpen && item.options
-        .filter((option) => option !== item.answer)
-        .map((option) => (
+      {alternativesOpen && assemblyExplanation && (
+        <Section
+          icon="reorder-four-outline"
+          title="Как устроена фраза"
+          text={assemblyExplanation}
+          color={colors.purple}
+        />
+      )}
+      {alternativesOpen && alternatives.map((alternative, index) => (
           <Section
-            key={option}
+            key={`${alternative.title}-${index}`}
             icon="close-circle-outline"
-            title={`Почему не «${option}»`}
-            text={explainSelectedOption(item, { ...context, selected: option })}
+            title={alternative.title}
+            text={alternative.text}
             color={colors.pink}
           />
         ))}

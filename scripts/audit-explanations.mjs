@@ -7,6 +7,8 @@ import {
   getExplanationExamples,
   getExplanationSections,
   getRelevantReinforcement,
+  getAlternativeExplanations,
+  getAssemblyExplanation,
 } from '../src/utils/explanations.js';
 
 const entries = [
@@ -50,6 +52,11 @@ for (const entry of entries) {
 
 for (const lesson of lessons) {
   for (const item of lesson.exercises) {
+    if (item.type === 'build') {
+      assert.deepEqual(getAlternativeExplanations(item), [], `${item.id}: word tiles treated as wrong answers`);
+      const assembly = getAssemblyExplanation(item);
+      assert.ok(assembly && !assembly.includes('Почему не'), `${item.id}: missing assembly explanation`);
+    }
     assert.ok(
       String(item.explanation || '').length >= 80,
       `${lesson.title}: missing individual explanation for “${item.prompt}”`,
@@ -86,5 +93,9 @@ for (const lesson of lessons) {
     }
   }
 }
+
+const nameExercise = lessons.flatMap((lesson) => lesson.exercises).find((item) => item.id === 'g3');
+assert.ok(getAssemblyExplanation(nameExercise).includes('My name → is → Anna'));
+assert.equal(getAssemblyExplanation({ type: 'choice', answer: 'Hello' }), null);
 
 console.log(`Explanation audit passed: ${entries.length} questions, including individual course options and examples.`);
