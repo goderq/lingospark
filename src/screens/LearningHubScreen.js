@@ -88,13 +88,6 @@ const tools = [
     color: "#FF9F43",
   },
   {
-    id: "league",
-    title: "Недельная лига",
-    subtitle: "Рейтинг из 20 участников и повышение",
-    icon: "podium",
-    color: "#F4B942",
-  },
-  {
     id: "knowledgeMap",
     title: "Карта знаний",
     subtitle: "Процент освоения каждого навыка",
@@ -236,8 +229,8 @@ const tools = [
   },
   {
     id: "adaptive",
-    title: "Урок для тебя",
-    subtitle: "Персонально по слабым темам",
+    title: "Персональная тренировка",
+    subtitle: "Ошибки · слабые правила · слова к повтору",
     icon: "sparkles",
     color: "#F4B942",
   },
@@ -327,53 +320,31 @@ export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
   const normalized = query.trim().toLowerCase();
   const groups = {
     "Для меня": [
-      "lingoWorld",
-      "smartSearch",
-      "favorites",
       "adaptive",
-      "smartCoach",
       "reviewCalendar",
-      "mistakes",
-      "skillSprint",
-      "spacedRepetition",
       "knowledgeMap",
     ],
     Грамматика: [
-      "articlesPrepositions",
       "grammarAcademy",
       "tenses",
-      "irregular",
       "sentenceBuilder",
-      "commonMistakes",
+      "irregular",
       "notebook",
     ],
     Практика: [
-      "writtenVocabulary",
+      "lingoWorld",
       "lexicon",
       "listeningLab",
       "writingStudio",
-      "minimalPairs",
-      "branchingDialogues",
-      "missions",
-      "stories",
       "readingLab",
-      "storyGame",
+      "branchingDialogues",
       "workEnglish",
-      "careerCourses",
-      "marathons",
-      "storySeasonTwo",
     ],
     Экзамены: [
-      "dailyChallenge",
-      "dailyMixedExam",
       "levelExams",
-      "fullIeltsMock",
       "ielts",
       "c1Exam",
-      "league",
       "analytics",
-      "skills",
-      "achievements",
     ],
   };
   const filteredTools = tools.filter(
@@ -404,13 +375,13 @@ export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.content}
       >
-        <Text style={styles.title}>Что будем учить?</Text>
+        <Text style={styles.title}>Один понятный маршрут</Text>
         <View style={styles.search}>
           <Ionicons name="search" size={20} color={colors.textMuted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Найти курс или тренировку"
+            placeholder="Найти любой курс или старый режим"
             placeholderTextColor={colors.textMuted}
             style={styles.searchInput}
           />
@@ -515,7 +486,9 @@ export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
           )}
           {section !== "Курсы" && filteredTools.length > 0 && (
             <>
-              <Text style={styles.section}>РАЗДЕЛЫ И ТРЕНАЖЁРЫ</Text>
+              <Text style={styles.section}>
+                {section === "Для меня" ? "ТРИ ЛУЧШИХ ДЕЙСТВИЯ" : "ОСНОВНЫЕ РАЗДЕЛЫ"}
+              </Text>
               {filteredTools.map((item) => (
                 <Pressable
                   key={item.id}

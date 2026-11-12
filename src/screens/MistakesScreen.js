@@ -11,7 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton } from "../components/UI";
-import { answersMatch } from "../utils/answer";
+import { evaluateExercise } from "../utils/answer";
 import { expandExplanation } from "../utils/explanations";
 import ExplanationCard from "../components/ExplanationCard";
 
@@ -73,7 +73,7 @@ export default function MistakesScreen({ onClose }) {
     setCorrect(false);
   };
   const check = () => {
-    const right = answersMatch(answer, item.answer);
+    const right = evaluateExercise(item, answer).correct;
     setCorrect(right);
     setChecked(true);
   };

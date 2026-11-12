@@ -96,7 +96,6 @@ import {
 } from "./src/screens/GrowthScreens";
 import {
   DailyMixedExamScreen,
-  LeagueScreen,
   KnowledgeMapScreen,
 } from "./src/screens/ProgressionScreens";
 import {
@@ -666,12 +665,6 @@ function AppContent() {
         <DailyMixedExamScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
-    );
-  if (overlay?.type === "league")
-    return (
-      <SafeAreaView style={styles.safe}>
-        <LeagueScreen onClose={() => setOverlay({ type: "learningHub" })} />
       </SafeAreaView>
     );
   if (overlay?.type === "knowledgeMap")

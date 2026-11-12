@@ -190,3 +190,17 @@ export const gradeAnswer = (actual, variants = []) => {
     analysis,
   };
 };
+
+// Single evaluation entry point for every learning mode. Screens should not
+// implement their own equality, language or free-word-order rules.
+export const evaluateExercise = (exercise = {}, input = "") => {
+  const variants = [exercise.answer, ...(exercise.answers || [])].filter(Boolean);
+  const evaluation = gradeAnswer(input, variants);
+  return {
+    ...evaluation,
+    correct: evaluation.status === "correct",
+    accepted: variants,
+    expected: evaluation.analysis?.expected || variants[0] || "",
+    input: normalizeAnswer(input),
+  };
+};

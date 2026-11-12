@@ -17,6 +17,10 @@ import { expandExplanation } from "../utils/explanations";
 import * as Haptics from "expo-haptics";
 import {
   getWordCandidates,
+  extendedWordBank,
+  extendedWordBankSize,
+  extendedWordCountsByLevel,
+  extendedWordsByLevel,
   wordBank,
   wordBankSize,
   wordCountsByLevel,
@@ -27,7 +31,7 @@ import { wordThemes } from "../data/wordThemes";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
-import { answersMatch, gradeAnswer } from "../utils/answer";
+import { evaluateExercise } from "../utils/answer";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 
 const levelColors = {
@@ -68,6 +72,7 @@ export default function ReviewScreen() {
     updateWordTranslation,
   } = useProgress();
   const [level, setLevel] = useState("A1");
+  const [catalogMode, setCatalogMode] = useState("core");
   const [theme, setTheme] = useState("all");
   const [statusFilter, setStatusFilter] = useState("new");
   const [mode, setMode] = useState("typing");
@@ -100,6 +105,10 @@ export default function ReviewScreen() {
     [progress.wordPreferences],
   );
   const studiedIds = useMemo(() => new Set(Object.keys(stats)), [stats]);
+  const activeWordBank = catalogMode === "core" ? wordBank : extendedWordBank;
+  const activeWordsByLevel = catalogMode === "core" ? wordsByLevel : extendedWordsByLevel;
+  const activeCountsByLevel = catalogMode === "core" ? wordCountsByLevel : extendedWordCountsByLevel;
+  const activeWordBankSize = catalogMode === "core" ? wordBankSize : extendedWordBankSize;
   const favoriteIds = useMemo(
     () => new Set(preferences.favorites),
     [preferences.favorites],
@@ -116,14 +125,14 @@ export default function ReviewScreen() {
     () =>
       level === "Все"
         ? studiedIds.size
-        : wordsByLevel[level].reduce(
+        : activeWordsByLevel[level].reduce(
             (total, word) => total + (studiedIds.has(word.id) ? 1 : 0),
             0,
           ),
-    [level, studiedIds],
+    [level, studiedIds, activeWordsByLevel],
   );
   const levelCount =
-    level === "Все" ? wordBankSize : wordCountsByLevel[level];
+    level === "Все" ? activeWordBankSize : activeCountsByLevel[level];
 
   const summary = useMemo(
     () =>
@@ -147,10 +156,10 @@ export default function ReviewScreen() {
       (selectedTheme
         ? selectedTheme.words
         : level === "Все"
-          ? wordBank
-          : wordsByLevel[level]
+          ? activeWordBank
+          : activeWordsByLevel[level]
       ).filter((word) => !hiddenIds.has(word.id)),
-    [selectedTheme, level, hiddenIds],
+    [selectedTheme, level, hiddenIds, activeWordBank, activeWordsByLevel],
   );
   const selectedPool = useMemo(
     () =>
@@ -168,7 +177,7 @@ export default function ReviewScreen() {
     [basePool, stats, statusFilter, today, hardIds, favoriteIds],
   );
   const dateSeed = Number(today.replaceAll("-", ""));
-  const wordOfDay = wordBank[dateSeed % wordBank.length];
+  const wordOfDay = activeWordBank[dateSeed % activeWordBank.length];
 
   const startSession = (forcedPool = null) => {
     const source = forcedPool || selectedPool;
@@ -208,10 +217,29 @@ export default function ReviewScreen() {
       >
         <View style={styles.hero}>
           <Text style={styles.heroEmoji}>📚</Text>
-          <Text style={styles.setupTitle}>Случайные слова</Text>
+          <Text style={styles.setupTitle}>Слова без мусора</Text>
           <Text style={styles.setupSubtitle}>
-            {wordBankSize.toLocaleString("ru-RU")} слов работают без интернета
+            {activeWordBankSize.toLocaleString("ru-RU")} слов работают без интернета
           </Text>
+        </View>
+
+        <View style={styles.catalogSwitch}>
+          {[
+            ["core", "Основные", `${wordBankSize.toLocaleString("ru-RU")} полезных`],
+            ["extended", "Расширенные", `${extendedWordBankSize.toLocaleString("ru-RU")} всего`],
+          ].map(([id, title, subtitle]) => (
+            <Pressable
+              key={id}
+              onPress={() => {
+                setCatalogMode(id);
+                setTheme("all");
+              }}
+              style={[styles.catalogOption, catalogMode === id && styles.catalogOptionActive]}
+            >
+              <Text style={[styles.catalogTitle, catalogMode === id && { color: "white" }]}>{title}</Text>
+              <Text style={styles.catalogSubtitle}>{subtitle}</Text>
+            </Pressable>
+          ))}
         </View>
 
         <Pressable
@@ -228,7 +256,7 @@ export default function ReviewScreen() {
         </Pressable>
 
         <View style={styles.statsGrid}>
-          <MiniStat value={Math.max(0, wordBankSize - studiedIds.size)} label="новых" color={colors.purple} />
+          <MiniStat value={Math.max(0, activeWordBankSize - studiedIds.size)} label="новых" color={colors.purple} />
           <MiniStat value={summary.learning} label="изучаются" color={colors.orange} />
           <MiniStat value={summary.learned} label="выучено" color={colors.mint} />
           <MiniStat value={summary.due} label="пора повторить" color={colors.pink} />
@@ -264,7 +292,7 @@ export default function ReviewScreen() {
                   level === item && { color: "rgba(255,255,255,.75)" },
                 ]}
               >
-                {item === "Все" ? wordBankSize : wordCountsByLevel[item]}
+                {item === "Все" ? activeWordBankSize : activeCountsByLevel[item]}
               </Text>
             </Pressable>
           ))}
@@ -450,7 +478,7 @@ export default function ReviewScreen() {
   const direction = englishToRussian
     ? "ПЕРЕВЕДИ НА РУССКИЙ"
     : "ПЕРЕВЕДИ НА АНГЛИЙСКИЙ";
-  const distractors = getWordCandidates(card.id, 12)
+  const distractors = getWordCandidates(card.id, 12, activeWordBank)
     .map((item) => (englishToRussian ? item.russian : item.english))
     .filter(
       (option, optionIndex, options) =>
@@ -476,16 +504,11 @@ export default function ReviewScreen() {
 
   const check = (submittedAnswer = answer) => {
     Keyboard.dismiss();
-    const evaluation = englishToRussian
-      ? gradeAnswer(submittedAnswer, acceptedAnswers)
-      : {
-          status: acceptedAnswers.some((variant) =>
-            answersMatch(submittedAnswer, variant),
-          )
-            ? "correct"
-            : "wrong",
-        };
-    const result = evaluation.status === "correct";
+    const evaluation = evaluateExercise(
+      { answer: acceptedAnswers[0], answers: acceptedAnswers.slice(1) },
+      submittedAnswer,
+    );
+    const result = evaluation.correct;
     setGrade(evaluation.status);
     setCorrect(result);
     setChecked(true);
@@ -833,6 +856,21 @@ const styles = StyleSheet.create({
   heroEmoji: { fontSize: 60 },
   setupTitle: { color: "white", fontSize: 32, fontWeight: "900", marginTop: 8 },
   setupSubtitle: { color: colors.textMuted, textAlign: "center", marginTop: 6 },
+  catalogSwitch: { flexDirection: "row", gap: 9, marginTop: 12 },
+  catalogOption: {
+    flex: 1,
+    padding: 13,
+    borderRadius: 17,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  catalogOptionActive: {
+    backgroundColor: "rgba(124,92,252,.16)",
+    borderColor: colors.purple,
+  },
+  catalogTitle: { color: colors.textMuted, fontSize: 13, fontWeight: "900" },
+  catalogSubtitle: { color: colors.textMuted, fontSize: 9, marginTop: 3 },
   dailyWord: {
     flexDirection: "row",
     alignItems: "center",

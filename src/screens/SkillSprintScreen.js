@@ -7,6 +7,7 @@ import { colors } from '../theme';
 import { PrimaryButton, ProgressBar } from '../components/UI';
 import { balancedOptions, shuffleOptions } from '../utils/shuffle';
 import { expandExplanation } from '../utils/explanations';
+import { evaluateExercise } from '../utils/answer';
 
 export default function SkillSprintScreen({ onClose }) {
   const { recordExercise } = useProgress();
@@ -17,13 +18,13 @@ export default function SkillSprintScreen({ onClose }) {
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
   const item = deck[index];
-  const right = selected === item.answer;
+  const right = evaluateExercise(item, selected).correct;
   const choose = (option) => {
     if (selected) return;
     setSelected(option);
-    const correct = option === item.answer;
+    const correct = evaluateExercise(item, option).correct;
     if (correct) setScore((value) => value + 1);
-    recordExercise({ id: `sprint-${item.id}`, prompt: item.prompt, answer: item.answer, type: item.type }, correct);
+    recordExercise({ id: `sprint-${item.id}`, prompt: item.prompt, answer: item.answer, type: item.type }, correct, { selected: option, topic: 'Гибкая практика' });
   };
   const next = () => {
     if (index === deck.length - 1) setDone(true);

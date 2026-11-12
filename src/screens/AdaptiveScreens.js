@@ -16,7 +16,7 @@ import { tenseModules } from "../data/advancedCourse";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
-import { gradeAnswer, analyzeAnswer } from "../utils/answer";
+import { evaluateExercise, analyzeAnswer } from "../utils/answer";
 import { expandExplanation } from "../utils/explanations";
 
 const random = (items) => [...items].sort(() => Math.random() - 0.5);
@@ -102,8 +102,8 @@ export function AdaptiveLessonScreen({ onClose }) {
   const item = deck[index];
   const analysis = analyzeAnswer(answer, item?.answer || "");
   const check = () => {
-    const evaluation = gradeAnswer(answer, [item.answer]);
-    const right = evaluation.status === "correct";
+    const evaluation = evaluateExercise(item, answer);
+    const right = evaluation.correct;
     setGrade(evaluation.status);
     setCorrect(right);
     setChecked(true);

@@ -7,6 +7,7 @@ import { PrimaryButton, ProgressBar } from '../components/UI';
 import { shuffleOptions } from '../utils/shuffle';
 import { sentenceBuilderPack } from '../data/contentExpansion';
 import { expandExplanation } from '../utils/explanations';
+import { evaluateExercise } from '../utils/answer';
 
 const sentences = sentenceBuilderPack;
 
@@ -14,7 +15,7 @@ export default function SentenceBuilderScreen({ onClose }) {
   const { recordExercise } = useProgress(); const [index, setIndex] = useState(0); const [built, setBuilt] = useState([]); const [checked, setChecked] = useState(false); const [correct, setCorrect] = useState(false); const [lives, setLives] = useState(3); const [score, setScore] = useState(0); const [done, setDone] = useState(false); const [seed] = useState(() => Math.floor(Math.random() * 2147483647));
   const deck = useMemo(() => shuffleOptions(sentences, seed).slice(0, 12), []); const item = deck[index]; const shuffledWords = useMemo(() => shuffleOptions(item.words.map((word, wordIndex) => ({ word, wordIndex })), `${seed}-${index}`), [index]);
   const answer = built.map((wordIndex) => item.words[wordIndex]).join(' ');
-  const check = () => { const right = answer === item.answer; setCorrect(right); setChecked(true); if (right) setScore((value) => value + 1); else setLives((value) => Math.max(0, value - 1)); recordExercise(item, right); };
+  const check = () => { const right = evaluateExercise(item, answer).correct; setCorrect(right); setChecked(true); if (right) setScore((value) => value + 1); else setLives((value) => Math.max(0, value - 1)); recordExercise(item, right, { selected: answer, topic: 'Порядок слов' }); };
   const restart = () => { setIndex(0); setBuilt([]); setChecked(false); setCorrect(false); setLives(3); setScore(0); };
   const next = () => { if (index === deck.length - 1) setDone(true); else { setIndex((value) => value + 1); setBuilt([]); setChecked(false); setCorrect(false); } };
   if (done) return <View style={styles.container}><Header onClose={onClose} /><View style={styles.result}><Text style={styles.resultEmoji}>🧱</Text><Text style={styles.resultTitle}>{score}/{deck.length}</Text><Text style={styles.subtitle}>Ты построил двенадцать английских предложений</Text><View style={{ width: '100%', marginTop: 24 }}><PrimaryButton title="Завершить" onPress={onClose} /></View></View></View>;

@@ -20,9 +20,8 @@ import { PrimaryButton, ProgressBar, XPBadge } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import {
-  answersMatch,
   closestAnswerAnalysis,
-  gradeAnswer,
+  evaluateExercise,
 } from "../utils/answer";
 import ExplanationCard from "../components/ExplanationCard";
 import { courseConversationTopics } from "../data/courseSupplement";
@@ -158,15 +157,8 @@ export default function LessonScreen({ lesson, onClose }) {
   ];
 
   const check = () => {
-    const evaluation =
-      exercise.type === "translate"
-        ? gradeAnswer(current, accepted)
-        : {
-            status: accepted.some((variant) => answersMatch(current, variant))
-              ? "correct"
-              : "wrong",
-          };
-    const result = evaluation.status === "correct";
+    const evaluation = evaluateExercise(exercise, current);
+    const result = evaluation.correct;
     setAnswerGrade(evaluation);
     setCorrect(result);
     if (result) setCorrectCount((value) => value + 1);
@@ -225,9 +217,7 @@ export default function LessonScreen({ lesson, onClose }) {
   const checkRemediation = () => {
     const item = lessonMistakes[remediationIndex]?.exercise;
     if (!item) return;
-    const right = [item.answer, ...(item.answers || [])].some((answer) =>
-      answersMatch(remediationAnswer, answer),
-    );
+    const right = evaluateExercise(item, remediationAnswer).correct;
     setRemediationCorrect(right);
     setRemediationChecked(true);
     recordExercise(item, right, {
