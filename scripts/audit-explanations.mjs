@@ -64,8 +64,14 @@ for (const lesson of lessons) {
     };
     const reinforcement = getRelevantReinforcement(item, unrelatedNextQuestion);
     assert.equal(reinforcement.sourceId, item.id, `${lesson.title}: reinforcement changed the source question`);
-    assert.equal(reinforcement.answer, item.answer, `${lesson.title}: reinforcement changed the answer`);
-    assert.ok(reinforcement.prompt.includes(item.prompt), `${lesson.title}: reinforcement lost the original meaning`);
+    if (reinforcement.isNew) {
+      assert.notEqual(reinforcement.prompt, item.prompt);
+      assert.ok(reinforcement.skill && reinforcement.explanation);
+      assert.ok(reinforcement.options.includes(reinforcement.answer));
+    } else {
+      assert.equal(reinforcement.answer, item.answer);
+      assert.ok(reinforcement.prompt.includes(item.prompt));
+    }
     assert.ok(!reinforcement.prompt.includes(unrelatedNextQuestion.prompt), `${lesson.title}: unrelated next question leaked into reinforcement`);
     for (const option of item.options.filter((value) => value !== item.answer)) {
       const optionExplanation = item.optionExplanations?.[option];

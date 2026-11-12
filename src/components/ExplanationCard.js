@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme";
+import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import {
   explainSelectedOption,
@@ -23,6 +24,7 @@ export default function ExplanationCard({
   accentColor,
   showStatus = true,
 }) {
+  const { recordExercise } = useProgress();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [examplesOpen, setExamplesOpen] = useState(false);
@@ -41,8 +43,8 @@ export default function ExplanationCard({
   const details = sections.filter((section) => detailIds.has(section.id));
   const color = accentColor || (correct ? colors.mint : colors.orange);
   const relevantReinforcement = useMemo(
-    () => getRelevantReinforcement(item, Boolean(reinforcement)),
-    [item, reinforcement],
+    () => getRelevantReinforcement(item, Boolean(reinforcement), context),
+    [item, reinforcement, context],
   );
   const practiceOptions = useMemo(
     () => relevantReinforcement?.type === "choice"
@@ -195,7 +197,16 @@ export default function ExplanationCard({
               <Pressable
                 key={option}
                 disabled={answered}
-                onPress={() => setPracticeSelected(option)}
+                onPress={() => {
+                  setPracticeSelected(option);
+                  if (relevantReinforcement.isNew) {
+                    recordExercise(relevantReinforcement, right, {
+                      selected: option,
+                      topic: relevantReinforcement.skill,
+                      ruleId: `reinforcement-${relevantReinforcement.sourceId || relevantReinforcement.skill}`,
+                    });
+                  }
+                }}
                 style={[
                   styles.practiceOption,
                   answered && right && styles.practiceCorrect,
@@ -215,6 +226,9 @@ export default function ExplanationCard({
                 ? "Верно — правило закреплено."
                 : `Ответ: ${relevantReinforcement.answer}. Сравни его со своим вариантом и попробуй объяснить отличие.`}
             </Text>
+          )}
+          {!!practiceSelected && !!relevantReinforcement.explanation && (
+            <Text style={styles.muted}>{relevantReinforcement.explanation}</Text>
           )}
         </View>
       )}

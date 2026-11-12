@@ -1,3 +1,5 @@
+import { findReinforcement } from "../data/reinforcement.js";
+
 const clean = (value) => String(value || "").trim();
 const lower = (value) => clean(value).toLocaleLowerCase("ru");
 const isRussian = (value) => /[а-яё]/i.test(clean(value));
@@ -142,8 +144,12 @@ export function getExplanationExamples(item = {}, context = {}) {
 // Reinforcement must verify the exact skill the learner has just seen. Older
 // screens supplied the next deck item here, which could switch from “Hello” to
 // “What is your name?” while still being presented as reinforcement.
-export function getRelevantReinforcement(item = {}, enabled = true) {
+export function getRelevantReinforcement(item = {}, enabled = true, context = {}) {
   if (!enabled || item.type !== "choice") return null;
+  const linked = findReinforcement(item, context);
+  if (linked && linked.prompt !== item.prompt) {
+    return { ...linked, id: `${item.id || item.prompt}-linked`, sourceId: item.id || null, isNew: true };
+  }
   const answer = clean(item.answer);
   const options = [...new Set((item.options || []).map(clean).filter(Boolean))];
   if (!answer || options.length < 2 || !options.includes(answer)) return null;
