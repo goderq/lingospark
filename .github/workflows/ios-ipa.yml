@@ -1,0 +1,67 @@
+name: iOS IPA for Sideloadly
+
+# Intentionally manual: pushing code never starts an IPA build.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build unsigned iPhone IPA
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      COCOAPODS_DISABLE_STATS: 'true'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22.22.0'
+          cache: npm
+      - name: Check Xcode
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          pod --version
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Verify learning content
+        run: |
+          npm run test:exercise-engine
+          npm run test:cloud-sync
+          npm run explanations:audit
+          npm run courses:audit
+      - name: Generate native iOS project
+        run: npx expo prebuild --platform ios --no-install
+      - name: Install iOS native dependencies
+        working-directory: ios
+        run: pod install
+      - name: Compile and package IPA
+        run: bash scripts/build-ios-unsigned.sh
+      - name: Upload IPA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: LingoSpark-unsigned-IPA-${{ github.run_number }}
+          path: artifacts/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iOS-build-logs-${{ github.run_number }}
+          path: artifacts/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 7
