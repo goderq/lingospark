@@ -1,4 +1,6 @@
 import { findReinforcement } from "../data/reinforcement.js";
+import { assemblyBlocks } from '../data/assemblyNotes.js';
+import { closestAnswerAnalysis, normalizeAnswer } from './answer.js';
 
 const clean = (value) => String(value || "").trim();
 const lower = (value) => clean(value).toLocaleLowerCase("ru");
@@ -68,6 +70,7 @@ export const explainSelectedOption = (item, context = {}) => {
   const answer = clean(item?.answer || context.answer);
   if (!selected || lower(selected) === lower(answer))
     return "Ответ совпадает и по смыслу, и по форме. Всё предложение после подстановки остаётся грамматически цельным.";
+  if (item.type === 'build') return explainAssemblyAttempt(item, selected);
   if (item?.optionExplanations?.[selected]) return clean(item.optionExplanations[selected]);
   if ((isRussian(selected) && hasLatin(answer)) || (hasLatin(selected) && isRussian(answer)))
     return `«${selected}» написано не на том языке, который требуется в этом задании. Здесь нужен ответ «${answer}» без добавления перевода на другом языке.`;
@@ -94,11 +97,45 @@ export function getAssemblyExplanation(item = {}) {
   const answer = clean(item.answer);
   const words = answer.split(/\s+/).filter(Boolean);
   if (!words.length) return null;
+  const blocks = assemblyBlocks(item);
+  if (blocks) {
+    const meanings = blocks.map(({english, russian}) => `${english} — ${russian}`).join('\n');
+    return `${meanings}\n\nПорядок: ${blocks.map((block) => block.english).join(' → ')}.\n${assemblyOrderRule(answer)}\n${item.hint ? `Подсказка: ${item.hint}` : ''}`.trim();
+  }
   const nameStatement = answer.match(/^My name is (.+)$/i);
   if (nameStatement) {
     return `My name — «моё имя»: My относится к слову name и стоит перед ним.\nIs — форма глагола be, связывает My name с именем.\n${nameStatement[1]} — имя, которое ты называешь.\nПорядок: My name → is → ${nameStatement[1]}.\nВсе эти слова нужны для полной фразы. Они не являются неправильными вариантами ответа.`;
   }
   return `Правильная последовательность: ${words.join(' → ')}.\nКаждая плитка — часть предложения, а не отдельный ответ на весь вопрос. Читай слова вместе: «${answer}».\n${clean(item.hint) ? `Подсказка к сборке: ${clean(item.hint)}.\n` : ''}Проверь порядок по готовой фразе, сохрани служебные слова и повторяющиеся слова, если они встречаются в ответе несколько раз.`;
+}
+
+function assemblyOrderRule(answer) {
+  if (/^My name is /i.test(answer)) return 'My уточняет, чьё это имя, и стоит перед name. Затем is связывает My name с именем человека.';
+  if (/^What do you do/i.test(answer)) return 'Первое do помогает задать вопрос и стоит перед you. Второе do означает «занимаешься». Оба слова нужны.';
+  if (/^Not only /i.test(answer)) return 'После Not only в начале предложения нужна инверсия: was he, а не he was. Во второй части после but порядок обычный: he also forgot.';
+  if (/^(May|Can|Could|Would|Have|Is|Does|How long have|Where is|When is)/i.test(answer)) return 'В этом вопросе вспомогательный или модальный глагол стоит перед подлежащим. Если есть вопросительные слова, они идут первыми. Остальные части сохраняют связи, показанные в схеме.';
+  if (/^(Let us|Let me|Let’s|Let's)/i.test(answer)) return 'После Let идёт тот, кому предлагают или разрешают действие (us, me), затем глагол в начальной форме.';
+  if (/^(Don't|Add|Preheat|Back up|Please speak|Maintain)/i.test(answer)) return 'Это просьба или указание: начинаем с глагола (или Don’t + глагол для запрета), затем называем объект и уточнения.';
+  if (/^If I had known /i.test(answer)) return 'If + had known задаёт нереальное условие в прошлом. Затем would have helped обозначает несостоявшийся результат.';
+  if (/\b(has been stolen|has not been cleaned|was trained|were taken|must be reduced|is protected|are passed down)\b/i.test(answer)) return 'Здесь предмет получает действие: сначала называем его, затем ставим всю глагольную группу пассивного залога, сохраняя её порядок.';
+  if (/\b(didn't|has not)\b/i.test(answer)) return 'Отрицание входит в глагольную группу. Не отделяй not (или n’t) от вспомогательного глагола; после didn’t нужен глагол в начальной форме.';
+  return 'Собирай фразу смысловыми блоками в указанном порядке. Внутри блока сохраняй связанные слова: предлог с дополнением, определение с существительным, части устойчивого выражения.';
+}
+
+export function explainAssemblyAttempt(item, actual) {
+  const analysis = closestAnswerAnalysis(actual, [item.answer, ...(item.answers || [])]);
+  if (normalizeAnswer(actual) === normalizeAnswer(analysis.expected)) return 'Все слова на месте, порядок верный.';
+  const messages = [];
+  if (analysis.missing.length) messages.push(`Не хватает: ${analysis.missing.join(', ')}.`);
+  if (analysis.extra.length) messages.push(`Лишние слова или неверная форма: ${analysis.extra.join(', ')}.`);
+  const expected = normalizeAnswer(analysis.expected).split(' ');
+  const given = normalizeAnswer(actual).split(' ').filter(Boolean);
+  const first = expected.findIndex((word, index) => word !== given[index]);
+  if (first >= 0 && given[first]) {
+    messages.push(`${analysis.sameWords ? 'Все слова есть, но нарушен порядок. ' : ''}Первое расхождение — позиция ${first + 1}: у тебя «${given[first]}», в образце «${expected[first]}».`);
+  }
+  messages.push(`Собери: ${analysis.expected}.`);
+  return messages.join('\n');
 }
 
 const breakdownFor = (item) => {

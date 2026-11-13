@@ -33,6 +33,7 @@ export default function ExplanationCard({
   const [alternativesOpen, setAlternativesOpen] = useState(false);
   const [practiceOpen, setPracticeOpen] = useState(false);
   const [practiceSelected, setPracticeSelected] = useState("");
+  const [practiceVariant] = useState(() => Math.floor(Math.random() * 100000));
   const sections = useMemo(
     () => getExplanationSections(item, { ...context, selected }),
     [item, context, selected],
@@ -47,8 +48,8 @@ export default function ExplanationCard({
   const alternatives = useMemo(() => getAlternativeExplanations(item), [item]);
   const assemblyExplanation = useMemo(() => getAssemblyExplanation(item), [item]);
   const relevantReinforcement = useMemo(
-    () => getRelevantReinforcement(item, Boolean(reinforcement), context),
-    [item, reinforcement, context],
+    () => getRelevantReinforcement(item, Boolean(reinforcement), { ...context, practiceVariant }),
+    [item, reinforcement, context, practiceVariant],
   );
   const practiceOptions = useMemo(
     () => relevantReinforcement?.type === "choice"

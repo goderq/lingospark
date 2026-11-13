@@ -66,7 +66,20 @@ export const tenseReinforcement = {
   "Future Perfect Continuous": task("Future Perfect Continuous", "By next May, Dan ___ here for ten years.", "will have been working", ["will working", "has work"], "Подчёркнута длительность работы к будущей точке: will have been + working."),
 };
 
+const alternateCourseTasks = {
+  g1: task('Приветствие', 'Ты начинаешь дружеское сообщение однокласснику. Какая первая реплика подходит?', 'Hey!', ['See you!', 'Sorry!'], 'Hey — неформальное приветствие. See you используют при прощании, Sorry — для извинения.'),
+  g2: task('Имя собеседника', 'На языковой встрече ты ещё не знаешь имени партнёра. Что спросить?', 'What is your name?', ['What time is it?', 'Where is the station?'], 'Name означает имя. What time спрашивает время, Where is the station — расположение вокзала.'),
+  'mega-greetings-2': task('Представить друга', 'Познакомь коллегу со своим другом Дэвидом.', 'This is my friend David', ['My name is David', 'Nice to meet you'], 'This is… представляет другого человека. My name is… называет твоё собственное имя.'),
+  c2: task('Счёт в кафе', 'Ты готов оплатить ужин. Как вежливо обратиться к официанту?', 'Could I have the bill, please?', ['Could I have the menu, please?', 'Could I have some water, please?'], 'The bill — счёт за еду. Menu — меню, water — вода. Could I have… — вежливая просьба.'),
+  t2: task('Посадочный талон', 'Как назвать по-английски талон, который сканируют перед входом в самолёт?', 'boarding pass', ['passport control', 'baggage claim'], 'Boarding pass — посадочный талон; passport control — паспортный контроль, baggage claim — выдача багажа.'),
+  pp5: task('Длительность с for', 'They have studied together ___ six months.', 'for', ['since', 'at'], 'Six months — длительность. For обозначает, как долго; since требует начальную точку.'),
+  pa1: task('Прошлая форма go', 'Last Sunday, we ___ to the park.', 'went', ['go', 'gone'], 'Last Sunday — завершённое прошлое. Нужна форма Past Simple: went. Gone используется с вспомогательным have.'),
+  ph2: task('Снять одежду', 'Please ___ your hat before the ceremony.', 'take off', ['turn off', 'put off'], 'Take off означает снять одежду. Turn off — выключить, put off — отложить событие.'),
+};
+
 export function findReinforcement(item, context = {}) {
+  const variant = Math.abs(context.practiceVariant || 0) % 2;
+  if (variant && alternateCourseTasks[item.id]) return alternateCourseTasks[item.id];
   const source = courseReinforcement[item.id];
   if (source) return source;
   const situation = reinforcementSituations[item.id];

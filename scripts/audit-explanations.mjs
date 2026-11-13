@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { assemblyBlocks } from '../src/data/assemblyNotes.js';
 import { lessons } from '../src/data/course.js';
 import { tenseModules } from '../src/data/advancedCourse.js';
 import { grammarQuestions, placementQuestions, stories } from '../src/data/practice.js';
@@ -9,6 +10,7 @@ import {
   getRelevantReinforcement,
   getAlternativeExplanations,
   getAssemblyExplanation,
+  explainAssemblyAttempt,
 } from '../src/utils/explanations.js';
 
 const entries = [
@@ -53,6 +55,7 @@ for (const entry of entries) {
 for (const lesson of lessons) {
   for (const item of lesson.exercises) {
     if (item.type === 'build') {
+      assert.ok(assemblyBlocks(item), `${item.id}: missing or stale individual assembly notes`);
       assert.deepEqual(getAlternativeExplanations(item), [], `${item.id}: word tiles treated as wrong answers`);
       const assembly = getAssemblyExplanation(item);
       assert.ok(assembly && !assembly.includes('Почему не'), `${item.id}: missing assembly explanation`);
@@ -96,6 +99,10 @@ for (const lesson of lessons) {
 
 const nameExercise = lessons.flatMap((lesson) => lesson.exercises).find((item) => item.id === 'g3');
 assert.ok(getAssemblyExplanation(nameExercise).includes('My name → is → Anna'));
+assert.ok(explainAssemblyAttempt(nameExercise, 'My Anna name is').includes('нарушен порядок'));
+assert.ok(explainAssemblyAttempt(nameExercise, 'My name Anna').includes('Не хватает: is'));
+assert.ok(explainAssemblyAttempt(nameExercise, 'My name is is Anna').includes('Лишние слова'));
+assert.equal(explainAssemblyAttempt(nameExercise, 'My name is Anna'), 'Все слова на месте, порядок верный.');
 assert.equal(getAssemblyExplanation({ type: 'choice', answer: 'Hello' }), null);
 
 console.log(`Explanation audit passed: ${entries.length} questions, including individual course options and examples.`);
