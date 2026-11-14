@@ -1,0 +1,66 @@
+{
+  "expo": {
+    "name": "LingoSpark",
+    "slug": "lingospark",
+    "version": "2.7.5",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#090B17"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.lingospark.app",
+      "buildNumber": "31",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Разрешите LingoSpark слышать вашу речь для разговорной практики.",
+        "NSSpeechRecognitionUsageDescription": "Разрешите LingoSpark локально преобразовывать английскую речь в текст.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#7C5CFC"
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-font",
+      "expo-asset",
+      "expo-sharing",
+      "expo-notifications",
+      "expo-build-properties",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Разрешите LingoSpark слышать вашу речь для разговорной практики.",
+          "speechRecognitionPermission": "Разрешите LingoSpark локально преобразовывать английскую речь в текст."
+        }
+      ],
+      [
+        "@pocketpalai/llama.rn",
+        {
+          "enableEntitlements": true,
+          "entitlementsProfile": "sideloadly",
+          "forceCxx20": true,
+          "enableOpenCL": false
+        }
+      ],
+      "expo-audio",
+      "expo-status-bar"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3baff75e-7a73-494a-b44b-50074ee31916"
+      }
+    },
+    "owner": "qwetarhj"
+  }
+}

@@ -1,0 +1,16 @@
+node_modules/
+.expo/
+dist/
+.DS_Store
+npm-debug.log*
+artifacts/
+ios/
+android/
+.env
+.env.*
+!.env.example
+*.ipa
+*.p12
+*.p8
+*.mobileprovision
+

@@ -1,0 +1,28 @@
+export const commonMistakes = [
+  { id: 'm1', topic: 'Артикли', wrong: 'I am programmer', correct: 'I am a programmer', rule: 'Перед профессией в единственном числе нужен a или an.', options: ['I am a programmer', 'I am programmer', 'I am the programmer always'], answer: 'I am a programmer' },
+  { id: 'm2', topic: 'Возраст', wrong: 'I have 25 years', correct: 'I am 25 years old', rule: 'Возраст в английском выражается глаголом be, а не have.', options: ['I am 25 years old', 'I have 25 years', 'Me is 25 years'], answer: 'I am 25 years old' },
+  { id: 'm3', topic: 'Настоящее время', wrong: 'I am work every day', correct: 'I work every day', rule: 'В Present Simple перед смысловым глаголом am/is/are не ставится.', options: ['I work every day', 'I am work every day', 'I working every day'], answer: 'I work every day' },
+  { id: 'm4', topic: 'Предлоги', wrong: 'It depends from you', correct: 'It depends on you', rule: 'Устойчивое сочетание: depend on — зависеть от.', options: ['It depends on you', 'It depends from you', 'It depends of you'], answer: 'It depends on you' },
+  { id: 'm5', topic: 'Ложные друзья', wrong: 'I am sympathetic', correct: 'I am nice / friendly', rule: 'Sympathetic означает «сочувствующий». Русское «симпатичный» — nice или attractive.', options: ['I am nice', 'I am sympathetic', 'I am sympathy'], answer: 'I am nice' },
+  { id: 'm6', topic: 'Согласие', wrong: 'I am agree', correct: 'I agree', rule: 'Agree — это глагол, поэтому форма be перед ним не нужна.', options: ['I agree', 'I am agree', 'I agreeing'], answer: 'I agree' },
+  { id: 'm7', topic: 'Информация', wrong: 'an information', correct: 'some information', rule: 'Information — неисчисляемое существительное. У него нет формы informations.', options: ['some information', 'an information', 'one information'], answer: 'some information' },
+  { id: 'm8', topic: 'Советы', wrong: 'He advised me to not go', correct: 'He advised me not to go', rule: 'Отрицание ставится перед to: advised me not to...', options: ['He advised me not to go', 'He advised me to not go', 'He advised not me go'], answer: 'He advised me not to go' },
+  { id: 'm9', topic: 'Вопросы', wrong: 'How it looks?', correct: 'What does it look like?', rule: 'Для внешнего вида используется конструкция What does ... look like?', options: ['What does it look like?', 'How it looks?', 'How does it looks?'], answer: 'What does it look like?' },
+  { id: 'm10', topic: 'Past Simple', wrong: 'Did you went there?', correct: 'Did you go there?', rule: 'После did используется начальная форма глагола.', options: ['Did you go there?', 'Did you went there?', 'Do you went there?'], answer: 'Did you go there?' },
+];
+
+export const thematicPacks = [
+  { id: 'it', title: 'Английский для IT', emoji: '💻', color: '#6575E8', words: [['deploy', 'развернуть'], ['bug', 'ошибка'], ['feature', 'функция'], ['deadline', 'крайний срок'], ['repository', 'репозиторий'], ['issue', 'задача или проблема'], ['merge', 'объединить'], ['requirements', 'требования']] },
+  { id: 'games', title: 'Игры', emoji: '🎮', color: '#D15BE3', words: [['quest', 'задание'], ['achievement', 'достижение'], ['level up', 'повысить уровень'], ['teammate', 'товарищ по команде'], ['matchmaking', 'подбор игроков'], ['inventory', 'инвентарь'], ['skill', 'навык'], ['opponent', 'противник']] },
+  { id: 'movies', title: 'Фильмы и сериалы', emoji: '🎬', color: '#FF5C8A', words: [['plot', 'сюжет'], ['cast', 'актёрский состав'], ['episode', 'эпизод'], ['spoiler', 'спойлер'], ['soundtrack', 'саундтрек'], ['review', 'рецензия'], ['character', 'персонаж'], ['subtitles', 'субтитры']] },
+  { id: 'relocation', title: 'Переезд', emoji: '🏠', color: '#2ED3B7', words: [['rent', 'арендная плата'], ['landlord', 'арендодатель'], ['deposit', 'залог'], ['utilities', 'коммунальные услуги'], ['neighborhood', 'район'], ['residence permit', 'вид на жительство'], ['application', 'заявление'], ['appointment', 'запись на приём']] },
+  { id: 'business', title: 'Работа и бизнес', emoji: '📊', color: '#FF9F43', words: [['revenue', 'выручка'], ['stakeholder', 'заинтересованная сторона'], ['negotiate', 'вести переговоры'], ['proposal', 'предложение'], ['feedback', 'обратная связь'], ['priority', 'приоритет'], ['outcome', 'результат'], ['strategy', 'стратегия']] },
+  { id: 'travel_plus', title: 'Путешествия+', emoji: '🌍', color: '#36B8D9', words: [['layover', 'пересадка'], ['accommodation', 'жильё'], ['itinerary', 'маршрут'], ['departure', 'отправление'], ['destination', 'место назначения'], ['luggage allowance', 'норма багажа'], ['sightseeing', 'осмотр достопримечательностей'], ['currency exchange', 'обмен валюты']] },
+];
+
+export const shadowingLines = [
+  { level: 'A2', text: 'Could you tell me how to get to the station?', translation: 'Не могли бы вы подсказать, как добраться до вокзала?', parts: ['Could you tell me', 'how to get', 'to the station?'] },
+  { level: 'B1', text: "I'll get back to you as soon as I have more information.", translation: 'Я свяжусь с вами, как только у меня появится больше информации.', parts: ["I'll get back to you", 'as soon as I have', 'more information.'] },
+  { level: 'B2', text: 'I see where you are coming from, but I would suggest a different approach.', translation: 'Я понимаю вашу точку зрения, но предложил бы другой подход.', parts: ['I see where you are coming from,', 'but I would suggest', 'a different approach.'] },
+  { level: 'C1', text: 'Taking everything into account, this appears to be the most viable solution.', translation: 'Учитывая всё, это представляется наиболее жизнеспособным решением.', parts: ['Taking everything into account,', 'this appears to be', 'the most viable solution.'] },
+];

@@ -1,0 +1,37 @@
+build:
+  name: LingoSpark unsigned IPA for Sideloadly
+  steps:
+    - eas/checkout
+    - eas/install_node_modules
+    - eas/resolve_build_config
+    - eas/prebuild
+    - run:
+        name: Install iOS pods
+        working_directory: ./ios
+        command: pod install
+    - run:
+        name: Compile unsigned iPhone application
+        command: |
+          xcodebuild \
+            -workspace ios/LingoSpark.xcworkspace \
+            -scheme LingoSpark \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ios/build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=''
+    - run:
+        name: Package unsigned IPA
+        command: |
+          test -d ios/build/Build/Products/Release-iphoneos/LingoSpark.app
+          mkdir -p ipa/Payload
+          cp -R ios/build/Build/Products/Release-iphoneos/LingoSpark.app ipa/Payload/
+          ditto -c -k --sequesterRsrc --keepParent ipa/Payload LingoSpark-unsigned.ipa
+          unzip -t LingoSpark-unsigned.ipa
+    - eas/upload_artifact:
+        name: Upload LingoSpark IPA
+        inputs:
+          type: application-archive
+          path: LingoSpark-unsigned.ipa
