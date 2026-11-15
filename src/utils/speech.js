@@ -1,7 +1,9 @@
 import * as Speech from "expo-speech";
+import {now,recordTiming} from './performance';
 
 let requestId = 0;
 let warmupStarted = false;
+let active = false;
 
 // Only query the voice list during warm-up. Calling Speech.speak with a silent
 // utterance during app launch can raise an Objective-C exception on newer iOS
@@ -22,16 +24,20 @@ export async function warmSpeech() {
 export async function speak(text, options = {}) {
   if (!text?.trim()) return false;
   const currentRequest = ++requestId;
-  try {
-    await Speech.stop();
-  } catch {}
+  const tapped=now();
+  if(active){try { await Speech.stop(); } catch {}}
   if (currentRequest !== requestId) return false;
-  Speech.speak(text, options);
+  active=true;
+  const finish=(callback)=>(...args)=>{if(currentRequest===requestId)active=false;callback?.(...args);};
+  try{
+    Speech.speak(text, {...options,onStart:()=>{if(currentRequest===requestId)recordTiming('speech_start',now()-tapped);options.onStart?.();},onDone:finish(options.onDone),onStopped:finish(options.onStopped),onError:finish(options.onError)});
+  }catch(error){if(currentRequest===requestId)active=false;options.onError?.(error);return false;}
   return true;
 }
 
 export async function stopSpeech() {
   requestId += 1;
+  active=false;
   try {
     await Speech.stop();
   } catch {}

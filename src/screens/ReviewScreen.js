@@ -33,6 +33,9 @@ import { PrimaryButton, ProgressBar } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
 import { evaluateExercise } from "../utils/answer";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
+import {distinctDistractors} from '../utils/contentQuality';
+import useScreenTiming from '../components/useScreenTiming';
+import ContentReportButton from '../components/ContentReportButton';
 
 const levelColors = {
   A1: "#4CB963",
@@ -64,6 +67,7 @@ const takeRandom = (pool, amount) => {
 };
 
 export default function ReviewScreen() {
+  useScreenTiming('words_open');
   const {
     progress,
     recordReview,
@@ -177,6 +181,16 @@ export default function ReviewScreen() {
     [basePool, stats, statusFilter, today, hardIds, favoriteIds],
   );
   const dateSeed = Number(today.replaceAll("-", ""));
+  const wordChoices=useMemo(()=>{
+    const card=deck?.[index];
+    if(!card)return [];
+    const custom=preferences.customTranslations[card.id];
+    const ru=custom || card.russian,reverse=card.direction==='en-ru';
+    const expected=reverse?ru:card.english;
+    const accepted=reverse?[ru,...(custom?[]:(card.translations || []))]:[card.english];
+    const candidates=getWordCandidates(card.id,24,activeWordBank).map((word)=>reverse?word.russian:word.english);
+    return balancedOptions([expected,...distinctDistractors(candidates,accepted)],expected,index,deck.length*97);
+  },[deck,index,preferences.customTranslations,activeWordBank]);
   const wordOfDay = activeWordBank[dateSeed % activeWordBank.length];
 
   const startSession = (forcedPool = null) => {
@@ -478,19 +492,7 @@ export default function ReviewScreen() {
   const direction = englishToRussian
     ? "ПЕРЕВЕДИ НА РУССКИЙ"
     : "ПЕРЕВЕДИ НА АНГЛИЙСКИЙ";
-  const distractors = getWordCandidates(card.id, 12, activeWordBank)
-    .map((item) => (englishToRussian ? item.russian : item.english))
-    .filter(
-      (option, optionIndex, options) =>
-        option !== expected && options.indexOf(option) === optionIndex,
-    )
-    .slice(0, 12);
-  const choiceOptions = balancedOptions(
-    [expected, ...distractors.slice(0, 3)],
-    expected,
-    index,
-    deck.length * 97,
-  );
+  const choiceOptions = wordChoices;
   const favorite = preferences.favorites.includes(card.id);
   const hard = preferences.hard.includes(card.id);
   const currentStat = stats[card.id];
@@ -619,6 +621,7 @@ export default function ReviewScreen() {
           <Pressable onPress={skipHiddenWord} style={styles.toolButton}><Ionicons name="eye-off-outline" size={20} color={colors.textMuted} /></Pressable>
         </View>
 
+        <ContentReportButton item={{id:activeCard.id,type:'translate',prompt:activeCard.english,answer:activeCard.fullTranslation}} context={{topic:'Слова',selected:answer}}/>
         {phase === "learn" ? (
           <>
             <LinearGradient

@@ -1,4 +1,7 @@
-import React, { useCallback, useDeferredValue, useMemo, useState } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import useScreenTiming from '../components/useScreenTiming';
+import ContentReportButton from '../components/ContentReportButton';
+import {now,recordTiming} from '../utils/performance';
 import {
   Alert,
   FlatList,
@@ -186,6 +189,7 @@ export function PlanScreen({ onClose, onNavigate, onLesson }) {
 }
 
 export function VocabularyScreen({ onClose }) {
+  useScreenTiming('dictionary_open');
   const {
     progress,
     addCustomWord,
@@ -200,6 +204,7 @@ export function VocabularyScreen({ onClose }) {
   const [level, setLevel] = useState("Все");
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
+  const [visibleCount,setVisibleCount]=useState(100);
   const preferences = useMemo(
     () => ({
       favorites: [],
@@ -213,6 +218,7 @@ export function VocabularyScreen({ onClose }) {
   const stats = progress.reviewStats || {};
   const deferredQuery = useDeferredValue(query);
   const normalized = deferredQuery.trim().toLocaleLowerCase("ru");
+  useEffect(()=>setVisibleCount(100),[normalized,level,filter]);
   const favoriteIds = useMemo(
     () => new Set(preferences.favorites),
     [preferences.favorites],
@@ -234,6 +240,7 @@ export function VocabularyScreen({ onClose }) {
     setAdding(false);
   };
   const result = useMemo(() => {
+    const started=now();
     const custom = (progress.customWords || []).map((word) => ({
       ...word,
       level: "Мои",
@@ -258,16 +265,16 @@ export function VocabularyScreen({ onClose }) {
         .filter((word) => {
           const customTranslation = preferences.customTranslations[word.id];
           return word.searchText?.includes(normalized) ||
-            `${word.english} ${customTranslation || word.russian} ${word.fullTranslation || ""}`
-              .toLocaleLowerCase("ru")
-              .includes(normalized);
+            customTranslation?.toLocaleLowerCase('ru').includes(normalized) ||
+            (!word.searchText && `${word.english} ${word.russian}`.toLocaleLowerCase('ru').includes(normalized));
         })
         .sort((a, b) => {
           const aStarts = a.english.toLowerCase().startsWith(normalized) ? 0 : 1;
           const bStarts = b.english.toLowerCase().startsWith(normalized) ? 0 : 1;
           return aStarts - bStarts || (a.frequency || 99999) - (b.frequency || 99999);
         });
-    return { count: words.length, items: words.slice(0, 300) };
+    recordTiming('dictionary_filter',now()-started);
+    return { count: words.length, items: words };
   }, [
     progress.customWords,
     preferences.customTranslations,
@@ -279,6 +286,7 @@ export function VocabularyScreen({ onClose }) {
     favoriteIds,
     hardIds,
   ]);
+  const displayedWords=useMemo(()=>result.items.slice(0,visibleCount),[result.items,visibleCount]);
   const renderWord = useCallback(({ item: word }) => {
     const favorite = favoriteIds.has(word.id);
     const hard = hardIds.has(word.id);
@@ -308,6 +316,7 @@ export function VocabularyScreen({ onClose }) {
               )}
               {!!word.example && <Text style={s.wordExample}>{word.example}</Text>}
               {!!word.exampleRu && <Text style={s.wordExampleRu}>{word.exampleRu}</Text>}
+              <ContentReportButton item={{id:word.id,type:'translate',prompt:word.english,answer:word.fullTranslation || displayedRussian}} context={{topic:'Словарь'}}/>
               <Text style={s.wordStatus}>
                 {stats[word.id]
                   ? `Изучается · верно ${stats[word.id].correct || 0} из ${stats[word.id].total || 0}`
@@ -338,7 +347,9 @@ export function VocabularyScreen({ onClose }) {
     <View style={s.container}>
       <Header title="Словарь" onClose={onClose} />
       <FlatList
-        data={result.items}
+        data={displayedWords}
+        onEndReached={()=>setVisibleCount((count)=>Math.min(count+100,result.count))}
+        onEndReachedThreshold={0.5}
         keyExtractor={(item) => item.id}
         renderItem={renderWord}
         keyboardShouldPersistTaps="handled"
@@ -387,7 +398,7 @@ export function VocabularyScreen({ onClose }) {
                 </Pressable>
               ))}
             </ScrollView>
-            <Text style={s.dictionaryCount}>НАЙДЕНО: {result.count}{result.count > 300 ? " · ПОКАЗАНЫ ПЕРВЫЕ 300" : ""}</Text>
+            <Text style={s.dictionaryCount}>НАЙДЕНО: {result.count} · ЗАГРУЖЕНО: {Math.min(visibleCount,result.count)}</Text>
           </>
         }
         ListEmptyComponent={<Text style={s.emptyDictionary}>Ничего не найдено. Попробуйте другой запрос или фильтр.</Text>}

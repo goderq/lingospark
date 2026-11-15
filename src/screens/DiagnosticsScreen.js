@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
+import * as Clipboard from 'expo-clipboard';
+import {performanceSummary} from '../utils/performance';
 import { useAuth } from "../store/AuthContext";
 import { useCloudSync } from "../store/CloudSyncContext";
 import { useProgress } from "../store/ProgressContext";
@@ -34,9 +36,11 @@ export default function DiagnosticsScreen({ onClose }) {
   } = useCloudSync();
   const [device, setDevice] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [timings,setTimings]=useState(()=>performanceSummary());
 
   const refresh = useCallback(async () => {
     setBusy(true);
+    setTimings(performanceSummary());
     try {
       const [ai, speech] = await Promise.all([
         import("../services/localAi"),
@@ -117,6 +121,18 @@ export default function DiagnosticsScreen({ onClose }) {
           <Row icon="time" label="Времена" value={`${progress.completedTenses?.length || 0} / ${tenseModules.length}`} />
           <Row icon="school" label="Грамматика" value={`${progress.completedGrammarTracks?.length || 0} / ${grammarTracks.length}`} />
           <Row icon="library" label="Словарь" value={`${wordBankSize} основных · ${extendedWordBankSize} всего`} good />
+        </Section>
+
+        <Section title="БЫСТРОДЕЙСТВИЕ · ТЕКУЩИЙ ЗАПУСК">
+          {!timings.length&&<Text style={styles.value}>Замеры появятся после открытия экранов и прослушивания фраз.</Text>}
+          {timings.map((entry)=><Row key={entry.name} icon="speedometer" label={({startup_js:'Запуск JavaScript',words_open:'Экран слов',dictionary_open:'Открытие словаря',dictionary_filter:'Поиск в словаре',speech_start:'Начало озвучки'})[entry.name] || entry.name} value={`${entry.last} мс · максимум ${entry.max} мс · замеров ${entry.count}`}/>)}
+          <Text style={styles.value}>Последние 60 замеров. Открытие экрана — от начала отрисовки до следующего кадра. Запуск JS не включает загрузку iOS. Озвучка — от нажатия до события начала речи.</Text>
+        </Section>
+
+        <Section title={`СООБЩЕНИЯ ОБ ОШИБКАХ · ${progress.contentReports?.length || 0}`}>
+          <Text style={styles.value}>Записи сохраняются в прогрессе. Автоматической отправки разработчику нет.</Text>
+          {(progress.contentReports || []).slice(0,10).map((report)=><View key={report.key} style={{paddingVertical:10}}><Text style={styles.label}>{report.reason} · {report.topic || 'Задание'}</Text><Text style={styles.value}>{report.prompt}</Text><Text style={styles.value}>Ответ: {report.answer} · отмечено {report.count} раз</Text></View>)}
+          <Action title="Скопировать все записи" icon="copy" disabled={!progress.contentReports?.length} onPress={async()=>{await Clipboard.setStringAsync(JSON.stringify({version:Constants.expoConfig?.version,reports:progress.contentReports},null,2));Alert.alert('Скопировано','Можно вставить записи в сообщение для разбора. Они включают вопросы и выбранные ответы.');}}/>
         </Section>
 
         <Section title="ОФЛАЙН-МОДЕЛИ">

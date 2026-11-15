@@ -46,6 +46,8 @@ jobs:
           npm run test:world
           npm run test:world-paths
           npm run test:world-dialogue
+          npm run test:content-quality
+          npm run test:speech-scheduling
       - name: Generate native iOS project
         run: npx expo prebuild --platform ios --no-install
       - name: Install iOS native dependencies

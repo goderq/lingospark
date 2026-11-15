@@ -97,6 +97,7 @@ import {
 } from "./src/screens/PremiumScreens";
 import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
+import {markStartup} from './src/utils/performance';
 
 const AITutorScreen = React.lazy(() => import("./src/screens/AITutorScreen"));
 const ReviewScreen = React.lazy(() => import("./src/screens/ReviewScreen"));
@@ -145,6 +146,7 @@ function AppContent() {
   const [recentScreens, setRecentScreens] = useState([]);
   const [aiImmersive, setAiImmersive] = useState(false);
   const [navigationReady, setNavigationReady] = useState(false);
+  useEffect(()=>{if(ready&&authReady&&navigationReady&&(!user||!cloudRestoring))markStartup();},[ready,authReady,navigationReady,user,cloudRestoring]);
   const accountName = user?.user_metadata?.display_name?.trim() || "";
   useEffect(() => {
     if (user && !cloudRestoring && !progress.onboarded && accountName) {

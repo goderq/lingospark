@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert,Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
+import {reportReasons} from '../utils/contentQuality';
 import {
   explainSelectedOption,
   getExplanationExamples,
@@ -26,7 +27,8 @@ export default function ExplanationCard({
   accentColor,
   showStatus = true,
 }) {
-  const { recordExercise } = useProgress();
+  const { recordExercise,reportContentIssue } = useProgress();
+  const [reportOpen,setReportOpen]=useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mistakeOpen, setMistakeOpen] = useState(false);
   const [examplesOpen, setExamplesOpen] = useState(false);
@@ -70,6 +72,7 @@ export default function ExplanationCard({
     setAlternativesOpen(false);
     setPracticeOpen(false);
     setPracticeSelected("");
+    setReportOpen(false);
   }, [item?.id, item?.prompt]);
 
   return (
@@ -176,6 +179,9 @@ export default function ExplanationCard({
       )}
 
       <View style={styles.footer}>
+        <Pressable onPress={()=>setReportOpen((value)=>!value)} style={styles.footerButton}>
+          <Ionicons name="flag-outline" size={17} color={colors.textMuted}/><Text style={styles.muted}>Ошибка в задании</Text>
+        </Pressable>
         {!!relevantReinforcement && (
           <Pressable
             onPress={() => {
@@ -195,6 +201,7 @@ export default function ExplanationCard({
           </Pressable>
         )}
       </View>
+      {reportOpen&&<View style={styles.practice}><Text style={styles.muted}>Выбери причину. Вопрос сохранится в «Профиль → Диагностика». Автоматической отправки разработчику нет.</Text>{reportReasons.map((reason)=><Pressable key={reason} style={styles.practiceOption} onPress={()=>{reportContentIssue(item,{...context,selected},reason);setReportOpen(false);Alert.alert('Сохранено','Запись доступна в диагностике. При необходимости её можно скопировать и передать для исправления.');}}><Text style={styles.practiceOptionText}>{reason}</Text></Pressable>)}</View>}
 
       {practiceOpen && relevantReinforcement?.type === "choice" && (
         <View style={styles.practice}>
@@ -299,7 +306,7 @@ const styles = StyleSheet.create({
   sectionText: { color: colors.textMuted, lineHeight: 21, marginTop: 7 },
   examples: { marginTop: 1 },
   muted: { color: colors.textMuted, lineHeight: 20, marginTop: 12 },
-  footer: { flexDirection: "row", gap: 8, marginTop: 14 },
+  footer: { flexDirection: "row", flexWrap: 'wrap', gap: 8, marginTop: 14 },
   footerButton: {
     flexDirection: "row",
     alignItems: "center",

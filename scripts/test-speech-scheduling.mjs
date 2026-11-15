@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+let stops=0,utterances=[];
+globalThis.__speechMock={stop:async()=>{stops++;},getAvailableVoicesAsync:async()=>[],speak:(text,options)=>utterances.push({text,options})};
+globalThis.__speechTimes=[];
+const source=(await readFile(new URL('../src/utils/speech.js',import.meta.url),'utf8')).replace('import * as Speech from "expo-speech";','const Speech=globalThis.__speechMock;').replace("import {now,recordTiming} from './performance';","const now=()=>performance.now();const recordTiming=(name,ms)=>globalThis.__speechTimes.push({name,ms});");
+const speech=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
+await speech.speak('First');assert.equal(stops,0,'Idle first tap must not await a native stop');
+utterances[0].options.onStart();assert.equal(globalThis.__speechTimes[0].name,'speech_start');
+await speech.speak('Second');assert.equal(stops,1,'Active speech must be interrupted');
+utterances[0].options.onDone();await speech.speak('Third');assert.equal(stops,2,'Stale completion must not clear the active utterance');
+utterances.at(-1).options.onDone();await speech.speak('Fourth');assert.equal(stops,2,'Idle playback must skip stop');
+const before=utterances.length;await Promise.all([speech.speak('Old tap'),speech.speak('Latest tap')]);assert.equal(utterances.length,before+1);assert.equal(utterances.at(-1).text,'Latest tap');
+await speech.stopSpeech();assert.equal(await speech.speak(' '),false);
+console.log('Speech scheduling passed: idle fast path, interruption, late callbacks, rapid taps, start timing and blank input. Native iPhone latency still requires device measurements.');

@@ -10,6 +10,7 @@ import React, {
   useState,
 } from "react";
 import { lessons } from "../data/course";
+import {addContentReport} from '../utils/contentQuality';
 import { finishPathChapter, finishRental, restartLifePath, restartRental } from '../data/worldPaths';
 
 const STORAGE_KEY = "@lingospark/progress-v1";
@@ -811,6 +812,7 @@ export function ProgressProvider({ children }) {
   const saveWorldDraft = useCallback((draft) => {
     setProgress((old) => ({ ...old, world: { ...initial.world, ...(old.world || {}), draft } }));
   }, []);
+  const reportContentIssue = (item,context,reason) => setProgress((old)=>({...old,contentReports:addContentReport(old.contentReports || [],item,context,reason)}));
 
   const saveWorldPathDraft = useCallback((pathDraft) => {
     setProgress((old) => ({...old,world:{...initial.world,...(old.world || {}),pathDraft}}));
@@ -1258,6 +1260,7 @@ export function ProgressProvider({ children }) {
       saveStoryGame,
       completeWorldLocation,
       saveWorldDraft,
+      reportContentIssue,
       saveWorldPathDraft,
       completeWorldPathChapter,
       completeWorldRental,
