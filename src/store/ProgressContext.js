@@ -10,7 +10,7 @@ import React, {
   useState,
 } from "react";
 import { lessons } from "../data/course";
-import { finishPathChapter, finishRental, restartLifePath } from '../data/worldPaths';
+import { finishPathChapter, finishRental, restartLifePath, restartRental } from '../data/worldPaths';
 
 const STORAGE_KEY = "@lingospark/progress-v1";
 const UPDATED_KEY = "@lingospark/progress-updated-v1";
@@ -815,18 +815,19 @@ export function ProgressProvider({ children }) {
   const saveWorldPathDraft = useCallback((pathDraft) => {
     setProgress((old) => ({...old,world:{...initial.world,...(old.world || {}),pathDraft}}));
   }, []);
-  const completeWorldPathChapter = (pathId,chapterId,decisionId) => setProgress((old) => {
+  const completeWorldPathChapter = (pathId,chapterId,decisionId,assessment=null) => setProgress((old) => {
     const world=old.world || initial.world;
-    const nextWorld=finishPathChapter(world,pathId,chapterId,decisionId);
+    const nextWorld=finishPathChapter(world,pathId,chapterId,decisionId,assessment);
     if(nextWorld===world)return old;
     return {...old,world:nextWorld};
   });
-  const completeWorldRental = (listingId,terms) => setProgress((old) => {
+  const completeWorldRental = (listingId,terms,dialogue=null) => setProgress((old) => {
     const world=old.world || initial.world;
-    const nextWorld=finishRental(world,listingId,terms);
+    const nextWorld=finishRental(world,listingId,terms,dialogue);
     return nextWorld===world?old:{...old,world:nextWorld};
   });
   const restartWorldLifePath = (pathId) => setProgress((old)=>({...old,world:restartLifePath(old.world || initial.world,pathId)}));
+  const restartWorldRental = () => setProgress((old)=>({...old,world:restartRental(old.world || initial.world)}));
 
   const completeWorldLocation = (
     location,
@@ -1261,6 +1262,7 @@ export function ProgressProvider({ children }) {
       completeWorldPathChapter,
       completeWorldRental,
       restartWorldLifePath,
+      restartWorldRental,
       buyWorldHomeItem,
       completeWorldEvent,
       replyWorldMessage,

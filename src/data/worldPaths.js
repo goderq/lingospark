@@ -78,7 +78,7 @@ export function pathQuestions(world,path,chapter){
   if(path.id==='career' && chapter.id==='venture' && world.lifePaths?.study?.ending)questions.unshift(scene('Amelia из учебного пути предлагает познакомить тебя с партнёром. Как согласиться?','Thank you, an introduction would be very helpful.',['I demand every contact immediately.','Introduction are help yesterday.'],'Связь между путями: завершённая учёба открыла новое знакомство. An introduction — представление друг другу.'));
   return questions;
 }
-export function finishPathChapter(world,pathId,chapterId,decisionId){
+export function finishPathChapter(world,pathId,chapterId,decisionId,assessment=null){
   const path=lifePaths.find((entry)=>entry.id===pathId);
   const index=path?.chapters.findIndex((entry)=>entry.id===chapterId) ?? -1;
   if(index<0)return world;
@@ -86,7 +86,7 @@ export function finishPathChapter(world,pathId,chapterId,decisionId){
   const choice=chapter.decisions.find((entry)=>entry.id===decisionId);
   if(!choice || state.completed.includes(chapterId) || !path.chapters.slice(0,index).every((entry)=>state.completed.includes(entry.id)))return world;
   const finished=index===path.chapters.length-1;
-  return {...world,lifePaths:{...world.lifePaths,[pathId]:{completed:[...state.completed,chapterId],decisions:{...state.decisions,[chapterId]:choice},ending:finished?choice.outcome:state.ending,endings:finished?[...new Set([...(state.endings || []),choice.outcome])]:(state.endings || [])}},pathDraft:null};
+  return {...world,lifePaths:{...world.lifePaths,[pathId]:{completed:[...state.completed,chapterId],decisions:{...state.decisions,[chapterId]:choice},assessments:{...(state.assessments || {}),...(assessment?{[chapterId]:assessment}:{})},ending:finished?choice.outcome:state.ending,endings:finished?[...new Set([...(state.endings || []),choice.outcome])]:(state.endings || [])}},pathDraft:null};
 }
 
 export function restartLifePath(world,pathId){
@@ -96,8 +96,13 @@ export function restartLifePath(world,pathId){
   return {...world,lifePaths:{...world.lifePaths,[pathId]:{completed:[],decisions:{},endings:[...new Set([...(state.endings || []),...(state.ending?[state.ending]:[])])]}},pathDraft:world.pathDraft?.pathId===pathId?null:world.pathDraft};
 }
 
-export function finishRental(world,listingId,terms){
+export function finishRental(world,listingId,terms,dialogue=null){
   const listing=rentalListings.find((entry)=>entry.id===listingId);
-  if(!listing || rentalInitialCost(listing)>rentalBudget || !['inventory','repair'].includes(terms) || world.rental?.completed)return world;
-  return {...world,rental:{completed:true,listingId,terms,monthly:listing.rent+listing.bills,initial:rentalInitialCost(listing),outcome:terms==='repair'?'Ты договорился устранить неполадки перед въездом.':'Ты договорился составить опись и зафиксировать состояние жилья.'},pathDraft:null};
+  if(!listing || rentalInitialCost(listing)>rentalBudget || !['inventory','repair'].includes(terms) || world.rental?.completed || (dialogue && dialogue.phase!=='done'))return world;
+  const discount=dialogue?.successfulIntents?.includes('budget')?20:0;
+  return {...world,rental:{completed:true,listingId,terms,monthly:listing.rent+listing.bills-discount,initial:rentalInitialCost(listing)-discount,discount,dialogue:dialogue?{...dialogue,turns:dialogue.turns.slice(-40)}:null,outcome:terms==='repair'?'Ты договорился устранить неполадки перед въездом.':'Ты договорился составить опись и зафиксировать состояние жилья.'},pathDraft:null};
+}
+
+export function restartRental(world){
+  return {...world,rentalHistory:world.rental?.completed?[world.rental,...(world.rentalHistory || [])].slice(0,10):(world.rentalHistory || []),rental:null,pathDraft:world.pathDraft?.mode==='rental'?null:world.pathDraft};
 }
