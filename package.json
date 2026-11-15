@@ -1,9 +1,10 @@
 {
   "name": "lingospark-expo",
-  "version": "2.7.5",
+  "version": "2.8.0",
   "private": true,
   "main": "index.js",
   "scripts": {
+    "test:world": "node scripts/test-world.mjs",
     "start": "expo start",
     "tunnel": "expo start --tunnel",
     "ios": "expo start --ios",

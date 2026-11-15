@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState } from "react-native";
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -806,6 +807,10 @@ export function ProgressProvider({ children }) {
       },
       coins: (old.coins || 0) + (completed ? 20 : 3),
     }));
+  const saveWorldDraft = useCallback((draft) => {
+    setProgress((old) => ({ ...old, world: { ...initial.world, ...(old.world || {}), draft } }));
+  }, []);
+
   const completeWorldLocation = (
     location,
     score,
@@ -819,22 +824,26 @@ export function ProgressProvider({ children }) {
       const today = dateKey();
       const previousDecision = old.world?.decisions?.[location.id];
       const applyDecision = decision && !previousDecision;
+      if (applyDecision && (old.world?.money ?? 150) + (decision.money || 0) < 0) return old;
       const relationshipName = decision?.relation?.name;
       const relationships = old.world?.relationships || {};
       const homeItems = old.world?.homeItems || [];
       return {
         ...old,
-        totalXP: old.totalXP + (alreadyCompleted ? 5 : 25 + location.order * 5),
+        totalXP: old.totalXP + (alreadyCompleted ? 0 : 25 + location.order * 5),
         dailyXP:
           (old.dailyDate === today ? old.dailyXP : 0) +
-          (alreadyCompleted ? 5 : 25 + location.order * 5),
+          (alreadyCompleted ? 0 : 25 + location.order * 5),
         dailyDate: today,
-        coins: (old.coins || 0) + (alreadyCompleted ? 2 : 10 + stars * 3),
+        coins: (old.coins || 0) + (alreadyCompleted ? 0 : 10 + stars * 3),
         activity: {
           ...old.activity,
           [today]: (old.activity?.[today] || 0) + 1,
         },
         world: {
+          ...initial.world,
+          ...(old.world || {}),
+          draft: null,
           completed: alreadyCompleted
             ? old.world.completed
             : [...(old.world?.completed || []), location.id],
@@ -1230,6 +1239,7 @@ export function ProgressProvider({ children }) {
       completeReading,
       saveStoryGame,
       completeWorldLocation,
+      saveWorldDraft,
       buyWorldHomeItem,
       completeWorldEvent,
       replyWorldMessage,

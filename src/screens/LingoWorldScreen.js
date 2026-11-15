@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { speak } from "../utils/speech";
 import { worldLocations } from "../data/lingoWorld";
+import { buildWorldMission, worldArcs, worldUnlocked, worldMemory, worldDecisionAvailable, readWorldDraft } from '../data/worldExpansion';
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
@@ -145,12 +146,21 @@ export default function LingoWorldScreen({ onClose }) {
   const completed = progress.world?.completed || [];
   const stars = progress.world?.stars || {};
   const inventory = progress.world?.inventory || [];
-  const unlockedCount = Math.min(worldLocations.length, completed.length + 1);
+  const world = progress.world || {};
+  const nextLocation = worldLocations.find((item) => !completed.includes(item.id) && worldUnlocked(item,world,worldLocations));
 
   if (location)
     return (
       <WorldMission location={location} onBack={() => setLocation(null)} />
     );
+
+  if (tab === 'journal') return (
+    <View style={s.container}>
+      <Header title="Журнал истории" onClose={onClose} right={<Text style={s.money}>£{world.money ?? 150}</Text>} />
+      <WorldTabs tab={tab} setTab={setTab} />
+      <WorldJournal world={world} onLocation={setLocation} />
+    </View>
+  );
 
   if (tab === "phone")
     return (
@@ -211,6 +221,17 @@ export default function LingoWorldScreen({ onClose }) {
           />
         </View>
 
+        {nextLocation && <View style={s.dailyEvent}>
+          <Text style={s.dailyTitle}>{world.draft?.locationId === nextLocation.id ? 'Продолжить незавершённую главу' : 'Следующий шаг твоей истории'}</Text>
+          <Text style={s.dailyPrompt}>{nextLocation.title} · {nextLocation.level}</Text>
+          <PrimaryButton title="Продолжить историю" onPress={() => setLocation(nextLocation)} color={nextLocation.color} />
+        </View>}
+        {worldArcs.map((arc) => <View key={arc.title} style={s.journalArc}>
+          <Text style={s.locationTitle}>{arc.title}</Text>
+          <Text style={s.locationText}>{arc.ids.filter((id) => completed.includes(id)).length} / {arc.ids.length} глав</Text>
+          <ProgressBar value={arc.ids.filter((id) => completed.includes(id)).length / arc.ids.length} color={colors.mint} />
+        </View>)}
+
         {!!inventory.length && (
           <View>
             <Text style={s.section}>ТВОЙ ИНВЕНТАРЬ</Text>
@@ -232,7 +253,7 @@ export default function LingoWorldScreen({ onClose }) {
         <Text style={s.section}>КАРТА ИСТОРИИ · A1–C1</Text>
         {worldLocations.map((item, index) => {
           const done = completed.includes(item.id);
-          const unlocked = index < unlockedCount || done;
+          const unlocked = worldUnlocked(item,world,worldLocations);
           return (
             <View key={item.id} style={s.pathRow}>
               <View style={s.pathRail}>
@@ -310,6 +331,7 @@ function WorldTabs({ tab, setTab }) {
     ["phone", "chatbubble-ellipses", "Телефон"],
     ["home", "home", "Дом"],
     ["passport", "ribbon", "Паспорт"],
+    ["journal", "book", "История"],
   ];
   return (
     <View style={s.worldTabs}>
@@ -331,6 +353,34 @@ function WorldTabs({ tab, setTab }) {
       ))}
     </View>
   );
+}
+
+function WorldJournal({ world, onLocation }) {
+  const completed = world.completed || [];
+  const draftLocation = worldLocations.find((item) => item.id === world.draft?.locationId);
+  return <ScrollView contentContainerStyle={s.tabContent}>
+    <Text style={s.tabTitle}>Твоя история</Text>
+    <Text style={s.tabSubtitle}>Решения, отношения и незавершённая глава сохраняются вместе с учебным прогрессом.</Text>
+    {draftLocation && worldUnlocked(draftLocation,world,worldLocations) && <View style={s.dailyEvent}>
+      <Text style={s.dailyTitle}>Не закончено: {draftLocation.title}</Text>
+      <Text style={s.dailyPrompt}>Сцена {(world.draft.index || 0) + 1}. Ответы и оставшиеся жизни сохранены.</Text>
+      <PrimaryButton title="Продолжить главу" onPress={() => onLocation(draftLocation)} />
+    </View>}
+    <Text style={s.section}>ДНЕВНИК РЕШЕНИЙ · {completed.length} / {worldLocations.length}</Text>
+    {worldLocations.filter((item) => completed.includes(item.id)).map((item) => {
+      const decision = world.decisions?.[item.id];
+      return <View key={item.id} style={s.journalArc}>
+        <Text style={s.locationTitle}>{item.emoji} {item.title} · {'⭐'.repeat(world.stars?.[item.id] || 1)}</Text>
+        <Text style={s.locationText}>{decision?.title || 'Глава завершена'}</Text>
+        {!!decision?.outcome && <Text style={s.dailyPrompt}>{decision.outcome}</Text>}
+        <Pressable onPress={() => onLocation(item)}><Text style={s.memory}>Повторить без повторной выдачи награды →</Text></Pressable>
+      </View>;
+    })}
+    {!completed.length && <Text style={s.dailyPrompt}>Заверши первую главу — здесь появятся её последствия.</Text>}
+    <Text style={s.section}>ЛЮДИ, КОТОРЫЕ ТЕБЯ ПОМНЯТ</Text>
+    {Object.entries(world.relationships || {}).map(([name,trust]) => <View key={name} style={s.journalArc}><Text style={s.locationTitle}>{name}</Text><Text style={s.locationText}>Доверие: {trust} · {trust >= 3 ? 'Надёжный контакт' : 'Знакомый'}</Text></View>)}
+    {!Object.keys(world.relationships || {}).length && <Text style={s.dailyPrompt}>Отношения появятся после сюжетных решений и ответов на сообщения.</Text>}
+  </ScrollView>;
 }
 
 function PhoneTab({ world }) {
@@ -633,23 +683,31 @@ function PassportTab({ world }) {
   );
 }
 
-function WorldMission({ location, onBack }) {
-  const { progress, completeWorldLocation } = useProgress();
-  const [started, setStarted] = useState(false);
-  const [index, setIndex] = useState(0);
-  const [lives, setLives] = useState(3);
-  const [score, setScore] = useState(0);
-  const [answer, setAnswer] = useState("");
-  const [selected, setSelected] = useState("");
-  const [checked, setChecked] = useState(false);
-  const [correct, setCorrect] = useState(false);
+function WorldMission({ location: originalLocation, onBack }) {
+  const { progress, completeWorldLocation, saveWorldDraft } = useProgress();
+  const [location] = useState(() => buildWorldMission(originalLocation,progress.world));
+  const [draft] = useState(() => readWorldDraft(progress.world,location));
+  const [started, setStarted] = useState(Boolean(draft));
+  const [index, setIndex] = useState(draft?.index || 0);
+  const [lives, setLives] = useState(draft?.lives ?? 3);
+  const [score, setScore] = useState(draft?.score || 0);
+  const [answer, setAnswer] = useState(draft?.answer || "");
+  const [selected, setSelected] = useState(draft?.selected || "");
+  const [checked, setChecked] = useState(draft?.checked || false);
+  const [correct, setCorrect] = useState(draft?.correct || false);
   const [failed, setFailed] = useState(false);
-  const [finished, setFinished] = useState(false);
+  const [finished, setFinished] = useState(draft?.finished || false);
   const [decision, setDecision] = useState(null);
-  const [consequences, setConsequences] = useState([]);
+  const [consequences, setConsequences] = useState(draft?.consequences || []);
   const [seed] = useState(() => Date.now());
   const scene = location.scenes[index];
   const sceneLine = scene.careerLines?.[progress.world?.career] || scene.line;
+  const memories = worldMemory(location,progress.world);
+  useEffect(() => {
+    if (!started) return;
+    if (failed || decision) { saveWorldDraft(null); return; }
+    saveWorldDraft({version:1,locationId:location.id,sceneCount:location.scenes.length,index,lives,score,answer,selected,checked,correct,finished,consequences});
+  }, [started,failed,decision,index,lives,score,answer,selected,checked,correct,finished,consequences,location,saveWorldDraft]);
   const earnedStars =
     score >= location.scenes.length
       ? 3
@@ -685,13 +743,13 @@ function WorldMission({ location, onBack }) {
     const isCorrect =
       scene.type === "choice"
         ? actual === scene.answer
-        : gradeAnswer(actual, scene.answers).status !== "wrong";
+        : gradeAnswer(actual, scene.answers).status === "correct";
     if (scene.type === "choice") setSelected(actual);
     setCorrect(isCorrect);
     setChecked(true);
     if (isCorrect) setScore((current) => current + 1);
     else setLives((current) => Math.max(0, current - 1));
-    if (scene.consequence)
+    if (isCorrect && scene.consequence)
       setConsequences((current) => [...current, scene.consequence]);
   };
   const next = () => {
@@ -732,6 +790,7 @@ function WorldMission({ location, onBack }) {
           </Text>
           <Text style={s.introTitle}>{location.title}</Text>
           <Text style={s.introText}>{location.intro}</Text>
+          {memories.map((memory,index) => <Text key={index} style={s.memory}>{memory}</Text>)}
           <View style={s.missionInfo}>
             <Info
               icon="chatbubbles"
@@ -801,6 +860,7 @@ function WorldMission({ location, onBack }) {
             {location.storyChoices.map((choice) => (
               <Pressable
                 key={choice.id}
+                disabled={!worldDecisionAvailable(choice,progress.world)}
                 onPress={() => {
                   completeWorldLocation(
                     location,
@@ -828,6 +888,7 @@ function WorldMission({ location, onBack }) {
                 <View style={{ flex: 1 }}>
                   <Text style={s.choiceTitle}>{choice.title}</Text>
                   <Text style={s.choiceText}>{choice.text}</Text>
+                  <Text style={s.locationText}>{choice.money ? `${choice.money > 0 ? '+' : ''}£${choice.money} · ` : ''}{choice.relation ? `Доверие ${choice.relation.delta > 0 ? '+' : ''}${choice.relation.delta} · ` : ''}{choice.reputation ? `Репутация +${choice.reputation}` : ''}{!worldDecisionAvailable(choice,progress.world) ? 'Недостаточно средств' : ''}</Text>
                 </View>
                 <Ionicons
                   name="chevron-forward"
@@ -909,6 +970,7 @@ function WorldMission({ location, onBack }) {
         <Text style={[s.level, { color: location.color }]}>
           СЦЕНА {index + 1} ИЗ {location.scenes.length}
         </Text>
+        <Text style={s.memory}>{scene.kind === 'document' ? '📄 ПРОЧИТАЙ ДОКУМЕНТ И НАЙДИ ДЕТАЛЬ' : scene.kind === 'repair' ? '↩ УТОЧНИ: ТЕБЯ ПОНЯЛИ НЕВЕРНО' : '💬 РАЗГОВОР'}</Text>
         <View style={s.dialogue}>
           <View
             style={[
@@ -978,7 +1040,7 @@ function WorldMission({ location, onBack }) {
                 { color: correct ? colors.mint : colors.orange },
               ]}
             >
-              {correct ? "Отличный ответ" : "Смысл понятен, но лучше так:"}
+              {correct ? "Отличный ответ" : "Ответ не засчитан. Разберём точную формулировку:"}
             </Text>
             {!correct && <Text style={s.correctAnswer}>{scene.answer}</Text>}
             <Text style={s.explanation}>
@@ -987,7 +1049,7 @@ function WorldMission({ location, onBack }) {
                 topic: location.title,
               })}
             </Text>
-            {scene.consequence && (
+            {correct && scene.consequence && (
               <Text style={s.consequence}>↳ {scene.consequence}</Text>
             )}
           </View>
@@ -1028,6 +1090,8 @@ function Info({ icon, title, text }) {
 }
 
 const s = StyleSheet.create({
+  journalArc: { backgroundColor: colors.card, borderRadius: 18, padding: 15, marginTop: 10, gap: 8 },
+  memory: { color: colors.mint, fontSize: 12, lineHeight: 19, marginVertical: 8 },
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,

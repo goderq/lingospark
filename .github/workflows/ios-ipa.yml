@@ -43,6 +43,7 @@ jobs:
           npm run test:cloud-sync
           npm run explanations:audit
           npm run courses:audit
+          npm run test:world
       - name: Generate native iOS project
         run: npx expo prebuild --platform ios --no-install
       - name: Install iOS native dependencies
