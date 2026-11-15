@@ -10,6 +10,7 @@ import { CloudSyncProvider, useCloudSync } from "./src/store/CloudSyncContext";
 import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
+import RetentionScreen from "./src/screens/RetentionScreen";
 import CourseScreen from "./src/screens/CourseScreen";
 import LevelCheckpointScreen from "./src/screens/LevelCheckpointScreen";
 import {
@@ -574,6 +575,8 @@ function AppContent() {
         <C1ExamScreen onClose={() => setOverlay({ type: "learningHub" })} />
       </SafeAreaView>
     );
+  if (overlay?.type === "retention")
+    return <SafeAreaView style={styles.safe}><RetentionScreen onClose={() => setOverlay(null)} /></SafeAreaView>;
   if (overlay?.type === "adaptive")
     return (
       <SafeAreaView style={styles.safe}>
@@ -758,6 +761,7 @@ function AppContent() {
       <View style={styles.body}>
         {tab === "home" && (
           <HomeScreen
+            onRetention={() => setOverlay({ type: "retention" })}
             onLesson={openLesson}
             onReview={() => setTab("review")}
             onPhrases={() => setOverlay({ type: "phrases" })}

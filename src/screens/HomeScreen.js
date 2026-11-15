@@ -8,9 +8,11 @@ import { worldLocations } from "../data/lingoWorld";
 import { useProgress } from "../store/ProgressContext";
 import { colors, shadows } from "../theme";
 import { ProgressBar, XPBadge } from "../components/UI";
+import DailyLearningPlan from '../components/DailyLearningPlan';
 
 export default function HomeScreen({
   onLesson,
+  onRetention,
   onReview,
   onPhrases,
   onDictation,
@@ -136,6 +138,7 @@ export default function HomeScreen({
           </View>
         </View>
       </View>
+      <DailyLearningPlan progress={progress} next={next} onLesson={onLesson} onRetention={onRetention} onMistakes={onMistakes} onReview={onReview} onDictation={onDictation} onLearningHub={onLearningHub} />
       {recentScreens.length > 0 && (
         <View>
           <Text style={styles.recentLabel}>НЕДАВНО</Text>
@@ -193,6 +196,7 @@ export default function HomeScreen({
         </View>
         <Ionicons name="grid" size={40} color={colors.mint} />
       </Pressable>
+      {showAll && <>
       <Pressable onPress={onAdaptive} style={styles.gameBanner}>
         <View>
           <Text style={styles.gameEyebrow}>АДАПТИВНЫЙ УРОК</Text>
@@ -231,6 +235,7 @@ export default function HomeScreen({
         </View>
         <Ionicons name="sparkles" size={40} color={colors.mint} />
       </Pressable>
+      </>}
       {showAll && (
         <>
           <Pressable onPress={onPlacement} style={styles.levelBanner}>

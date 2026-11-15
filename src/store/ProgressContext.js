@@ -11,6 +11,7 @@ import React, {
 } from "react";
 import { lessons } from "../data/course";
 import {addContentReport} from '../utils/contentQuality';
+import { enrollRetention, finishRetention } from '../utils/retention';
 import { finishPathChapter, finishRental, restartLifePath, restartRental } from '../data/worldPaths';
 
 const STORAGE_KEY = "@lingospark/progress-v1";
@@ -24,6 +25,7 @@ const initial = {
   dailyXP: 0,
   streak: 0,
   completed: [],
+  retention: {},
   completedTenses: [],
   completedBosses: [],
   completedGrammarTracks: [],
@@ -150,6 +152,7 @@ export function ProgressProvider({ children }) {
         if (!raw) return;
         const saved = { ...initial, ...JSON.parse(raw) };
         saved.completed = contiguousCompleted(saved.completed);
+        saved.retention = enrollRetention(saved.completed, saved.retention);
         saved.unlockedAll = false;
         if (saved.dailyDate !== dateKey()) saved.dailyXP = 0;
         setProgress(saved);
@@ -202,6 +205,10 @@ export function ProgressProvider({ children }) {
       name: name.trim() || "Друг",
       dailyGoal,
     }));
+  };
+
+  const recordRetention = (lessonId, dueAt, answers) => {
+    setProgress(old => finishRetention(old, lessons, lessonId, dueAt, answers));
   };
 
   const completeLesson = (lesson, result = null) => {
@@ -257,6 +264,7 @@ export function ProgressProvider({ children }) {
         lastStudyDate: today,
         streak,
         completed: [...old.completed, lesson.id],
+        retention: enrollRetention([...old.completed, lesson.id], old.retention),
         lessonResults: result
           ? {
               ...(old.lessonResults || {}),
@@ -1218,6 +1226,7 @@ export function ProgressProvider({ children }) {
     setProgress({
       ...initial,
       ...restored,
+      retention: enrollRetention(restored.completed || [], restored.retention),
       onboarded: true,
       settings: { ...initial.settings, ...(restored.settings || {}) },
     });
@@ -1245,6 +1254,7 @@ export function ProgressProvider({ children }) {
       localUpdatedAt,
       finishOnboarding,
       completeLesson,
+      recordRetention,
       completeTense,
       completeBoss,
       completeGrammarTrack,

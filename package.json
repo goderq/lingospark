@@ -1,9 +1,10 @@
 {
   "name": "lingospark-expo",
-  "version": "2.11.0",
+  "version": "2.12.0",
   "private": true,
   "main": "index.js",
   "scripts": {
+    "test:retention": "node scripts/test-retention.mjs",
     "test:content-quality": "node scripts/test-content-quality.mjs",
     "test:speech-scheduling": "node scripts/test-speech-scheduling.mjs",
     "test:world-dialogue": "node scripts/test-world-dialogue.mjs",

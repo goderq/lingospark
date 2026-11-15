@@ -244,8 +244,8 @@ export default function CourseScreen({ onLesson, onCheckpoint }) {
                 <Text style={s.detail} numberOfLines={1}>
                   {complete
                     ? progress.lessonResults?.[lesson.id]
-                      ? `Пройдено · ${"⭐".repeat(progress.lessonResults[lesson.id].stars || 1)} · ${progress.lessonResults[lesson.id].bestAccuracy || progress.lessonResults[lesson.id].accuracy}%`
-                      : "Пройдено"
+                      ? `${progress.retention?.[lesson.id]?.verifiedAt ? 'Закреплено' : 'Пройдено'} · ${"⭐".repeat(progress.lessonResults[lesson.id].stars || 1)} · ${progress.lessonResults[lesson.id].bestAccuracy || progress.lessonResults[lesson.id].accuracy}%`
+                      : progress.retention?.[lesson.id]?.verifiedAt ? 'Закреплено' : 'Пройдено'
                     : !unlocked
                       ? "Сначала пройди предыдущий урок"
                       : lesson.subtitle}
