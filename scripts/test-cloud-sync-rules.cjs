@@ -84,4 +84,9 @@ assert.equal(
   "a new second account must start clean instead of inheriting local progress",
 );
 
-console.log("cloud sync rules: 7 scenarios passed");
+const pathOnly = {world:{lifePaths:{study:{completed:['admission'],decisions:{admission:{id:'research'}}}}}};
+assert.ok(learningProgressScore(pathOnly)>0,'New life paths must count as saved learning');
+assert.ok(learningProgressScore({world:{rental:{completed:true}}})>0,'Rental mission must count as saved learning');
+assert.equal(chooseInitialProgressSource({local:fresh,cloud:pathOnly,localUpdatedAt:newer,cloudUpdatedAt:older}),'cloud','Reinstall must restore life-path-only progress');
+assert.equal(chooseInitialProgressSource({local:pathOnly,cloud:fresh,localUpdatedAt:older,cloudUpdatedAt:newer}),'local','Empty cloud must not erase completed side stories');
+console.log("cloud sync rules: 11 scenarios passed");

@@ -102,6 +102,11 @@ function learningProgressScore(progress = {}) {
     objectSize(world.replies) * 10;
   score += positive(world.reputation);
   if (world.career) score += 10;
+  for (const path of Object.values(world.lifePaths || {})) {
+    score += arraySize(path.completed) * 10 + objectSize(path.decisions) * 10 + arraySize(path.endings) * 10;
+  }
+  if (world.rental?.completed) score += 10;
+  if (world.draft || world.pathDraft) score += 10;
   if (progress.c1Certificate || progress.unlockedAll || progress.lessonDraft)
     score += 10;
 

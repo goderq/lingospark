@@ -10,6 +10,7 @@ import React, {
   useState,
 } from "react";
 import { lessons } from "../data/course";
+import { finishPathChapter, finishRental, restartLifePath } from '../data/worldPaths';
 
 const STORAGE_KEY = "@lingospark/progress-v1";
 const UPDATED_KEY = "@lingospark/progress-updated-v1";
@@ -811,6 +812,22 @@ export function ProgressProvider({ children }) {
     setProgress((old) => ({ ...old, world: { ...initial.world, ...(old.world || {}), draft } }));
   }, []);
 
+  const saveWorldPathDraft = useCallback((pathDraft) => {
+    setProgress((old) => ({...old,world:{...initial.world,...(old.world || {}),pathDraft}}));
+  }, []);
+  const completeWorldPathChapter = (pathId,chapterId,decisionId) => setProgress((old) => {
+    const world=old.world || initial.world;
+    const nextWorld=finishPathChapter(world,pathId,chapterId,decisionId);
+    if(nextWorld===world)return old;
+    return {...old,world:nextWorld};
+  });
+  const completeWorldRental = (listingId,terms) => setProgress((old) => {
+    const world=old.world || initial.world;
+    const nextWorld=finishRental(world,listingId,terms);
+    return nextWorld===world?old:{...old,world:nextWorld};
+  });
+  const restartWorldLifePath = (pathId) => setProgress((old)=>({...old,world:restartLifePath(old.world || initial.world,pathId)}));
+
   const completeWorldLocation = (
     location,
     score,
@@ -1240,6 +1257,10 @@ export function ProgressProvider({ children }) {
       saveStoryGame,
       completeWorldLocation,
       saveWorldDraft,
+      saveWorldPathDraft,
+      completeWorldPathChapter,
+      completeWorldRental,
+      restartWorldLifePath,
       buyWorldHomeItem,
       completeWorldEvent,
       replyWorldMessage,

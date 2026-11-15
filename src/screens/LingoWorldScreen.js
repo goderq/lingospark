@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { speak } from "../utils/speech";
 import { worldLocations } from "../data/lingoWorld";
+import WorldPathsScreen from './WorldPathsScreen';
 import { buildWorldMission, worldArcs, worldUnlocked, worldMemory, worldDecisionAvailable, readWorldDraft } from '../data/worldExpansion';
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
@@ -143,12 +144,14 @@ export default function LingoWorldScreen({ onClose }) {
   const { progress } = useProgress();
   const [location, setLocation] = useState(null);
   const [tab, setTab] = useState("map");
+  const [showPaths,setShowPaths]=useState(false);
   const completed = progress.world?.completed || [];
   const stars = progress.world?.stars || {};
   const inventory = progress.world?.inventory || [];
   const world = progress.world || {};
   const nextLocation = worldLocations.find((item) => !completed.includes(item.id) && worldUnlocked(item,world,worldLocations));
 
+  if(showPaths)return <WorldPathsScreen onClose={()=>setShowPaths(false)} />;
   if (location)
     return (
       <WorldMission location={location} onBack={() => setLocation(null)} />
@@ -221,6 +224,11 @@ export default function LingoWorldScreen({ onClose }) {
           />
         </View>
 
+        <View style={s.dailyEvent}>
+          <Text style={s.dailyTitle}>💼 🎓 🏡 Три жизненных пути</Text>
+          <Text style={s.dailyPrompt}>Карьера, учёба и своя жизнь: отдельные решения и финалы. Здесь же — многоэтапный поиск жилья.</Text>
+          <PrimaryButton title="Выбрать свой путь" onPress={()=>setShowPaths(true)} color={colors.purple}/>
+        </View>
         {nextLocation && <View style={s.dailyEvent}>
           <Text style={s.dailyTitle}>{world.draft?.locationId === nextLocation.id ? 'Продолжить незавершённую главу' : 'Следующий шаг твоей истории'}</Text>
           <Text style={s.dailyPrompt}>{nextLocation.title} · {nextLocation.level}</Text>

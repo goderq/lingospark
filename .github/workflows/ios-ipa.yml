@@ -44,6 +44,7 @@ jobs:
           npm run explanations:audit
           npm run courses:audit
           npm run test:world
+          npm run test:world-paths
       - name: Generate native iOS project
         run: npx expo prebuild --platform ios --no-install
       - name: Install iOS native dependencies
