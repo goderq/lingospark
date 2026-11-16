@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import WordMeanings from '../components/WordMeanings';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -641,11 +642,7 @@ export default function ReviewScreen() {
               )}
               <View style={styles.divider} />
               <Text style={styles.russianWord}>{activeCard.russian}</Text>
-              {!!activeCard.translations?.length && (
-                <Text style={styles.otherMeanings}>
-                  Другие значения: {activeCard.translations.join(" · ")}
-                </Text>
-              )}
+              <WordMeanings key={activeCard.id} word={activeCard} />
               {!!activeCard.example && <Text style={styles.wordExample}>{activeCard.example}</Text>}
               {!!activeCard.exampleRu && <Text style={styles.wordExampleRu}>{activeCard.exampleRu}</Text>}
               <Pressable onPress={speak} style={styles.speakButton}>

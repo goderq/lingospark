@@ -11,6 +11,10 @@ import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import RetentionScreen from "./src/screens/RetentionScreen";
+import LearningHomeScreen from './src/screens/LearningHomeScreen';
+import LearningJourneyScreen from './src/screens/LearningJourneyScreen';
+import SkillEvidenceScreen from './src/screens/SkillEvidenceScreen';
+import { mainTabs, navigationTarget } from './src/utils/appNavigation';
 import CourseScreen from "./src/screens/CourseScreen";
 import LevelCheckpointScreen from "./src/screens/LevelCheckpointScreen";
 import {
@@ -88,7 +92,6 @@ import {
 } from "./src/screens/GrowthScreens";
 import {
   DailyMixedExamScreen,
-  KnowledgeMapScreen,
 } from "./src/screens/ProgressionScreens";
 import {
   WrittenVocabularyScreen,
@@ -146,6 +149,8 @@ function AppContent() {
   const [overlay, setOverlay] = useState(null);
   const [recentScreens, setRecentScreens] = useState([]);
   const [aiImmersive, setAiImmersive] = useState(false);
+  const [worldImmersive, setWorldImmersive] = useState(false);
+  const [aiPractice, setAiPractice] = useState(null);
   const [navigationReady, setNavigationReady] = useState(false);
   useEffect(()=>{if(ready&&authReady&&navigationReady&&(!user||!cloudRestoring))markStartup();},[ready,authReady,navigationReady,user,cloudRestoring]);
   const accountName = user?.user_metadata?.display_name?.trim() || "";
@@ -157,14 +162,14 @@ function AppContent() {
   const serializeOverlay = (value) =>
     value
       ? value.type === "lesson"
-        ? { type: "lesson", lessonId: value.lesson.id }
-        : { type: value.type, level: value.level }
+        ? { type: "lesson", lessonId: value.lesson.id, returnTo: value.returnTo }
+        : { type: value.type, level: value.level, topicId: value.topicId }
       : null;
   const hydrateOverlay = (value) => {
     if (!value) return null;
     if (value.type === "lesson") {
       const lesson = lessons.find((item) => item.id === value.lessonId);
-      return lesson ? { type: "lesson", lesson } : null;
+      return lesson ? { type: "lesson", lesson, returnTo: value.returnTo } : null;
     }
     return value;
   };
@@ -203,6 +208,9 @@ function AppContent() {
     if (key === "tab-home") return;
     const labels = {
       course: "Курс",
+      learn: 'Обучение',
+      world: 'Английская жизнь',
+      journey: 'Маршрут «Знакомство»',
       ai: "ИИ-преподаватель",
       review: "Слова",
       profile: "Профиль",
@@ -251,6 +259,12 @@ function AppContent() {
     );
     return () => subscription.remove();
   }, [overlay]);
+  const navigate = target => {
+    const destination = navigationTarget(target);
+    setAiImmersive(false);
+    if (destination.tab) setTab(destination.tab);
+    setOverlay(destination.overlay);
+  };
   if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
   if (!user && !guestMode) return <AuthScreen />;
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
@@ -286,7 +300,7 @@ function AppContent() {
           onNavigate={(type) => {
             if (type === "review") {
               setOverlay(null);
-              setTab("review");
+              navigate('review');
             } else setOverlay({ type });
           }}
         />
@@ -301,12 +315,18 @@ function AppContent() {
           onNavigate={(type) => {
             if (type === "review") {
               setOverlay(null);
-              setTab("review");
+              navigate('review');
             } else setOverlay({ type });
           }}
         />
       </SafeAreaView>
     );
+  if (overlay?.type === 'course')
+    return <SafeAreaView style={styles.safe}><CourseScreen initialLevel={overlay.level} onClose={() => setOverlay(null)} onLesson={lesson => setOverlay({ type: 'lesson', lesson })} onCheckpoint={level => setOverlay({ type: 'courseCheckpoint', level })} /></SafeAreaView>;
+  if (overlay?.type === 'review')
+    return <SafeAreaView style={styles.safe}><View style={styles.overlayBack}><Pressable onPress={() => setOverlay(null)} style={styles.backButton}><Text style={styles.backText}>← Обучение</Text></Pressable><Pressable onPress={() => setOverlay({ type: 'vocabulary' })} style={styles.backButton}><Text style={styles.backText}>Словарь →</Text></Pressable></View><ReviewScreen /></SafeAreaView>;
+  if (overlay?.type === 'journey')
+    return <SafeAreaView style={styles.safe}><LearningJourneyScreen topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onCourse={() => setOverlay({ type: 'lesson', lesson: lessons[0], returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></SafeAreaView>;
   if (overlay?.type === "lingoWorld")
     return (
       <SafeAreaView style={styles.safe}>
@@ -318,7 +338,7 @@ function AppContent() {
       <SafeAreaView style={styles.safe}>
         <LessonScreen
           lesson={overlay.lesson}
-          onClose={() => setOverlay(null)}
+          onClose={() => setOverlay(overlay.returnTo ? { type: overlay.returnTo } : null)}
         />
       </SafeAreaView>
     );
@@ -410,7 +430,7 @@ function AppContent() {
           onNavigate={(type) => {
             if (type === "review") {
               setOverlay(null);
-              setTab("review");
+              navigate('review');
             } else setOverlay({ type });
           }}
         />
@@ -531,7 +551,7 @@ function AppContent() {
         <LearningHubScreen
           onClose={() => setOverlay(null)}
           onLesson={(lesson) => setOverlay({ type: "lesson", lesson })}
-          onNavigate={(type) => setOverlay({ type })}
+          onNavigate={navigate}
         />
       </SafeAreaView>
     );
@@ -718,7 +738,7 @@ function AppContent() {
   if (overlay?.type === "knowledgeMap")
     return (
       <SafeAreaView style={styles.safe}>
-        <KnowledgeMapScreen
+        <SkillEvidenceScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
       </SafeAreaView>
@@ -763,7 +783,10 @@ function AppContent() {
           <HomeScreen
             onRetention={() => setOverlay({ type: "retention" })}
             onLesson={openLesson}
-            onReview={() => setTab("review")}
+            onReview={() => navigate('review')}
+            onJourney={() => setOverlay({ type: 'journey' })}
+            onAccount={() => setOverlay({ type: 'account' })}
+            onSyncDetails={() => setOverlay({ type: 'diagnostics' })}
             onPhrases={() => setOverlay({ type: "phrases" })}
             onDictation={() => setOverlay({ type: "dictation" })}
             onDialogues={() => setOverlay({ type: "dialogues" })}
@@ -786,39 +809,32 @@ function AppContent() {
             onLevels={() => setOverlay({ type: "levels" })}
             onIrregular={() => setOverlay({ type: "irregular" })}
             onGrammarAcademy={() => setOverlay({ type: "grammarAcademy" })}
-            onLearningHub={() => setOverlay({ type: "learningHub" })}
+            onLearningHub={() => navigate('learn')}
             onAdaptive={() => setOverlay({ type: "adaptive" })}
             onDailyChallenge={() => setOverlay({ type: "dailyChallenge" })}
             onMissions={() => setOverlay({ type: "missions" })}
             onSearch={() => setOverlay({ type: "smartSearch" })}
             onBookmarks={() => setOverlay({ type: "bookmarks" })}
-            onLingoWorld={() => setOverlay({ type: "lingoWorld" })}
+            onLingoWorld={() => navigate('world')}
             recentScreens={recentScreens}
             onRecent={(item) => {
               if (item.overlay) setOverlay(hydrateOverlay(item.overlay));
               else {
                 setOverlay(null);
-                setTab(item.tab || "home");
+                navigate(item.tab || 'home');
               }
             }}
           />
         )}
-        {tab === "course" && (
-          <CourseScreen
-            onLesson={openLesson}
-            onCheckpoint={(level) =>
-              setOverlay({ type: "courseCheckpoint", level })
-            }
-          />
-        )}
-        {tab === "review" && <ReviewScreen />}
+        {tab === 'learn' && <LearningHomeScreen onNavigate={navigate} onJourney={() => setOverlay({ type: 'journey' })} onCourse={level => setOverlay({ type: 'course', level })} />}
+        {tab === 'world' && <LingoWorldScreen onClose={() => setTab('home')} onImmersiveChange={setWorldImmersive} />}
         {tab === "ai" && (
           <React.Suspense fallback={<LoadingScreen />}>
-            <AITutorScreen onImmersiveChange={setAiImmersive} onNavigate={({ type, target }) => {
+            <AITutorScreen practice={aiPractice} onPracticeConsumed={() => setAiPractice(null)} onImmersiveChange={setAiImmersive} onNavigate={({ type, target }) => {
               setAiImmersive(false);
               if (type === "tab") {
                 setOverlay(null);
-                setTab(target);
+                navigate(target);
               } else {
                 setOverlay({ type: target });
               }
@@ -837,18 +853,12 @@ function AppContent() {
           />
         )}
       </View>
-      {!aiImmersive && <TabBar tab={tab} setTab={setTab} />}
+      {!aiImmersive && !(tab === 'world' && worldImmersive) && <TabBar tab={tab} setTab={setTab} />}
     </SafeAreaView>
   );
 }
 
-const tabs = [
-  ["home", "sparkles", "Сегодня"],
-  ["course", "map", "Курс"],
-  ["ai", "chatbubbles", "ИИ"],
-  ["review", "library", "Слова"],
-  ["profile", "person-circle", "Профиль"],
-];
+const tabs = mainTabs;
 function TabBar({ tab, setTab }) {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
@@ -865,7 +875,7 @@ function TabBar({ tab, setTab }) {
       {tabs.map(([id, icon, label]) => {
         const active = id === tab;
         return (
-          <Pressable key={id} onPress={() => setTab(id)} style={styles.tab}>
+          <Pressable accessibilityRole="tab" accessibilityLabel={id === 'world' ? 'Английская жизнь' : label} accessibilityState={{ selected: active }} key={id} onPress={() => setTab(id)} style={styles.tab}>
             <Ionicons
               name={active ? icon : `${icon}-outline`}
               size={24}
@@ -883,6 +893,9 @@ function TabBar({ tab, setTab }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1 },
+  overlayBack: { paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  backButton: { minHeight: 48, justifyContent: 'center' },
+  backText: { color: colors.purple, fontSize: 17, fontWeight: '700' },
   tabs: {
     position: "absolute",
     left: 12,

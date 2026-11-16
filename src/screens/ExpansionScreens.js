@@ -416,18 +416,6 @@ export function SettingsScreen({ onClose }) {
         </View>
         <Text style={s.sectionTitle}>Сложность</Text>
         <View style={s.card}>
-          <SettingRow
-            title="Строгая проверка"
-            detail="Не принимать синонимы и опечатки"
-            value={settings.strictChecking}
-            onChange={(value) => updateSettings({ strictChecking: value })}
-          />
-          <SettingRow
-            title="Режим испытания"
-            detail="Меньше подсказок, больше наград"
-            value={settings.challengeMode}
-            onChange={(value) => updateSettings({ challengeMode: value })}
-          />
           <Text style={s.label}>Размер тренировки</Text>
           <View style={s.choices}>
             {[5, 10, 15].map((value) => (

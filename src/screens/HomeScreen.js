@@ -9,10 +9,14 @@ import { useProgress } from "../store/ProgressContext";
 import { colors, shadows } from "../theme";
 import { ProgressBar, XPBadge } from "../components/UI";
 import DailyLearningPlan from '../components/DailyLearningPlan';
+import SyncStatus from '../components/SyncStatus';
 
 export default function HomeScreen({
   onLesson,
   onRetention,
+  onJourney,
+  onAccount,
+  onSyncDetails,
   onReview,
   onPhrases,
   onDictation,
@@ -138,7 +142,8 @@ export default function HomeScreen({
           </View>
         </View>
       </View>
-      <DailyLearningPlan progress={progress} next={next} onLesson={onLesson} onRetention={onRetention} onMistakes={onMistakes} onReview={onReview} onDictation={onDictation} onLearningHub={onLearningHub} />
+      <SyncStatus onAccount={onAccount} onDetails={onSyncDetails} />
+      <DailyLearningPlan progress={progress} next={next} onLesson={onLesson} onRetention={onRetention} onMistakes={onMistakes} onReview={onReview} onDictation={onDictation} onLearningHub={onLearningHub} onJourney={onJourney} />
       {recentScreens.length > 0 && (
         <View>
           <Text style={styles.recentLabel}>НЕДАВНО</Text>
@@ -171,7 +176,7 @@ export default function HomeScreen({
         >
           <View style={{ flex: 1 }}>
             <Text style={styles.worldEyebrow}>
-              НОВЫЙ СЮЖЕТНЫЙ РЕЖИМ · A1–C1
+              ПРАКТИКА В СИТУАЦИЯХ · A1–C1
             </Text>
             <Text style={styles.worldTitle}>Английская жизнь 🌍</Text>
             <Text style={styles.worldText}>
@@ -188,8 +193,8 @@ export default function HomeScreen({
       </Pressable>
       <Pressable onPress={onLearningHub} style={styles.planBanner}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.planEyebrow}>НОВЫЙ КАТАЛОГ</Text>
-          <Text style={styles.planTitle}>Всё обучение в одном месте</Text>
+          <Text style={styles.planEyebrow}>ОБУЧЕНИЕ</Text>
+          <Text style={styles.planTitle}>Курсы, слова и практика</Text>
           <Text style={styles.planText}>
             Поиск · уровни A1–C1 · статистика · экзамены
           </Text>

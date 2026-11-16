@@ -5,16 +5,17 @@ import { lessons } from '../data/course';
 import { retentionSummary } from '../utils/retention';
 import { colors } from '../theme';
 
-export default function DailyLearningPlan({ progress, next, onLesson, onRetention, onMistakes, onReview, onDictation, onLearningHub }) {
+export default function DailyLearningPlan({ progress, next, onLesson, onRetention, onMistakes, onReview, onDictation, onLearningHub, onJourney }) {
   const memory = retentionSummary(progress, lessons);
   const allDone = progress.completed.length === lessons.length;
   const hasMistakes = progress.mistakes?.length > 0;
   const today = new Date().toISOString().slice(0, 10);
+  const fullTopic = !allDone && next.id === 'greetings' && onJourney;
   const actions = progress.dailyActions?.date === today ? progress.dailyActions : {};
   const steps = [
     { title: allDone ? 'Выбрать новую практику' : next.title,
-      reason: allDone ? 'Все уроки курса пройдены — попробуй другой навык в каталоге.' : progress.lessonDraft?.lessonId === next.id ? 'У тебя есть незаконченный урок. Продолжи с сохранённого места.' : 'Следующий урок по порядку: предыдущие темы уже пройдены.',
-      done: actions.lessons > 0, action: allDone ? onLearningHub : () => onLesson(next) },
+      reason: allDone ? 'Все уроки курса пройдены — попробуй другой навык в каталоге.' : fullTopic ? 'Пройди тему целиком: объяснение, слова, слух, фразы и разговор.' : progress.lessonDraft?.lessonId === next.id ? 'У тебя есть незаконченный урок. Продолжи с сохранённого места.' : 'Следующий урок по порядку: предыдущие темы уже пройдены.',
+      done: actions.lessons > 0, action: allDone ? onLearningHub : fullTopic ? onJourney : () => onLesson(next) },
     memory.eligible.length ? { title: memory.due.length ? `Проверить память · ${memory.due.length} ур.` : 'Проверки памяти',
       reason: memory.due.length ? 'Прошёл нужный интервал. Проверь себя без подсказок.' : 'Сегодня срок ещё не наступил. Здесь можно посмотреть расписание.',
       done: Object.values(progress.retention || {}).some(entry => entry.lastCheckedAt && new Date(entry.lastCheckedAt).toISOString().slice(0, 10) === today), action: onRetention }

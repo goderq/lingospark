@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { courseTutorContext } from '../utils/learningJourney';
 import {
   ActivityIndicator,
   Alert,
@@ -104,7 +105,8 @@ function formatSpace(bytes) {
     : `${Math.round(bytes / 1024 ** 2)} МБ`;
 }
 
-export default function AITutorScreen({ onImmersiveChange, onNavigate }) {
+export default function AITutorScreen({ onImmersiveChange, onNavigate, practice, onPracticeConsumed }) {
+  const [requestedPractice] = useState(practice);
   const [installed, setInstalled] = useState({});
   const [activeId, setActiveId] = useState(null);
   const [screen, setScreen] = useState("models");
@@ -174,6 +176,8 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate }) {
   if (screen === "chat" && activeModel) {
     return (
       <TutorChat
+        practice={requestedPractice}
+        onPracticeConsumed={onPracticeConsumed}
         model={activeModel}
         onModels={() => setScreen("models")}
         onDirector={() => setScreen("director")}
@@ -393,10 +397,11 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
   );
 }
 
-function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
+function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice, onPracticeConsumed }) {
   const { progress, toggleNotebook, addCustomWord } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
+  const [coursePractice, setCoursePractice] = useState(null);
   const [dialogueMode, setDialogueMode] = useState("conversation");
   const [mission, setMission] = useState(null);
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
@@ -468,7 +473,8 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
       if (!mounted) return;
       const modelSessions = allSessions.filter((item) => item.modelId === model.id);
       setSessions(modelSessions);
-      const recent = modelSessions[0];
+      const requestedId = practice?.requestId ? `ai-course-${model.id}-${practice.requestId}` : null;
+      const recent = requestedId ? modelSessions.find(item => item.id === requestedId) : modelSessions[0];
       if (recent) {
         setSessionId(recent.id);
         setLevel(recent.level || "A2");
@@ -476,13 +482,23 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
         setDialogueMode(recent.dialogueMode || "conversation");
         setMessages(recent.messages?.length ? recent.messages : [welcomeFor("A2", TOPICS[0], recent.dialogueMode)]);
         setAnalysis(recent.analysis || null);
+        setCoursePractice(recent.coursePractice || null);
+      } else if (requestedId) {
+        setSessionId(requestedId);
+        setLevel(practice.level);
+        setTopic(practice.topic);
+        setDialogueMode('conversation');
+        setCoursePractice(practice);
+        setMessages([{ id: `${requestedId}-opening`, role: 'assistant', content: practice.opening }]);
+        setAnalysis(null);
       }
       historyReady.current = true;
+      if (requestedId) onPracticeConsumed?.();
     });
     return () => {
       mounted = false;
     };
-  }, [model.id]);
+  }, [model.id, practice?.requestId]);
 
   useEffect(() => {
     if (!historyReady.current) return;
@@ -496,6 +512,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
         level,
         topic,
         dialogueMode,
+        coursePractice,
         title: firstUser ? firstUser.slice(0, 42) : topic,
         messages: cleanMessages,
         analysis,
@@ -505,7 +522,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
       );
     }, 450);
     return () => clearTimeout(timer);
-  }, [messages, level, topic, dialogueMode, sessionId, model.id, analysis]);
+  }, [messages, level, topic, dialogueMode, sessionId, model.id, analysis, coursePractice]);
 
   useSpeechRecognitionEvent("start", () => setListening(true));
   useSpeechRecognitionEvent("end", () => setListening(false));
@@ -614,6 +631,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
         level,
         topic,
         dialogueMode,
+        courseContext: courseTutorContext(coursePractice, level, topic),
         messages: nextMessages,
         analysis,
         onToken: (token) => {
@@ -643,6 +661,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
         topic,
         dialogueMode,
         title: nextMessages.find((item) => item.role === "user")?.content?.slice(0, 42) || topic,
+        coursePractice,
         messages: completedMessages.slice(-60),
         analysis,
         createdAt: sessions.find((item) => item.id === sessionId)?.createdAt || Date.now(),
@@ -704,6 +723,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
   const progressLabel = loadProgress > 0 ? `${Math.round(loadProgress * 100)}%` : "подготовка";
 
   const newConversation = () => {
+    setCoursePractice(null);
     const id = `ai-${Date.now()}`;
     setSessionId(id);
     setMessages([welcomeFor(level, topic, dialogueMode)]);
@@ -712,6 +732,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
   };
 
   const openSession = (session) => {
+    setCoursePractice(session.coursePractice || null);
     setSessionId(session.id);
     setLevel(session.level || "A2");
     setTopic(session.topic || TOPICS[0]);
@@ -870,12 +891,12 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
       <View style={styles.optionsStrip}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {LEVELS.map((item) => (
-            <Pressable key={item} onPress={() => setLevel(item)} style={[styles.chip, level === item && styles.chipActive]}>
+            <Pressable key={item} onPress={() => { setLevel(item); setCoursePractice(null); }} style={[styles.chip, level === item && styles.chipActive]}>
               <Text style={[styles.chipText, level === item && styles.chipTextActive]}>{item}</Text>
             </Pressable>
           ))}
           {TOPICS.map((item) => (
-            <Pressable key={item} onPress={() => setTopic(item)} style={[styles.topicChip, topic === item && styles.topicChipActive]}>
+            <Pressable key={item} onPress={() => { setTopic(item); setCoursePractice(null); }} style={[styles.topicChip, topic === item && styles.topicChipActive]}>
               <Text style={[styles.topicText, topic === item && { color: colors.white }]}>{item}</Text>
             </Pressable>
           ))}
@@ -887,7 +908,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate }) {
           {DIALOGUE_MODES.map((item) => {
             const active = dialogueMode === item.id;
             return (
-              <Pressable key={item.id} onPress={() => setDialogueMode(item.id)} style={[styles.modeChip, active && styles.modeChipActive]}>
+              <Pressable key={item.id} onPress={() => { setDialogueMode(item.id); setCoursePractice(null); }} style={[styles.modeChip, active && styles.modeChipActive]}>
                 <Ionicons name={item.icon} size={15} color={active ? "white" : colors.textMuted} />
                 <Text style={[styles.modeText, active && { color: "white" }]}>{item.title}</Text>
               </Pressable>

@@ -49,6 +49,7 @@ jobs:
           npm run test:content-quality
           npm run test:speech-scheduling
           npm run test:retention
+          npm run test:learning-journey
       - name: Generate native iOS project
         run: npx expo prebuild --platform ios --no-install
       - name: Install iOS native dependencies

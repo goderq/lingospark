@@ -1,6 +1,7 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import useScreenTiming from '../components/useScreenTiming';
 import ContentReportButton from '../components/ContentReportButton';
+import WordMeanings from '../components/WordMeanings';
 import {now,recordTiming} from '../utils/performance';
 import {
   Alert,
@@ -311,9 +312,7 @@ export function VocabularyScreen({ onClose }) {
             <>
               {!!word.transcription && <Text style={s.wordTranscription}>{word.transcription}</Text>}
               {!!word.partOfSpeech && <Text style={s.wordPart}>{word.partOfSpeech}</Text>}
-              {!!word.translations?.length && (
-                <Text style={s.wordMeanings}>Другие значения: {word.translations.join(" · ")}</Text>
-              )}
+              <WordMeanings key={word.id} word={word} />
               {!!word.example && <Text style={s.wordExample}>{word.example}</Text>}
               {!!word.exampleRu && <Text style={s.wordExampleRu}>{word.exampleRu}</Text>}
               <ContentReportButton item={{id:word.id,type:'translate',prompt:word.english,answer:word.fullTranslation || displayedRussian}} context={{topic:'Словарь'}}/>

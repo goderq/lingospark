@@ -140,11 +140,13 @@ function Header({ title, onClose, right }) {
   );
 }
 
-export default function LingoWorldScreen({ onClose }) {
+export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
   const { progress } = useProgress();
   const [location, setLocation] = useState(null);
   const [tab, setTab] = useState("map");
   const [showPaths,setShowPaths]=useState(false);
+  useEffect(() => { onImmersiveChange?.(!!location || showPaths); }, [location, showPaths, onImmersiveChange]);
+  useEffect(() => () => onImmersiveChange?.(false), [onImmersiveChange]);
   const completed = progress.world?.completed || [];
   const stars = progress.world?.stars || {};
   const inventory = progress.world?.inventory || [];
@@ -1119,7 +1121,7 @@ const s = StyleSheet.create({
   headerTitle: { color: "white", fontWeight: "900", fontSize: 17 },
   headerRight: { minWidth: 40, alignItems: "flex-end" },
   worldCounter: { color: colors.mint, fontWeight: "900" },
-  mapContent: { padding: 20, paddingBottom: 55 },
+  mapContent: { padding: 20, paddingBottom: 110 },
   worldHero: {
     backgroundColor: colors.card,
     borderRadius: 28,
@@ -1375,7 +1377,7 @@ const s = StyleSheet.create({
   },
   worldTabActive: { backgroundColor: colors.purple },
   worldTabText: { color: colors.textMuted, fontSize: 9, fontWeight: "800" },
-  tabContent: { padding: 20, paddingBottom: 55 },
+  tabContent: { padding: 20, paddingBottom: 110 },
   tabTitle: { color: "white", fontSize: 32, fontWeight: "900" },
   tabSubtitle: { color: colors.textMuted, lineHeight: 21, marginTop: 6 },
   dailyEvent: {

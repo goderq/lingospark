@@ -25,6 +25,7 @@ import {
 } from "../utils/answer";
 import ExplanationCard from "../components/ExplanationCard";
 import { courseConversationTopics } from "../data/courseSupplement";
+import { readLessonSession, lessonContentKey } from '../utils/lessonSession';
 
 export default function LessonScreen({ lesson, onClose }) {
   const {
@@ -35,34 +36,39 @@ export default function LessonScreen({ lesson, onClose }) {
     toggleFavorite,
     toggleNotebook,
   } = useProgress();
-  const draft =
-    progress.lessonDraft?.lessonId === lesson.id ? progress.lessonDraft : null;
+  const [draft] = useState(() => readLessonSession(lesson, progress.lessonDraft));
+  const contentKey = useMemo(() => lessonContentKey(lesson), [lesson]);
   const [index, setIndex] = useState(() =>
     Math.min(draft?.index || 0, lesson.exercises.length - 1),
   );
-  const [selected, setSelected] = useState("");
-  const [typed, setTyped] = useState("");
-  const [built, setBuilt] = useState([]);
-  const [checked, setChecked] = useState(false);
-  const [correct, setCorrect] = useState(false);
-  const [answerGrade, setAnswerGrade] = useState(null);
+  const [selected, setSelected] = useState(draft.selected || '');
+  const [typed, setTyped] = useState(draft.typed || '');
+  const [built, setBuilt] = useState(draft.built || []);
+  const [checked, setChecked] = useState(!!draft.checked);
+  const [correct, setCorrect] = useState(!!draft.correct);
+  const [answerGrade, setAnswerGrade] = useState(draft.answerGrade || null);
   const [finished, setFinished] = useState(false);
-  const [conversation, setConversation] = useState(false);
-  const [conversationStep, setConversationStep] = useState(0);
-  const [conversationChoice, setConversationChoice] = useState("");
-  const [conversationScore, setConversationScore] = useState(0);
-  const [lessonMistakes, setLessonMistakes] = useState([]);
-  const [remediation, setRemediation] = useState(false);
-  const [remediationIndex, setRemediationIndex] = useState(0);
-  const [remediationAnswer, setRemediationAnswer] = useState("");
-  const [remediationChecked, setRemediationChecked] = useState(false);
-  const [remediationCorrect, setRemediationCorrect] = useState(false);
-  const [correctCount, setCorrectCount] = useState(0);
+  const [conversation, setConversation] = useState(!!draft.conversation);
+  const [conversationStep, setConversationStep] = useState(draft.conversationStep || 0);
+  const [conversationChoice, setConversationChoice] = useState(draft.conversationChoice || '');
+  const [conversationScore, setConversationScore] = useState(draft.conversationScore || 0);
+  const [conversationWrong, setConversationWrong] = useState(!!draft.conversationWrong);
+  const [lessonMistakes, setLessonMistakes] = useState(draft.lessonMistakes || []);
+  const [remediation, setRemediation] = useState(!!draft.remediation);
+  const [remediationIndex, setRemediationIndex] = useState(draft.remediationIndex || 0);
+  const [remediationAnswer, setRemediationAnswer] = useState(draft.remediationAnswer || '');
+  const [remediationChecked, setRemediationChecked] = useState(!!draft.remediationChecked);
+  const [remediationCorrect, setRemediationCorrect] = useState(!!draft.remediationCorrect);
+  const [correctCount, setCorrectCount] = useState(draft.correctCount || 0);
   const [resultAccuracy, setResultAccuracy] = useState(0);
   const [resultCorrect, setResultCorrect] = useState(0);
   const [resultXP, setResultXP] = useState(0);
-  const [lives, setLives] = useState(() => draft?.lives ?? 3);
-  const [optionSeed] = useState(() => Math.floor(Math.random() * 2147483647));
+  const [optionSeed] = useState(() => draft.optionSeed || Math.floor(Math.random() * 2147483647));
+  const session = { version: 2, contentKey, index, selected, typed, built, checked, correct, answerGrade, conversation, conversationStep, conversationChoice, conversationScore, conversationWrong, lessonMistakes, remediation, remediationIndex, remediationAnswer, remediationChecked, remediationCorrect, correctCount, optionSeed };
+  const serializedSession = JSON.stringify(session);
+  useEffect(() => {
+    if (!finished) saveLessonDraft(lesson.id, JSON.parse(serializedSession));
+  }, [serializedSession, finished, lesson.id, saveLessonDraft]);
   const feedbackAnim = useRef(new Animated.Value(0)).current;
   const resultAnim = useRef(new Animated.Value(0)).current;
   const reduceMotion = progress.settings?.reduceMotion;
@@ -127,7 +133,10 @@ export default function LessonScreen({ lesson, onClose }) {
       .find((item) => /[a-z]/i.test(item.speak || "") && !/[а-яё]/i.test(item.speak || ""))
       ?.speak || "I learned a useful English phrase";
   const conversationTopic = courseConversationTopics[lesson.id] || "English communication";
-  const dialogueSteps = [
+  const dialogueSteps = lesson.id === 'greetings' ? [
+    { speaker: 'Sam', line: "Hi! I'm Sam. What's your name?", answer: 'My name is Anna.', options: ['My name is Anna.', 'My name am Anna.', 'This name I Anna.'] },
+    { speaker: 'Sam', line: 'Nice to meet you, Anna!', answer: 'Nice to meet you too.', options: ['Nice to meet you too.', 'Nice meet too you.', 'My nice name you.'] },
+  ] : [
     {
       speaker: "Partner",
       line: `What did you practise in the ${conversationTopic} lesson?`,
@@ -151,6 +160,7 @@ export default function LessonScreen({ lesson, onClose }) {
   ];
 
   const check = () => {
+    if (checked) return;
     const evaluation = evaluateExercise(exercise, current);
     const result = evaluation.correct;
     setAnswerGrade(evaluation);
@@ -163,14 +173,11 @@ export default function LessonScreen({ lesson, onClose }) {
       level: lesson.difficulty,
       ruleId: `course-${lesson.id}`,
     });
-    if (evaluation.status === "wrong") {
+    if (!result) {
       setLessonMistakes((items) => [
         ...items.filter((item) => item.exercise.id !== exercise.id),
         { exercise, selected: current },
       ]);
-      const nextLives = Math.max(0, lives - 1);
-      setLives(nextLives);
-      saveLessonDraft(lesson.id, index, nextLives);
     }
     if (progress.settings?.haptics !== false) {
       Haptics.notificationAsync(
@@ -185,7 +192,7 @@ export default function LessonScreen({ lesson, onClose }) {
           ? "Correct"
           : evaluation.status === "close"
             ? "Almost correct"
-            : "Try again",
+            : "Let's review",
         {
           language: "en-US",
           rate: 0.9,
@@ -199,7 +206,6 @@ export default function LessonScreen({ lesson, onClose }) {
       else setConversation(true);
       return;
     }
-    saveLessonDraft(lesson.id, index + 1, lives);
     setIndex(index + 1);
     setSelected("");
     setTyped("");
@@ -222,6 +228,10 @@ export default function LessonScreen({ lesson, onClose }) {
     });
   };
   const advanceRemediation = () => {
+    if (!remediationCorrect) {
+      setRemediationChecked(false);
+      return;
+    }
     if (remediationIndex === lessonMistakes.length - 1) {
       setRemediation(false);
       setConversation(true);
@@ -233,8 +243,13 @@ export default function LessonScreen({ lesson, onClose }) {
     setRemediationCorrect(false);
   };
   const advanceConversation = () => {
+    if (conversationChoice !== dialogueSteps[conversationStep].answer) {
+      setConversationWrong(true);
+      setConversationChoice('');
+      return;
+    }
     const gained =
-      conversationChoice === dialogueSteps[conversationStep].answer ? 1 : 0;
+      !conversationWrong ? 1 : 0;
     const nextScore = conversationScore + gained;
     if (conversationStep === 1) {
       const accuracy = Math.round(
@@ -254,35 +269,14 @@ export default function LessonScreen({ lesson, onClose }) {
       setConversationScore(nextScore);
       setConversationStep(1);
       setConversationChoice("");
+      setConversationWrong(false);
     }
   };
-  const restart = () => {
-    saveLessonDraft(lesson.id, 0, 3);
-    setIndex(0);
-    setSelected("");
-    setTyped("");
-    setBuilt([]);
-    setChecked(false);
-    setCorrect(false);
-    setAnswerGrade(null);
-    setLives(3);
-    setCorrectCount(0);
-    setConversation(false);
-    setConversationStep(0);
-    setConversationChoice("");
-    setConversationScore(0);
-    setLessonMistakes([]);
-    setRemediation(false);
-    setRemediationIndex(0);
-    setRemediationAnswer("");
-    setRemediationChecked(false);
-    setRemediationCorrect(false);
-  };
   const requestClose = () => {
-    saveLessonDraft(lesson.id, index, lives);
+    saveLessonDraft(lesson.id, session);
     Alert.alert(
       "Выйти из урока?",
-      "Текущий шаг и жизни сохранены — можно продолжить позже.",
+      "Ответы, результат и текущий шаг сохранены — можно продолжить позже.",
       [
         { text: "Остаться", style: "cancel" },
         { text: "Выйти", style: "destructive", onPress: onClose },
@@ -314,7 +308,7 @@ export default function LessonScreen({ lesson, onClose }) {
           {"⭐".repeat(resultAccuracy >= 90 ? 3 : resultAccuracy >= 70 ? 2 : 1)}
         </Text>
         <Text style={styles.resultText}>
-          Точность {resultAccuracy}% · мини-разговор завершён
+          С первой попытки {resultAccuracy}% · ошибки разобраны
         </Text>
         <View style={styles.resultStats}>
           <View style={styles.resultStat}>
@@ -344,7 +338,7 @@ export default function LessonScreen({ lesson, onClose }) {
         <View style={{ marginVertical: 20 }}>
           <XPBadge xp={lesson.xp} />
         </View>
-        <PrimaryButton title="Забрать награду" onPress={onClose} />
+        <PrimaryButton title="Продолжить обучение" onPress={onClose} />
       </Animated.View>
     );
 
@@ -419,7 +413,7 @@ export default function LessonScreen({ lesson, onClose }) {
         <View style={styles.bottom}>
           <PrimaryButton
             disabled={!remediationAnswer.trim()}
-            title={remediationChecked ? "Следующий разбор" : "Проверить себя"}
+            title={remediationChecked ? remediationCorrect ? "Следующий разбор" : 'Попробовать ещё раз' : "Проверить себя"}
             onPress={remediationChecked ? advanceRemediation : checkRemediation}
             color={remediationChecked && remediationCorrect ? colors.mint : colors.orange}
           />
@@ -511,7 +505,7 @@ export default function LessonScreen({ lesson, onClose }) {
           <PrimaryButton
             disabled={!answered}
             title={
-              conversationStep === 1 ? "Завершить урок" : "Продолжить разговор"
+              answered && !right ? 'Попробовать ещё раз' : conversationStep === 1 ? "Завершить урок" : "Продолжить разговор"
             }
             onPress={advanceConversation}
             color={
@@ -555,14 +549,7 @@ export default function LessonScreen({ lesson, onClose }) {
             color={colors.pink}
           />
         </Pressable>
-        <View style={styles.hearts}>
-          <Ionicons
-            name={lives > 0 ? "heart" : "heart-dislike"}
-            size={18}
-            color={colors.pink}
-          />
-          <Text style={styles.heartText}>{lives}</Text>
-        </View>
+        <Text style={{ color: colors.mint, fontSize: 12 }}>Практика</Text>
       </View>
       <ScrollView
         keyboardShouldPersistTaps="handled"
@@ -641,6 +628,7 @@ export default function LessonScreen({ lesson, onClose }) {
                 return (
                   <Pressable
                     key={`${word}-${optionIndex}`}
+                    disabled={checked}
                     onPress={() => setBuilt([...built, word])}
                     style={styles.word}
                   >
@@ -650,7 +638,7 @@ export default function LessonScreen({ lesson, onClose }) {
               })}
             </View>
             {built.length > 0 && (
-              <Pressable onPress={() => setBuilt([])}>
+              <Pressable disabled={checked} onPress={() => setBuilt([])}>
                 <Text style={styles.clear}>Очистить</Text>
               </Pressable>
             )}
@@ -807,8 +795,8 @@ export default function LessonScreen({ lesson, onClose }) {
         )}
         {checked && (
           <View style={styles.savedRow}>
-            <Ionicons name="cloud-done-outline" size={15} color={colors.mint} />
-            <Text style={styles.savedText}>Прогресс сохранён</Text>
+            <Ionicons name="save-outline" size={15} color={colors.mint} />
+            <Text style={styles.savedText}>Черновик обновлён</Text>
           </View>
         )}
       </ScrollView>
@@ -826,14 +814,12 @@ export default function LessonScreen({ lesson, onClose }) {
           }
           title={
             checked
-              ? lives === 0
-                ? "Жизни закончились — начать заново"
-                : index === lesson.exercises.length - 1
+              ? index === lesson.exercises.length - 1
                   ? "Завершить урок"
                   : "Дальше"
               : "Проверить"
           }
-          onPress={checked ? (lives === 0 ? restart : advance) : check}
+          onPress={checked ? advance : check}
         />
       </View>
     </KeyboardAvoidingView>

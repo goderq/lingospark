@@ -103,8 +103,8 @@ const tools = [
   },
   {
     id: "knowledgeMap",
-    title: "Карта знаний",
-    subtitle: "Процент освоения каждого навыка",
+    title: "Карта навыков",
+    subtitle: "Фактические результаты и задания по каждому навыку",
     icon: "analytics",
     color: "#2ED3B7",
   },

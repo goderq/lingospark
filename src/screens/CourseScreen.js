@@ -14,9 +14,9 @@ import { colors } from "../theme";
 import { ProgressBar, XPBadge } from "../components/UI";
 const baseLevel = (value) => value.replace("+", "");
 const levels = ["Все", "A1", "A2", "B1", "B2", "C1"];
-export default function CourseScreen({ onLesson, onCheckpoint }) {
+export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialLevel = 'Все' }) {
   const { progress, isUnlocked } = useProgress();
-  const [filter, setFilter] = useState("Все");
+  const [filter, setFilter] = useState(initialLevel);
   const [query, setQuery] = useState("");
   const scrollRef = useRef(null);
   const currentY = useRef(0);
@@ -75,6 +75,7 @@ export default function CourseScreen({ onLesson, onCheckpoint }) {
           });
       }}
     >
+      {!!onClose && <Pressable onPress={onClose} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontSize: 17, fontWeight: '700' }}>← Обучение</Text></Pressable>}
       <Text style={s.title}>Твой маршрут</Text>
       <Text style={s.subtitle}>
         {lessons.length} курсов · от A1 до C1 ·{" "}

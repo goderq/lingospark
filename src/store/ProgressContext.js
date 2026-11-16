@@ -12,6 +12,7 @@ import React, {
 import { lessons } from "../data/course";
 import {addContentReport} from '../utils/contentQuality';
 import { enrollRetention, finishRetention } from '../utils/retention';
+import { finishJourneyStage, stageAvailable } from '../utils/learningJourney';
 import { finishPathChapter, finishRental, restartLifePath, restartRental } from '../data/worldPaths';
 
 const STORAGE_KEY = "@lingospark/progress-v1";
@@ -26,6 +27,7 @@ const initial = {
   streak: 0,
   completed: [],
   retention: {},
+  journeys: {},
   completedTenses: [],
   completedBosses: [],
   completedGrammarTracks: [],
@@ -210,6 +212,18 @@ export function ProgressProvider({ children }) {
   const recordRetention = (lessonId, dueAt, answers) => {
     setProgress(old => finishRetention(old, lessons, lessonId, dueAt, answers));
   };
+
+  const saveJourneyDraft = useCallback((topicId, draft) => {
+    setProgress(old => {
+      if (!stageAvailable(old, topicId, draft.stageId)) return old;
+      const topic = old.journeys?.[topicId] || {};
+      if (JSON.stringify(topic.draft) === JSON.stringify(draft)) return old;
+      return { ...old, journeys: { ...old.journeys, [topicId]: { ...topic, draft } } };
+    });
+  }, []);
+  const completeJourneyStage = useCallback((topicId, stageId, responses, attemptId) => {
+    setProgress(old => finishJourneyStage(old, topicId, stageId, responses, attemptId));
+  }, []);
 
   const completeLesson = (lesson, result = null) => {
     setProgress((old) => {
@@ -1084,11 +1098,13 @@ export function ProgressProvider({ children }) {
           : [item, ...(old.notebook || [])],
       };
     });
-  const saveLessonDraft = (lessonId, index, lives) =>
-    setProgress((old) => ({
-      ...old,
-      lessonDraft: { lessonId, index, lives, updatedAt: Date.now() },
-    }));
+  const saveLessonDraft = useCallback((lessonId, session) =>
+    setProgress((old) => {
+      const next = { ...session, lessonId };
+      const { updatedAt, ...previous } = old.lessonDraft || {};
+      if (JSON.stringify(previous) === JSON.stringify(next)) return old;
+      return { ...old, lessonDraft: { ...next, updatedAt: Date.now() } };
+    }), []);
   const clearLessonDraft = (lessonId) =>
     setProgress((old) =>
       old.lessonDraft?.lessonId === lessonId
@@ -1255,6 +1271,8 @@ export function ProgressProvider({ children }) {
       finishOnboarding,
       completeLesson,
       recordRetention,
+      saveJourneyDraft,
+      completeJourneyStage,
       completeTense,
       completeBoss,
       completeGrammarTrack,

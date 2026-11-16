@@ -9,6 +9,7 @@ import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
 import { getTenseGuide } from "../data/tenseGuides";
 import ExplanationCard from "../components/ExplanationCard";
+import { trainingPassed } from '../utils/trainingResult';
 
 const groupColor = (name) =>
   name.startsWith("Present")
@@ -25,7 +26,6 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
   const [selected, setSelected] = useState("");
   const [score, setScore] = useState(0);
   const [done, setDone] = useState(false);
-  const [lives, setLives] = useState(3);
   const [gate, setGate] = useState(false);
   const [gateIndex, setGateIndex] = useState(0);
   const [gateSelected, setGateSelected] = useState("");
@@ -39,7 +39,6 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
       setSelected("");
       setScore(0);
       setDone(false);
-      setLives(3);
       setGate(false);
       setGateIndex(0);
       setGateSelected("");
@@ -163,11 +162,12 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
             {score}/{module.exercises.length}
           </Text>
           <Text style={styles.subtitle}>
-            {score === module.exercises.length
-              ? "Время освоено!"
-              : "Правило можно повторить ещё раз"}
+            {trainingPassed(score, module.exercises.length)
+              ? "Практика пройдена. Позже проверь навык без подсказок."
+              : "Нужно от 80%. Разбери ошибки и повтори практику."}
           </Text>
           <View style={{ width: "100%" }}>
+            {!trainingPassed(score, module.exercises.length) && <PrimaryButton title="Повторить практику" onPress={() => { setIndex(0); setSelected(''); setScore(0); setDone(false); }} />}
             <PrimaryButton title="К списку времён" onPress={back} />
           </View>
         </View>
@@ -363,7 +363,6 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
     setSelected(option);
     const right = option === question.answer;
     if (right) setScore(score + 1);
-    else setLives((value) => Math.max(0, value - 1));
     recordGrammar(
       {
         id: `tense-${module.id}-${index}`,
@@ -375,19 +374,12 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
   };
   const next = () => {
     if (index === module.exercises.length - 1) {
-      completeTense(module.id);
+      if (trainingPassed(score, module.exercises.length)) completeTense(module.id);
       setDone(true);
     } else {
       setIndex(index + 1);
       setSelected("");
     }
-  };
-  const restart = () => {
-    setIndex(0);
-    setSelected("");
-    setScore(0);
-    setDone(false);
-    setLives(3);
   };
   return (
     <View style={styles.container}>
@@ -400,14 +392,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
               color={groupColor(module.name)}
             />
           </View>
-          <View style={styles.lives}>
-            <Ionicons
-              name={lives > 0 ? "heart" : "heart-dislike"}
-              size={19}
-              color={colors.pink}
-            />
-            <Text style={styles.livesText}>{lives}</Text>
-          </View>
+          <Text style={{ color: colors.mint }}>Практика · без жизней</Text>
         </View>
         <Text style={styles.question}>{question.prompt}</Text>
         {balancedOptions(
@@ -448,13 +433,11 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
         {selected && (
           <PrimaryButton
             title={
-              lives === 0
-                ? "Жизни закончились — начать заново"
-                : index === module.exercises.length - 1
+              index === module.exercises.length - 1
                   ? "Результат"
                   : "Дальше"
             }
-            onPress={lives === 0 ? restart : next}
+            onPress={next}
             color={correct ? colors.mint : colors.orange}
           />
         )}

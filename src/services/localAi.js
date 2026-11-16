@@ -738,7 +738,7 @@ async function improveTutorReply({ llama, draft, messages, level, dialogueMode, 
   return String(result?.text || "").trim() ? result : { ...result, text: draft };
 }
 
-export async function completeTutorMessage({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken }) {
+export async function completeTutorMessage({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken, courseContext = '' }) {
   const llama = await loadModel(model);
   const settings = await getAiSettings();
   const tutorMemory = await loadTutorMemory();
@@ -756,7 +756,7 @@ export async function completeTutorMessage({ model, level, topic, dialogueMode =
   const draft = await completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) }, ...history],
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext }, ...history],
       n_predict: model.id === "light" ? 190 : 280,
       temperature: 0.76,
       top_k: 40,

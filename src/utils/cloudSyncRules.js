@@ -47,6 +47,12 @@ function learningProgressScore(progress = {}) {
     (sum, key) => sum + objectSize(progress[key]) * 10,
     0,
   );
+  // Opening a topic creates a draft, but is not completed learning. Only
+  // actual submitted answers/attempts may compete with an existing cloud save.
+  for (const topic of Object.values(progress.journeys || {})) {
+    score += Object.values(topic?.stages || {}).reduce((sum, stage) => sum + positive(stage?.attempts) * 10, 0);
+    score += arraySize(topic?.draft?.responses) * 10;
+  }
   score += [
     "totalXP",
     "dailyXP",

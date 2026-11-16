@@ -15,6 +15,9 @@ const older = "2026-11-10T10:00:00.000Z";
 const newer = "2026-11-11T10:00:00.000Z";
 
 assert.equal(learningProgressScore(fresh), 0);
+assert.equal(learningProgressScore({ ...fresh, journeys: { greetings: { draft: { responses: [] } } } }), 0, 'opening teaching material alone must not override the cloud');
+assert.ok(learningProgressScore({ ...fresh, journeys: { greetings: { stages: { words: { attempts: 1 } } } } }) > 0);
+assert.ok(learningProgressScore({ ...fresh, journeys: { greetings: { draft: { responses: [{ id: 'j-words-1', input: 'name' }] } } } }) > 0);
 assert.ok(learningProgressScore(learned) > 0);
 assert.ok(learningProgressScore(wordsLearned) > 0);
 
@@ -89,4 +92,4 @@ assert.ok(learningProgressScore(pathOnly)>0,'New life paths must count as saved 
 assert.ok(learningProgressScore({world:{rental:{completed:true}}})>0,'Rental mission must count as saved learning');
 assert.equal(chooseInitialProgressSource({local:fresh,cloud:pathOnly,localUpdatedAt:newer,cloudUpdatedAt:older}),'cloud','Reinstall must restore life-path-only progress');
 assert.equal(chooseInitialProgressSource({local:pathOnly,cloud:fresh,localUpdatedAt:older,cloudUpdatedAt:newer}),'local','Empty cloud must not erase completed side stories');
-console.log("cloud sync rules: 11 scenarios passed");
+console.log("cloud sync rules passed, including submitted journey answers and empty teaching drafts");
