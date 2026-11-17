@@ -31,16 +31,17 @@ import { wordBank, wordBankSize, wordLevels, wordsByLevel } from "../data/wordBa
 import { tenseModules } from "../data/advancedCourse";
 import { grammarQuestions, placementQuestions } from "../data/practice";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
 import ExplanationCard from "../components/ExplanationCard";
 
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -49,6 +50,7 @@ function Header({ title, onClose }) {
 }
 
 export function PlanScreen({ onClose, onNavigate, onLesson }) {
+  useTheme();
   const { progress } = useProgress();
   const stats = progress.stats || {};
   const today = new Date().toISOString().slice(0, 10);
@@ -193,6 +195,7 @@ export function PlanScreen({ onClose, onNavigate, onLesson }) {
 }
 
 export function VocabularyScreen({ onClose }) {
+  useTheme();
   useScreenTiming('dictionary_open');
   const {
     progress,
@@ -370,7 +373,7 @@ export function VocabularyScreen({ onClose }) {
                 <Text style={s.subtitleLeft}>{wordBankSize.toLocaleString("ru-RU")} базовых слов + свои записи</Text>
               </View>
               <Pressable onPress={() => setAdding(!adding)} style={s.add}>
-                <Ionicons name={adding ? "close" : "add"} size={26} color="white" />
+                <Ionicons name={adding ? "close" : "add"} size={26} color={colors.text} />
               </Pressable>
             </View>
             {adding && (
@@ -410,6 +413,7 @@ export function VocabularyScreen({ onClose }) {
 }
 
 export function WeeklyExamScreen({ onClose }) {
+  useTheme();
   const { recordExam } = useProgress();
   const [seed] = useState(Date.now);
   const deck = useMemo(() => sampleExamQuestions([...placementQuestions.slice(2, 8), ...grammarQuestions.slice(0, 6)], 10, seed), [seed]);
@@ -447,6 +451,7 @@ const rewards = [
   },
 ];
 export function RewardsScreen({ onClose }) {
+  useTheme();
   const { progress, buyReward } = useProgress();
   return (
     <View style={s.container}>
@@ -489,6 +494,7 @@ export function RewardsScreen({ onClose }) {
 }
 
 export function ActivityScreen({ onClose }) {
+  useTheme();
   const { progress } = useProgress();
   const days = Array.from({ length: 28 }, (_, offset) => {
     const date = new Date(Date.now() - (27 - offset) * 86400000);
@@ -522,7 +528,7 @@ export function ActivityScreen({ onClose }) {
                 },
               ]}
             >
-              <Text style={[s.dayText, day.count > 0 && { color: "white" }]}>
+              <Text style={[s.dayText, day.count > 0 && { color: colors.text }]}>
                 {day.day}
               </Text>
             </View>
@@ -554,6 +560,7 @@ export function ActivityScreen({ onClose }) {
 }
 
 export function PronunciationScreen({ onClose }) {
+  useTheme();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
   const player = useAudioPlayer();
@@ -618,7 +625,7 @@ export function PronunciationScreen({ onClose }) {
           <Ionicons
             name={recorderState.isRecording ? "stop" : "mic"}
             size={34}
-            color="white"
+            color={colors.onAccent}
           />
         </Pressable>
         <Text style={s.recordHint}>
@@ -643,7 +650,7 @@ export function PronunciationScreen({ onClose }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -660,10 +667,10 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "800", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "800", fontSize: 17 },
   content: { padding: 20, paddingBottom: 45 },
   dictionaryContent: { padding: 20, paddingBottom: 65 },
-  bigTitle: { color: "white", fontSize: 32, fontWeight: "900" },
+  bigTitle: { color: colors.text, fontSize: 32, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     textAlign: "center",
@@ -677,7 +684,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "800" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
   cardText: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
   planScore: {
     flexDirection: "row",
@@ -716,7 +723,7 @@ const s = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 16,
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -732,7 +739,7 @@ const s = StyleSheet.create({
     borderRadius: 15,
     backgroundColor: colors.cardLight,
     paddingHorizontal: 14,
-    color: "white",
+    color: colors.text,
     fontSize: 16,
   },
   wordRow: {
@@ -756,11 +763,11 @@ const s = StyleSheet.create({
     gap: 10,
     marginBottom: 12,
   },
-  dictionaryInput: { flex: 1, color: "white", fontSize: 15, paddingVertical: 14 },
+  dictionaryInput: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
   dictionaryChips: { gap: 7, paddingBottom: 9, paddingRight: 20 },
   dictionaryChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   dictionaryChipActive: { backgroundColor: "rgba(124,92,252,.20)", borderColor: colors.purple },
-  dictionaryChipText: { color: "white", fontSize: 11, fontWeight: "800" },
+  dictionaryChipText: { color: colors.text, fontSize: 11, fontWeight: "800" },
   dictionaryCount: { color: colors.textMuted, fontSize: 9, fontWeight: "900", letterSpacing: 1, marginVertical: 9 },
   emptyDictionary: { color: colors.textMuted, textAlign: "center", lineHeight: 21, padding: 30 },
   sound: {
@@ -771,7 +778,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  wordEnglish: { color: "white", fontSize: 17, fontWeight: "800" },
+  wordEnglish: { color: colors.text, fontSize: 17, fontWeight: "800" },
   wordTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   wordLevel: { color: colors.mint, fontSize: 8, fontWeight: "900", backgroundColor: "rgba(46,211,183,.12)", paddingHorizontal: 6, paddingVertical: 3, borderRadius: 7 },
   wordRussian: { color: colors.textMuted, marginTop: 3 },
@@ -795,7 +802,7 @@ const s = StyleSheet.create({
   },
   trophy: { fontSize: 80 },
   resultTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 45,
     fontWeight: "900",
     marginTop: 16,
@@ -808,7 +815,7 @@ const s = StyleSheet.create({
     marginTop: 22,
   },
   examQuestion: {
-    color: "white",
+    color: colors.text,
     fontSize: 28,
     lineHeight: 36,
     fontWeight: "900",
@@ -823,7 +830,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
   },
-  optionText: { color: "white", fontSize: 16, fontWeight: "600" },
+  optionText: { color: colors.text, fontSize: 16, fontWeight: "600" },
   balance: {
     flexDirection: "row",
     gap: 15,
@@ -885,7 +892,7 @@ const s = StyleSheet.create({
     marginTop: 18,
   },
   pronouncePhrase: {
-    color: "white",
+    color: colors.text,
     fontSize: 30,
     lineHeight: 38,
     fontWeight: "900",
@@ -898,12 +905,12 @@ const s = StyleSheet.create({
     padding: 14,
     marginTop: 17,
   },
-  listenText: { color: "white", fontWeight: "700" },
+  listenText: { color: colors.text, fontWeight: "700" },
   record: {
     width: 82,
     height: 82,
     borderRadius: 41,
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentFill,
     alignItems: "center",
     justifyContent: "center",
     alignSelf: "center",
@@ -931,4 +938,4 @@ const s = StyleSheet.create({
     borderColor: "rgba(124,92,252,.28)",
   },
   explanationText: { color: colors.textMuted, lineHeight: 21, fontSize: 14 },
-});
+}));

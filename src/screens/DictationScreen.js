@@ -17,7 +17,7 @@ import { speak } from "../utils/speech";
 import * as Haptics from "expo-haptics";
 import { dictations } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import ExplanationCard from "../components/ExplanationCard";
 import { evaluateExercise } from '../utils/answer';
@@ -31,6 +31,7 @@ const clean = (value) =>
 const KEYBOARD_ACCESSORY_ID = "dictation-keyboard-toolbar";
 
 export default function DictationScreen({ onClose }) {
+  useTheme();
   const { recordDictation } = useProgress();
   const [index, setIndex] = useState(0);
   const [answer, setAnswer] = useState("");
@@ -68,7 +69,7 @@ export default function DictationScreen({ onClose }) {
         >
           <View style={styles.header}>
             <Pressable onPress={onClose} style={styles.back}>
-              <Ionicons name="chevron-back" size={25} color="white" />
+              <Ionicons name="chevron-back" size={25} color={colors.text} />
             </Pressable>
             <View style={{ flex: 1 }}>
               <ProgressBar
@@ -86,7 +87,7 @@ export default function DictationScreen({ onClose }) {
             <Text style={styles.title}>Запиши фразу, которую услышишь</Text>
             <View style={styles.audioCard}>
               <Pressable onPress={() => play()} style={styles.play}>
-                <Ionicons name="play" size={35} color="white" />
+                <Ionicons name="play" size={35} color={colors.onAccent} />
               </Pressable>
               <Text style={styles.audioHint}>Нажми и слушай внимательно</Text>
               <View style={styles.speedRow}>
@@ -198,7 +199,7 @@ export default function DictationScreen({ onClose }) {
           <View style={styles.keyboardToolbar}>
             <Pressable onPress={Keyboard.dismiss} style={styles.keyboardDone}>
               <Text style={styles.keyboardDoneText}>Готово</Text>
-              <Ionicons name="chevron-down" size={19} color="white" />
+              <Ionicons name="chevron-down" size={19} color={colors.text} />
             </Pressable>
           </View>
         </InputAccessoryView>
@@ -206,7 +207,7 @@ export default function DictationScreen({ onClose }) {
     </>
   );
 }
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 62,
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   title: {
-    color: "white",
+    color: colors.text,
     fontSize: 29,
     lineHeight: 36,
     fontWeight: "900",
@@ -249,11 +250,11 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentFill,
     alignItems: "center",
     justifyContent: "center",
   },
-  audioHint: { color: "white", fontWeight: "700", marginTop: 15 },
+  audioHint: { color: colors.text, fontWeight: "700", marginTop: 15 },
   speedRow: { flexDirection: "row", gap: 10, marginTop: 16 },
   speed: {
     backgroundColor: colors.cardLight,
@@ -265,7 +266,7 @@ const styles = StyleSheet.create({
   translation: { color: colors.textMuted, fontSize: 13, marginTop: 16 },
   input: {
     minHeight: 64,
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     fontWeight: "600",
     backgroundColor: colors.card,
@@ -284,7 +285,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   feedbackTitle: { fontSize: 16, fontWeight: "900" },
-  correctText: { color: "white", fontWeight: "700", marginTop: 5 },
+  correctText: { color: colors.text, fontWeight: "700", marginTop: 5 },
   explanationText: { color: colors.textMuted, lineHeight: 21, marginTop: 12 },
   keyboardToolbar: {
     minHeight: 48,
@@ -302,5 +303,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  keyboardDoneText: { color: "white", fontSize: 16, fontWeight: "800" },
-});
+  keyboardDoneText: { color: colors.text, fontSize: 16, fontWeight: "800" },
+}));

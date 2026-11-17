@@ -6,7 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { speak } from "../utils/speech";
 import { tenseModules } from "../data/advancedCourse";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
 import { getTenseGuide } from "../data/tenseGuides";
@@ -21,9 +21,10 @@ const groupColor = (name) =>
       : colors.purple;
 
 export default function TensesScreen({ onClose, onChallenge, onWeak }) {
+  useTheme();
   const { recordGrammar, completeTense, toggleFavorite, progress, saveStudyDraft, clearStudyDraft } = useProgress();
   const draft = useRef(readStudyDraft(progress.studyDrafts?.tenses, tenseModules)).current;
-  const [module, setModule] = useState(() => tenseModules.find(item => item.id === draft.sourceId) || null);
+  const [module, setModule] = useState(null);
   const [learning, setLearning] = useState(draft.learning || false);
   const [index, setIndex] = useState(draft.index || 0);
   const [selected, setSelected] = useState(draft.selected || '');
@@ -134,7 +135,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.moduleName}>{item.name}</Text>
                         <Text style={styles.moduleUse} numberOfLines={1}>
-                          {complete ? "Выполнено ✓" : item.use}
+                          {complete ? "Выполнено ✓" : draft.sourceId === item.id ? 'Есть сохранённое занятие · продолжить' : item.use}
                         </Text>
                       </View>
                       <Text
@@ -457,10 +458,11 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
   );
 }
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={styles.header}>
       <Pressable onPress={onClose} style={styles.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -468,6 +470,7 @@ function Header({ title, onClose }) {
   );
 }
 function Theory({ title, text, icon }) {
+  useTheme();
   return (
     <View style={styles.theory}>
       <Ionicons name={icon} size={22} color={colors.purple} />
@@ -478,7 +481,7 @@ function Theory({ title, text, icon }) {
     </View>
   );
 }
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -495,11 +498,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "800", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "800", fontSize: 17 },
   content: { padding: 20, paddingBottom: 50 },
   challengeRow: { flexDirection: "row", gap: 11, marginBottom: 8 },
   challengeCard: { flex: 1, minHeight: 125, backgroundColor: colors.card, borderRadius: 20, padding: 16, justifyContent: "space-between", borderWidth: 1, borderColor: colors.border },
-  challengeTitle: { color: "white", fontSize: 15, fontWeight: "900", marginTop: 10 },
+  challengeTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 10 },
   challengeText: { color: colors.textMuted, fontSize: 11, marginTop: 5 },
   stageRow: { flexDirection: "row", alignItems: "center", marginBottom: 18 },
   stageDot: {
@@ -517,9 +520,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.cardLight,
   },
-  stageNumber: { color: "white", fontWeight: "900", fontSize: 12 },
+  stageNumber: { color: colors.text, fontWeight: "900", fontSize: 12 },
   stageActive: {
-    color: "white",
+    color: colors.text,
     fontWeight: "800",
     fontSize: 12,
     marginLeft: 7,
@@ -545,7 +548,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   storyEmoji: { fontSize: 30 },
-  storyTitle: { color: "white", fontSize: 17, fontWeight: "900" },
+  storyTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
   storyText: { color: colors.textMuted, lineHeight: 21, marginTop: 6 },
   timeline: {
     alignItems: "center",
@@ -568,7 +571,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   miniTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 19,
     fontWeight: "900",
     marginTop: 24,
@@ -584,7 +587,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   formIndex: { width: 25, fontSize: 17, fontWeight: "900" },
-  formText: { color: "white", flex: 1, fontSize: 15, fontWeight: "700" },
+  formText: { color: colors.text, flex: 1, fontSize: 15, fontWeight: "700" },
   listenExample: {
     flexDirection: "row",
     alignItems: "center",
@@ -606,7 +609,7 @@ const styles = StyleSheet.create({
   progressRow: { flexDirection: "row", alignItems: "center", gap: 13 },
   lives: { flexDirection: "row", alignItems: "center", gap: 4 },
   livesText: { color: colors.pink, fontWeight: "900" },
-  title: { color: "white", fontSize: 34, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 34, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     fontSize: 16,
@@ -644,7 +647,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  moduleName: { color: "white", fontSize: 16, fontWeight: "800" },
+  moduleName: { color: colors.text, fontSize: 16, fontWeight: "800" },
   moduleUse: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   level: { fontSize: 11, fontWeight: "900" },
   theoryHero: {
@@ -655,7 +658,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   theoryName: {
-    color: "white",
+    color: colors.text,
     fontSize: 30,
     fontWeight: "900",
     marginTop: 8,
@@ -678,7 +681,7 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     marginTop: 13,
   },
-  theoryTitle: { color: "white", fontWeight: "800" },
+  theoryTitle: { color: colors.text, fontWeight: "800" },
   theoryText: { color: colors.textMuted, lineHeight: 20, marginTop: 5 },
   example: {
     padding: 18,
@@ -693,14 +696,14 @@ const styles = StyleSheet.create({
     letterSpacing: 1.3,
   },
   exampleText: {
-    color: "white",
+    color: colors.text,
     fontSize: 19,
     fontWeight: "700",
     lineHeight: 27,
     marginVertical: 10,
   },
   question: {
-    color: "white",
+    color: colors.text,
     fontSize: 28,
     lineHeight: 36,
     fontWeight: "900",
@@ -715,7 +718,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
   },
-  optionText: { color: "white", fontSize: 16, fontWeight: "600" },
+  optionText: { color: colors.text, fontSize: 16, fontWeight: "600" },
   explain: {
     flexDirection: "row",
     gap: 10,
@@ -734,9 +737,9 @@ const styles = StyleSheet.create({
   },
   resultEmoji: { fontSize: 75 },
   resultTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 43,
     fontWeight: "900",
     marginTop: 16,
   },
-});
+}));

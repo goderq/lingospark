@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { lessons } from '../data/course';
 import { retentionSummary } from '../utils/retention';
-import { colors } from '../theme';
+import { colors , useTheme, createThemedStyles } from '../theme';
 import { nextLearningStep } from '../utils/learningContinuation';
 
 export default function DailyLearningPlan({ progress, next, onLesson, onRetention, onMistakes, onReview, onDictation, onLearningHub, onJourney }) {
+  useTheme();
   const memory = retentionSummary(progress, lessons);
   const allDone = progress.completed.length === lessons.length;
   const hasMistakes = progress.mistakes?.length > 0;
@@ -37,15 +38,15 @@ export default function DailyLearningPlan({ progress, next, onLesson, onRetentio
   </View>;
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   plan: { borderRadius: 24, backgroundColor: colors.card, padding: 18, marginBottom: 20, gap: 12 },
-  title: { fontSize: 23, fontWeight: '800', color: 'white' },
+  title: { fontSize: 23, fontWeight: '800', color: colors.text },
   caption: { fontSize: 15, color: colors.mint },
   step: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border },
   number: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.cardLight, justifyContent: 'center', alignItems: 'center' },
   numberText: { color: colors.purple, fontWeight: '800', fontSize: 16 },
   body: { flex: 1, gap: 6 },
-  stepTitle: { color: 'white', fontSize: 17, fontWeight: '700' },
+  stepTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
   reason: { color: colors.textMuted, fontSize: 14, lineHeight: 21 },
   done: { color: colors.mint, fontSize: 13 },
-});
+}));

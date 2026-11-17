@@ -8,18 +8,20 @@ import { balancedOptions } from '../utils/shuffle';
 import { speak, stopSpeech } from '../utils/speech';
 import { useProgress } from '../store/ProgressContext';
 import { PrimaryButton } from '../components/UI';
-import { colors } from '../theme';
+import { colors , useTheme, createThemedStyles } from '../theme';
 import useScreenTiming from '../components/useScreenTiming';
 import ExplanationCard from '../components/ExplanationCard';
+import { ScreenEntrance } from '../components/Motion';
 
 const skillNames = { mixed: 'Все навыки', grammar: 'Грамматика', vocabulary: 'Выражения', listening: 'Слух', writing: 'Письмо' };
 
 export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, sessionKey, title, onComplete }) {
+  useTheme();
   useScreenTiming('practice_open');
   const { progress, savePracticeDraft, completePractice, clearPracticeDraft } = useProgress();
   const draftKey = sessionKey || (review ? 'unified-review' : initialMode === 'exam' ? 'common-exam' : 'common-practice');
   const saved = progress.practiceDrafts?.[draftKey];
-  const [session, setSession] = useState(() => validatePracticeSession(saved) ? saved : null);
+  const [session, setSession] = useState(null);
   const [mode, setMode] = useState(initialMode);
   const [level, setLevel] = useState(initialLevel || progress.learnerLevel?.replace('+', '') || 'A1');
   const [skill, setSkill] = useState(initialSkill);
@@ -92,6 +94,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
           </ScrollView>
         </>}
         {!!error && <Text style={s.warning}>{error}</Text>}
+        {validatePracticeSession(saved) && <PrimaryButton title="Продолжить сохранённое занятие" color={colors.cardLight} onPress={() => setSession(saved)} />}
         <PrimaryButton title={busy ? 'Подготовка…' : review ? 'Начать повторение' : 'Начать практику'} disabled={busy} onPress={start} />
         {review && <PrimaryButton title="Расписание проверок уроков" color={colors.cardLight} onPress={onRetention} />}
       </> : finished ? <>
@@ -109,7 +112,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
       </> : <>
         <Text style={s.label}>{session.mode === 'learn' ? 'ОБУЧЕНИЕ' : 'БЕЗ ПОДСКАЗОК'} · {session.index + 1}/{session.deck.length}</Text>
         <Text style={s.text}>{current.topic || ''}{current.reason ? ` · ${current.reason}` : ''}</Text>
-        <Text style={s.title}>{current.prompt}</Text>
+        <ScreenEntrance transitionKey={current.id}><Text style={s.title}>{current.prompt}</Text></ScreenEntrance>
         {!!current.context && <View style={s.card}><Text style={s.text}>{current.context}</Text></View>}
         {!!current.audio && <PrimaryButton title="Послушать запись" onPress={() => speak(current.audio, { language: 'en-US', rate: 0.85 })} />}
         {current.skill === 'listening' && <PrimaryButton title="Послушать фразу" onPress={() => speak(current.speak, { language: 'en-US', rate: 0.8 })} />}
@@ -128,5 +131,6 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
   </KeyboardAvoidingView>;
 }
 
-function Chips({ values, selected, onSelect, labels = {} }) { return <View style={s.chips}>{values.map(value => <Pressable key={value} onPress={() => onSelect(value)} style={[s.chip, selected === value && s.selected]}><Text style={s.chipText}>{labels[value] || value}</Text></Pressable>)}</View>; }
-const s = StyleSheet.create({ root: { flex: 1, backgroundColor: colors.background }, content: { padding: 20, paddingBottom: 45, gap: 18 }, header: { paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 }, back: { minHeight: 48, justifyContent: 'center' }, link: { color: colors.purple, fontSize: 16 }, label: { color: colors.mint, fontSize: 13, fontWeight: '800', flexShrink: 1 }, title: { color: 'white', fontSize: 25, fontWeight: '800' }, heading: { color: 'white', fontSize: 18, lineHeight: 27 }, text: { color: colors.textMuted, fontSize: 16, lineHeight: 24 }, card: { backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 18, gap: 12 }, selected: { borderColor: colors.purple, backgroundColor: '#252044' }, success: { color: colors.mint, fontSize: 16 }, warning: { color: colors.orange, fontSize: 16, lineHeight: 24 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, chip: { padding: 14, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border }, chipText: { color: 'white', fontWeight: '700' }, input: { padding: 20, borderRadius: 17, backgroundColor: colors.card, color: 'white', fontSize: 19, minHeight: 68 } });
+function Chips({ values, selected, onSelect, labels = {} }) {
+  useTheme(); return <View style={s.chips}>{values.map(value => <Pressable key={value} onPress={() => onSelect(value)} style={[s.chip, selected === value && s.selected]}><Text style={s.chipText}>{labels[value] || value}</Text></Pressable>)}</View>; }
+const s = createThemedStyles(() => ({ root: { flex: 1, backgroundColor: colors.background }, content: { padding: 20, paddingBottom: 45, gap: 18 }, header: { paddingHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 12 }, back: { minHeight: 48, justifyContent: 'center' }, link: { color: colors.purple, fontSize: 16 }, label: { color: colors.mint, fontSize: 13, fontWeight: '800', flexShrink: 1 }, title: { color: colors.text, fontSize: 25, fontWeight: '800' }, heading: { color: colors.text, fontSize: 18, lineHeight: 27 }, text: { color: colors.textMuted, fontSize: 16, lineHeight: 24 }, card: { backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 18, gap: 12 }, selected: { borderColor: colors.purple, backgroundColor: colors.accentSoft }, success: { color: colors.mint, fontSize: 16 }, warning: { color: colors.orange, fontSize: 16, lineHeight: 24 }, chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, chip: { padding: 14, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border }, chipText: { color: colors.text, fontWeight: '700' }, input: { padding: 20, borderRadius: 17, backgroundColor: colors.card, color: colors.text, fontSize: 19, minHeight: 68 } }));

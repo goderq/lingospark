@@ -8,10 +8,11 @@ import { JourneyStage } from './LearningJourneyScreen';
 import CourseTestScreen from './CourseTestScreen';
 import PracticeScreen from './PracticeScreen';
 import { PrimaryButton } from '../components/UI';
-import { colors } from '../theme';
+import { colors , useTheme } from '../theme';
 
 const names = ['Продолжить тему', 'Повторить по сроку', 'Письменный разговор'];
 export default function QuickSessionScreen({ onClose, onJourney, onAI, onRetention }) {
+  useTheme();
   const { progress, saveQuickSession, clearPracticeDraft } = useProgress();
   const [session, setSession] = useState(() => readQuickSession(progress.quickSession, progress));
   const [active, setActive] = useState(null);
@@ -44,11 +45,11 @@ export default function QuickSessionScreen({ onClose, onJourney, onAI, onRetenti
   const complete = session?.step === 3;
   return <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 60, gap: 20 }}>
     <Pressable onPress={onClose} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontSize: 17 }}>← Назад</Text></Pressable>
-    <Text style={{ color: 'white', fontSize: 29, fontWeight: '800' }}>{complete ? 'Короткое занятие завершено' : 'Английский за 10 минут'}</Text>
+    <Text style={{ color: colors.text, fontSize: 29, fontWeight: '800' }}>{complete ? 'Короткое занятие завершено' : 'Английский за 10 минут'}</Text>
     <Text style={{ color: colors.textMuted, lineHeight: 25, fontSize: 16 }}>Один этап темы, до пяти вопросов повторения и две письменные реплики. Время примерное: можно остановиться и продолжить позже.</Text>
     <Text style={{ color: colors.mint, fontSize: 20 }}>{journey.title}</Text>
     {names.map((name, index) => <View key={name} style={{ backgroundColor: colors.card, padding: 20, borderRadius: 20, gap: 10 }}>
-      <Text style={{ color: 'white', fontSize: 19, fontWeight: '700' }}>{index + 1}. {name}</Text>
+      <Text style={{ color: colors.text, fontSize: 19, fontWeight: '700' }}>{index + 1}. {name}</Text>
       <Text style={{ color: colors.textMuted }}>{session?.results[index] ? session.results[index].skipped ? 'Пропущено — результат не засчитан' : `Верно ${session.results[index].correct}/${session.results[index].total}` : index === 0 ? session?.stageId ? journey.stages.find(stage => stage.id === session.stageId)?.title : next.stageTitle : index === 1 ? 'Только задания, срок которых наступил' : 'Собеседник и цель из этой же темы'}</Text>
     </View>)}
     {!session ? <PrimaryButton title="Начать занятие" onPress={begin} /> : !complete ? <PrimaryButton title={`Продолжить · ${names[session.step]}`} onPress={() => setActive(session.step)} /> : <>

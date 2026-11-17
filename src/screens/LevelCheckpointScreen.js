@@ -7,13 +7,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { placementQuestions, grammarQuestions } from "../data/practice";
 import { grammarTracks } from "../data/grammarAcademy";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { expandExplanation } from "../utils/explanations";
 
 const levelIndex = { A1: 0, A2: 1, B1: 2, B2: 3, C1: 4 };
 export default function LevelCheckpointScreen({ level, onClose }) {
+  useTheme();
   const { completeCourseCheckpoint } = useProgress();
   const [seed] = useState(Date.now);
   const deck = useMemo(() => {
@@ -24,17 +25,18 @@ export default function LevelCheckpointScreen({ level, onClose }) {
   return <PracticeScreen key={level} title={'Контрольная ' + level} sessionKey={'checkpoint-' + level} presetDeck={deck} onComplete={score => completeCourseCheckpoint(level, score)} onClose={onClose} />;
 }
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
     </View>
   );
 }
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -51,7 +53,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "800", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "800", fontSize: 17 },
   content: { padding: 20, paddingBottom: 50 },
   meta: {
     color: colors.orange,
@@ -61,7 +63,7 @@ const s = StyleSheet.create({
     marginTop: 22,
   },
   question: {
-    color: "white",
+    color: colors.text,
     fontSize: 28,
     lineHeight: 36,
     fontWeight: "900",
@@ -76,7 +78,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
   },
-  optionText: { color: "white", fontSize: 16, fontWeight: "650" },
+  optionText: { color: colors.text, fontSize: 16, fontWeight: "650" },
   explanation: {
     backgroundColor: colors.card,
     borderRadius: 18,
@@ -93,9 +95,9 @@ const s = StyleSheet.create({
     padding: 30,
   },
   emoji: { fontSize: 76 },
-  score: { color: "white", fontSize: 47, fontWeight: "900", marginTop: 12 },
+  score: { color: colors.text, fontSize: 47, fontWeight: "900", marginTop: 12 },
   title: {
-    color: "white",
+    color: colors.text,
     fontSize: 25,
     fontWeight: "900",
     textAlign: "center",
@@ -118,4 +120,4 @@ const s = StyleSheet.create({
     marginBottom: 22,
   },
   rewardText: { color: colors.orange, fontWeight: "800", flex: 1 },
-});
+}));

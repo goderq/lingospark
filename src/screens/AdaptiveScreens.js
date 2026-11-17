@@ -14,7 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { reviewWords } from "../data/course";
 import { tenseModules } from "../data/advancedCourse";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { evaluateExercise, analyzeAnswer } from "../utils/answer";
 import { expandExplanation } from "../utils/explanations";
@@ -23,6 +23,7 @@ const random = (items) => [...items].sort(() => Math.random() - 0.5);
 const dateKey = (date = new Date()) => date.toISOString().slice(0, 10);
 
 export function AdaptiveLessonScreen({ onClose }) {
+  useTheme();
   const { progress, resolveMistake, recordReview, recordGrammar, recordExercise } =
     useProgress();
   const [index, setIndex] = useState(0);
@@ -310,6 +311,7 @@ export function AdaptiveLessonScreen({ onClose }) {
 }
 
 export function ReviewCalendarScreen({ onClose }) {
+  useTheme();
   const { progress } = useProgress();
   const today = new Date();
   const days = Array.from({ length: 15 }, (_, offset) => {
@@ -385,17 +387,18 @@ export function ReviewCalendarScreen({ onClose }) {
 }
 
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={styles.header}>
       <Pressable onPress={onClose} style={styles.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
     </View>
   );
 }
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -412,7 +415,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontSize: 17, fontWeight: "800" },
+  headerTitle: { color: colors.text, fontSize: 17, fontWeight: "800" },
   practice: { flex: 1, padding: 20, paddingBottom: 25 },
   progress: { flexDirection: "row", alignItems: "center", gap: 13 },
   hearts: { color: colors.pink, fontWeight: "900" },
@@ -424,7 +427,7 @@ const styles = StyleSheet.create({
     marginTop: 28,
   },
   prompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 29,
     lineHeight: 37,
     fontWeight: "900",
@@ -432,7 +435,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 105,
-    color: "white",
+    color: colors.text,
     fontSize: 18,
     backgroundColor: colors.card,
     borderRadius: 19,
@@ -468,7 +471,7 @@ const styles = StyleSheet.create({
   },
   resultEmoji: { fontSize: 77 },
   resultTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 44,
     fontWeight: "900",
     marginTop: 15,
@@ -480,7 +483,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   content: { padding: 20, paddingBottom: 50 },
-  calendarTitle: { color: "white", fontSize: 34, fontWeight: "900" },
+  calendarTitle: { color: colors.text, fontSize: 34, fontWeight: "900" },
   subtitleLeft: {
     color: colors.textMuted,
     lineHeight: 21,
@@ -496,7 +499,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     marginBottom: 14,
   },
-  scheduleTitle: { color: "white", fontWeight: "900" },
+  scheduleTitle: { color: colors.text, fontWeight: "900" },
   todayCard: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -506,7 +509,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   dayNumber: { color: colors.mint, fontWeight: "900" },
-  todayCount: { color: "white", fontWeight: "800" },
+  todayCount: { color: colors.text, fontWeight: "800" },
   day: {
     flexDirection: "row",
     gap: 13,
@@ -520,8 +523,8 @@ const styles = StyleSheet.create({
   dayToday: { borderColor: "rgba(46,211,183,.45)" },
   dateBox: { width: 52, alignItems: "center" },
   weekday: { color: colors.textMuted, fontSize: 9, fontWeight: "900" },
-  dateNumber: { color: "white", fontSize: 25, fontWeight: "900", marginTop: 3 },
-  dayTitle: { color: "white", fontWeight: "800" },
+  dateNumber: { color: colors.text, fontSize: 25, fontWeight: "900", marginTop: 3 },
+  dayTitle: { color: colors.text, fontWeight: "800" },
   word: { color: colors.textMuted, fontSize: 11, marginTop: 5 },
   more: { color: colors.purple, fontSize: 11, marginTop: 4 },
-});
+}));

@@ -3,16 +3,17 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { lessons } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 
 const baseLevel = (value) => value.replace("+", "");
 const levels = ["A1", "A2", "B1", "B2", "C1"];
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -21,6 +22,7 @@ function Header({ title, onClose }) {
 }
 
 export function LevelProgressScreen({ onClose, onLesson }) {
+  useTheme();
   const { progress, isUnlocked } = useProgress();
   const [level, setLevel] = useState(baseLevel(progress.learnerLevel || "A1"));
   const pool = lessons.filter((item) => baseLevel(item.difficulty) === level);
@@ -61,7 +63,7 @@ export function LevelProgressScreen({ onClose, onLesson }) {
                 style={[s.levelTab, level === item && s.levelTabActive]}
               >
                 <Text
-                  style={[s.levelCode, level === item && { color: "white" }]}
+                  style={[s.levelCode, level === item && { color: colors.text }]}
                 >
                   {item}
                 </Text>
@@ -147,6 +149,7 @@ export function LevelProgressScreen({ onClose, onLesson }) {
 }
 
 export function StreakCalendarScreen({ onClose }) {
+  useTheme();
   const { progress } = useProgress();
   const days = Array.from({ length: 35 }, (_, index) => {
     const date = new Date(Date.now() - (34 - index) * 86400000);
@@ -182,7 +185,7 @@ export function StreakCalendarScreen({ onClose }) {
                 },
               ]}
             >
-              <Text style={[s.dayText, item.count > 0 && { color: "white" }]}>
+              <Text style={[s.dayText, item.count > 0 && { color: colors.text }]}>
                 {item.day}
               </Text>
             </View>
@@ -215,6 +218,7 @@ export function StreakCalendarScreen({ onClose }) {
 }
 
 function Metric({ value, label }) {
+  useTheme();
   return (
     <View style={s.metric}>
       <Text style={s.metricValue}>{value}</Text>
@@ -222,7 +226,7 @@ function Metric({ value, label }) {
     </View>
   );
 }
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -239,9 +243,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "900", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "900", fontSize: 17 },
   content: { padding: 20, paddingBottom: 55 },
-  title: { color: "white", fontSize: 34, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 34, fontWeight: "900" },
   levelTabs: { gap: 8, paddingVertical: 18 },
   levelTab: {
     width: 67,
@@ -253,7 +257,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   levelTabActive: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentSoft,
     borderColor: colors.purple,
   },
   levelCode: { color: colors.purple, fontWeight: "900" },
@@ -264,7 +268,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 13,
   },
-  heroLevel: { color: "white", fontSize: 27, fontWeight: "900" },
+  heroLevel: { color: colors.text, fontSize: 27, fontWeight: "900" },
   heroPercent: { color: colors.mint, fontSize: 24, fontWeight: "900" },
   metrics: { flexDirection: "row", gap: 9, marginTop: 17 },
   metric: {
@@ -274,7 +278,7 @@ const s = StyleSheet.create({
     borderRadius: 15,
     paddingVertical: 11,
   },
-  metricValue: { color: "white", fontWeight: "900", fontSize: 16 },
+  metricValue: { color: colors.text, fontWeight: "900", fontSize: 16 },
   metricLabel: { color: colors.textMuted, fontSize: 9, marginTop: 3 },
   section: {
     color: colors.textMuted,
@@ -300,7 +304,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  lessonTitle: { color: "white", fontWeight: "900", fontSize: 15 },
+  lessonTitle: { color: colors.text, fontWeight: "900", fontSize: 15 },
   lessonText: {
     color: colors.textMuted,
     fontSize: 11,
@@ -361,4 +365,4 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-});
+}));

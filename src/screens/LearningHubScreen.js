@@ -14,7 +14,7 @@ import { lessons } from "../data/course";
 import { tenseModules } from "../data/advancedCourse";
 import { grammarTracks } from "../data/grammarAcademy";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { ProgressBar } from "../components/UI";
 
 const tools = [
@@ -23,21 +23,21 @@ const tools = [
     title: "Центр грамматики",
     subtitle: "Единый маршрут: правила, времена и практика A1–C1",
     icon: "school",
-    color: "#7C5CFC",
+    color: colors.purple,
   },
   {
     id: "examCenter",
     title: "Центр экзаменов",
     subtitle: "Проверки A1–C1, IELTS и сохранённые результаты",
     icon: "ribbon",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "lingoWorld",
     title: "Английская жизнь",
     subtitle: "Открытый мир A1–C1 · 20 глав · 68 сцен",
     icon: "earth",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "smartSearch",
@@ -58,28 +58,28 @@ const tools = [
     title: "Гибкая практика",
     subtitle: "16 заданий · ошибки · лишние слова · диалоги",
     icon: "color-wand",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "articlesPrepositions",
     title: "Точная грамматика",
     subtitle: "Артикли · предлоги · фразовые глаголы",
     icon: "locate",
-    color: "#7C5CFC",
+    color: colors.purple,
   },
   {
     id: "writtenVocabulary",
     title: "Письменный перевод",
     subtitle: "Без вариантов ответа · два направления",
     icon: "pencil",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "fullIeltsMock",
     title: "IELTS · контрольные задания",
     subtitle: "Чтение и слух · результат без официального Band",
     icon: "ribbon",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "careerCourses",
@@ -93,21 +93,21 @@ const tools = [
     title: "Сюжетная игра · Сезон 2",
     subtitle: "10 новых глав и итоговая роль",
     icon: "trail-sign",
-    color: "#FF9F43",
+    color: colors.orange,
   },
   {
     id: "dailyMixedExam",
     title: "Ежедневный экзамен",
     subtitle: "20 новых вопросов из разных навыков",
     icon: "flash",
-    color: "#FF9F43",
+    color: colors.orange,
   },
   {
     id: "knowledgeMap",
     title: "Карта навыков",
     subtitle: "Фактические результаты и задания по каждому навыку",
     icon: "analytics",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "workEnglish",
@@ -121,21 +121,21 @@ const tools = [
     title: "Сюжетная игра",
     subtitle: "5 глав · выборы · разные результаты",
     icon: "compass",
-    color: "#FF9F43",
+    color: colors.orange,
   },
   {
     id: "readingLab",
     title: "Тренировка чтения",
     subtitle: "12 текстов и 24 вопроса A1–C1",
     icon: "book",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "marathons",
     title: "Марафоны",
     subtitle: "Планы на 7 и 30 дней",
     icon: "flame",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "smartCoach",
@@ -149,49 +149,49 @@ const tools = [
     title: "Повторение слов",
     subtitle: "Интервалы 1 · 3 · 7 · 14 · 30 дней",
     icon: "sync-circle",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "branchingDialogues",
     title: "Диалоги с выбором",
     subtitle: "10 ситуаций с разными концовками",
     icon: "git-branch",
-    color: "#7C5CFC",
+    color: colors.purple,
   },
   {
     id: "ielts",
     title: "IELTS Trainer",
     subtitle: "Reading · Listening · Writing · Speaking",
     icon: "school",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "lexicon",
     title: "Словарь и выражения",
     subtitle: "200 слов · 40 phrasal verbs · 30 идиом",
     icon: "library",
-    color: "#7C5CFC",
+    color: colors.purple,
   },
   {
     id: "listeningLab",
     title: "Живое аудирование",
     subtitle: "20 сцен от A1 до C1 с вопросами",
     icon: "headset",
-    color: "#FF9F43",
+    color: colors.orange,
   },
   {
     id: "writingStudio",
     title: "Письменная практика",
     subtitle: "18 заданий, образцы и самопроверка",
     icon: "create",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "levelExams",
     title: "Экзамены A1–C1",
     subtitle: "5 экзаменов и сертификаты",
     icon: "ribbon",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "minimalPairs",
@@ -212,21 +212,21 @@ const tools = [
     title: "Испытание дня",
     subtitle: "Новый набор и награда каждый день",
     icon: "flash",
-    color: "#FF9F43",
+    color: colors.orange,
   },
   {
     id: "missions",
     title: "Сюжетные миссии",
     subtitle: "Три истории с разными концовками",
     icon: "map",
-    color: "#7C5CFC",
+    color: colors.purple,
   },
   {
     id: "skills",
     title: "Карта навыков",
     subtitle: "Сильные стороны и рекомендации",
     icon: "analytics",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "achievements",
@@ -240,7 +240,7 @@ const tools = [
     title: "Закладки",
     subtitle: "Курсы, времена, слова и правила",
     icon: "bookmark",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "adaptive",
@@ -254,28 +254,28 @@ const tools = [
     title: "Календарь повторений",
     subtitle: "Интервалы 1 · 3 · 7 · 14 дней",
     icon: "calendar",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "tenses",
     title: "Времена A1–C1",
     subtitle: "29 блоков · теория и практика",
     icon: "time",
-    color: "#FF9F43",
+    color: colors.orange,
   },
   {
     id: "grammarAcademy",
     title: "Академия грамматики",
     subtitle: "20 больших курсов · 120 заданий",
     icon: "school",
-    color: "#7C5CFC",
+    color: colors.purple,
   },
   {
     id: "sentenceBuilder",
     title: "Конструктор предложений",
     subtitle: "150 предложений A1–C1",
     icon: "construct",
-    color: "#2ED3B7",
+    color: colors.mint,
   },
   {
     id: "irregular",
@@ -303,7 +303,7 @@ const tools = [
     title: "Подробная статистика",
     subtitle: "Сильные и слабые темы",
     icon: "stats-chart",
-    color: "#FF5C8A",
+    color: colors.pink,
   },
   {
     id: "c1Exam",
@@ -329,7 +329,7 @@ const addedTools = [
   ['backup', 'Резервная копия', 'Файл, код и копии до облачной замены', 'save'],
   ['commonMistakes', 'Типичные ошибки', 'Разбери распространённые трудности', 'warning'],
   ['packs', 'Тематические наборы', 'Выражения по темам', 'albums'],
-].map(([id, title, subtitle, icon]) => ({ id, title, subtitle, icon, color: '#7C5CFC' }));
+].map(([id, title, subtitle, icon]) => ({ id, title, subtitle, icon, color: colors.purple }));
 const toolMap = new Map(tools.filter(item => !consolidatedIds.has(item.id)).map(item => [item.id, item]));
 addedTools.forEach(item => toolMap.set(item.id, item));
 const catalogTools = [...toolMap.values()];
@@ -341,6 +341,7 @@ const catalogGroups = {
 };
 
 export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
+  useTheme();
   const { progress, isUnlocked } = useProgress();
   const [query, setQuery] = useState('');
   const deferredQuery = React.useDeferredValue(query);
@@ -369,7 +370,7 @@ export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
         const available = item.kind !== 'course' || isUnlocked(item);
         return <Pressable disabled={!available} onPress={() => item.kind === 'course' ? onLesson(item) : onNavigate(item.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 15, padding: 20, marginBottom: 12, borderRadius: 21, backgroundColor: colors.card, opacity: available ? 1 : 0.45 }}>
           <Ionicons name={available ? item.icon || 'book' : 'lock-closed'} size={25} color={item.color || colors.purple} />
-          <View style={{ flex: 1, gap: 7 }}><Text style={{ color: 'white', fontSize: 18, fontWeight: '800' }}>{item.title}</Text><Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 22 }}>{available ? item.kind === 'course' ? item.difficulty + ' · ' + item.subtitle : item.subtitle : 'Сначала пройди предыдущий урок'}</Text></View>
+          <View style={{ flex: 1, gap: 7 }}><Text style={{ color: colors.text, fontSize: 18, fontWeight: '800' }}>{item.title}</Text><Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 22 }}>{available ? item.kind === 'course' ? item.difficulty + ' · ' + item.subtitle : item.subtitle : 'Сначала пройди предыдущий урок'}</Text></View>
         </Pressable>;
       }}
       ListEmptyComponent={<Text style={{ color: colors.textMuted, padding: 20 }}>Ничего не найдено</Text>}
@@ -378,6 +379,7 @@ export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
 }
 
 export function LearningAnalyticsScreen({ onClose }) {
+  useTheme();
   const { progress } = useProgress();
   const mistakes = progress.mistakes || [];
   const tenseStats = ["A1", "A2", "B1", "B2", "C1"].map((level) => {
@@ -515,6 +517,7 @@ export function LearningAnalyticsScreen({ onClose }) {
 }
 
 function Accuracy({ title, value, color }) {
+  useTheme();
   return (
     <View style={styles.accuracyRow}>
       <Text style={styles.toolTitle}>{title}</Text>
@@ -526,6 +529,7 @@ function Accuracy({ title, value, color }) {
   );
 }
 function Stat({ value, label, color }) {
+  useTheme();
   return (
     <View style={styles.stat}>
       <Text style={[styles.statValue, { color }]}>{value}</Text>
@@ -534,17 +538,18 @@ function Stat({ value, label, color }) {
   );
 }
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={styles.header}>
       <Pressable onPress={onClose} style={styles.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={styles.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
     </View>
   );
 }
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -561,9 +566,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "800", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "800", fontSize: 17 },
   content: { padding: 20, paddingBottom: 50 },
-  title: { color: "white", fontSize: 34, fontWeight: "900", marginBottom: 18 },
+  title: { color: colors.text, fontSize: 34, fontWeight: "900", marginBottom: 18 },
   search: {
     height: 55,
     flexDirection: "row",
@@ -575,7 +580,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  searchInput: { flex: 1, color: "white", fontSize: 16 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 16 },
   filters: { gap: 8, paddingVertical: 15 },
   categories: { gap: 8, paddingTop: 15, paddingBottom: 6 },
   category: {
@@ -587,18 +592,18 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   categoryActive: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentSoft,
     borderColor: colors.purple,
   },
   categoryText: { color: colors.textMuted, fontWeight: "900", fontSize: 12 },
-  categoryTextActive: { color: "white" },
+  categoryTextActive: { color: colors.text },
   filter: {
     paddingHorizontal: 17,
     paddingVertical: 10,
     borderRadius: 18,
     backgroundColor: colors.card,
   },
-  filterActive: { backgroundColor: colors.purple },
+  filterActive: { backgroundColor: colors.accentSoft },
   filterText: { color: colors.textMuted, fontWeight: "800" },
   section: {
     color: colors.textMuted,
@@ -634,7 +639,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
   },
   continueTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "900",
     marginTop: 3,
@@ -646,7 +651,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  toolTitle: { color: "white", fontSize: 15, fontWeight: "800" },
+  toolTitle: { color: colors.text, fontSize: 15, fontWeight: "800" },
   toolText: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   lesson: {
     flexDirection: "row",
@@ -729,4 +734,4 @@ const styles = StyleSheet.create({
     padding: 18,
     marginTop: 22,
   },
-});
+}));

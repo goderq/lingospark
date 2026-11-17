@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Device from "expo-device";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import {
   AI_MODELS,
   addTutorMemoryGoal,
@@ -40,6 +40,7 @@ const formatBytes = (bytes) => {
 };
 
 export default function AICenterScreen({ onClose, onPronunciation, onSpeechModels }) {
+  useTheme();
   const [data, setData] = useState(null);
   const [busy, setBusy] = useState(false);
   const [memoryGoal, setMemoryGoal] = useState("");
@@ -90,15 +91,15 @@ export default function AICenterScreen({ onClose, onPronunciation, onSpeechModel
   return (
     <ScrollView style={styles.page} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
       <View style={styles.header}>
-        <Pressable onPress={onClose} style={styles.round}><Ionicons name="chevron-back" size={24} color="white" /></Pressable>
+        <Pressable onPress={onClose} style={styles.round}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
         <View style={{ flex: 1 }}><Text style={styles.title}>Центр ИИ</Text><Text style={styles.muted}>Память, скорость и надёжность</Text></View>
         <View style={[styles.statusDot, { backgroundColor: data.engine.loadedModelId ? colors.mint : colors.textMuted }]} />
       </View>
 
       <Pressable onPress={onPronunciation} style={styles.labCard}>
-        <View style={styles.labIcon}><Ionicons name="mic" size={28} color="white" /></View>
+        <View style={styles.labIcon}><Ionicons name="mic" size={28} color={colors.text} /></View>
         <View style={{ flex: 1 }}><Text style={styles.labTitle}>Лаборатория произношения</Text><Text style={styles.labText}>Пары звуков, запись голоса, оценка и экзамен</Text></View>
-        <Ionicons name="chevron-forward" size={22} color="white" />
+        <Ionicons name="chevron-forward" size={22} color={colors.text} />
       </Pressable>
 
       <Pressable onPress={onSpeechModels} style={styles.speechCard}>
@@ -153,7 +154,7 @@ export default function AICenterScreen({ onClose, onPronunciation, onSpeechModel
           <Text style={styles.memoryCaption}>ДОБАВИТЬ ЦЕЛЬ ВРУЧНУЮ</Text>
           <View style={styles.memoryInputRow}>
             <TextInput value={memoryGoal} onChangeText={setMemoryGoal} placeholder="Например: пройти собеседование" placeholderTextColor={colors.textMuted} style={styles.memoryInput} maxLength={90} returnKeyType="done" />
-            <Pressable disabled={!memoryGoal.trim()} onPress={async () => { await addTutorMemoryGoal(memoryGoal); setMemoryGoal(""); await refresh(); }} style={[styles.memoryAdd, !memoryGoal.trim() && { opacity: 0.35 }]}><Ionicons name="add" size={22} color="white" /></Pressable>
+            <Pressable disabled={!memoryGoal.trim()} onPress={async () => { await addTutorMemoryGoal(memoryGoal); setMemoryGoal(""); await refresh(); }} style={[styles.memoryAdd, !memoryGoal.trim() && { opacity: 0.35 }]}><Ionicons name="add" size={22} color={colors.text} /></Pressable>
           </View>
         </View>
         {remembered.recurringMistakes.length ? (
@@ -188,17 +189,20 @@ export default function AICenterScreen({ onClose, onPronunciation, onSpeechModel
   );
 }
 
-function Row({ icon, title, value, good }) { return <View style={styles.row}><Ionicons name={icon} size={21} color={good ? colors.mint : colors.textMuted} /><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowValue}>{value}</Text></View>; }
-function Stat({ label, value, color }) { return <View style={styles.stat}><View style={[styles.statDot, { backgroundColor: color }]} /><Text style={styles.statValue}>{value}</Text><Text style={styles.rowSub}>{label}</Text></View>; }
-function MemoryStat({ value, label, color }) { return <View style={styles.memoryStat}><Text style={[styles.memoryValue, { color }]}>{value}</Text><Text style={styles.memoryStatLabel}>{label}</Text></View>; }
+function Row({ icon, title, value, good }) {
+  useTheme(); return <View style={styles.row}><Ionicons name={icon} size={21} color={good ? colors.mint : colors.textMuted} /><Text style={styles.rowTitle}>{title}</Text><Text style={styles.rowValue}>{value}</Text></View>; }
+function Stat({ label, value, color }) {
+  useTheme(); return <View style={styles.stat}><View style={[styles.statDot, { backgroundColor: color }]} /><Text style={styles.statValue}>{value}</Text><Text style={styles.rowSub}>{label}</Text></View>; }
+function MemoryStat({ value, label, color }) {
+  useTheme(); return <View style={styles.memoryStat}><Text style={[styles.memoryValue, { color }]}>{value}</Text><Text style={styles.memoryStatLabel}>{label}</Text></View>; }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   page: { flex: 1, backgroundColor: colors.background }, content: { padding: 22, paddingBottom: 130 }, center: { flex: 1, backgroundColor: colors.background, justifyContent: "center", alignItems: "center" },
-  header: { flexDirection: "row", alignItems: "center", gap: 13, marginBottom: 22 }, round: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, title: { color: "white", fontWeight: "900", fontSize: 28 }, muted: { color: colors.textMuted, marginTop: 3 }, statusDot: { width: 11, height: 11, borderRadius: 6 },
-  labCard: { backgroundColor: colors.purple, borderRadius: 24, padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }, labIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }, labTitle: { color: "white", fontSize: 18, fontWeight: "900" }, labText: { color: "#E9E3FF", marginTop: 4, lineHeight: 19 },
+  header: { flexDirection: "row", alignItems: "center", gap: 13, marginBottom: 22 }, round: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, title: { color: colors.text, fontWeight: "900", fontSize: 28 }, muted: { color: colors.textMuted, marginTop: 3 }, statusDot: { width: 11, height: 11, borderRadius: 6 },
+  labCard: { backgroundColor: colors.accentSoft, borderRadius: 24, padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }, labIcon: { width: 52, height: 52, borderRadius: 18, backgroundColor: "#ffffff22", alignItems: "center", justifyContent: "center" }, labTitle: { color: colors.text, fontSize: 18, fontWeight: "900" }, labText: { color: "#E9E3FF", marginTop: 4, lineHeight: 19 },
   speechCard: { backgroundColor: colors.card, borderRadius: 19, borderWidth: 1, borderColor: `${colors.mint}44`, padding: 14, marginTop: 11, flexDirection: "row", alignItems: "center", gap: 12 }, speechIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: `${colors.mint}15`, alignItems: "center", justifyContent: "center" },
-  section: { color: colors.textMuted, fontSize: 12, letterSpacing: 2, fontWeight: "900", marginTop: 27, marginBottom: 10 }, card: { backgroundColor: colors.card, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 17, gap: 15 }, row: { flexDirection: "row", alignItems: "center", gap: 11 }, rowTitle: { color: "white", fontSize: 15, fontWeight: "800", flex: 1 }, rowValue: { color: colors.textMuted, fontWeight: "700", maxWidth: "45%", textAlign: "right" }, rowSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, lineHeight: 17 },
+  section: { color: colors.textMuted, fontSize: 12, letterSpacing: 2, fontWeight: "900", marginTop: 27, marginBottom: 10 }, card: { backgroundColor: colors.card, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 17, gap: 15 }, row: { flexDirection: "row", alignItems: "center", gap: 11 }, rowTitle: { color: colors.text, fontSize: 15, fontWeight: "800", flex: 1 }, rowValue: { color: colors.textMuted, fontWeight: "700", maxWidth: "45%", textAlign: "right" }, rowSub: { color: colors.textMuted, fontSize: 12, marginTop: 4, lineHeight: 17 },
   outlineButton: { borderWidth: 1, borderColor: `${colors.orange}66`, borderRadius: 14, padding: 13, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }, outlineText: { color: colors.orange, fontWeight: "900" }, switchRow: { flexDirection: "row", alignItems: "center", gap: 14 }, notice: { backgroundColor: `${colors.purple}12`, padding: 12, borderRadius: 14, flexDirection: "row", gap: 9 }, noticeText: { flex: 1, color: colors.textMuted, fontSize: 12, lineHeight: 17 },
-  storageGrid: { flexDirection: "row", gap: 9 }, stat: { flex: 1, minHeight: 100, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 13, justifyContent: "center" }, statDot: { width: 9, height: 9, borderRadius: 5, marginBottom: 10 }, statValue: { color: "white", fontWeight: "900", fontSize: 16 }, modelRow: { marginTop: 9, backgroundColor: colors.card, borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }, modelMark: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center" }, actionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 12 },
-  memoryStats: { flexDirection: "row", gap: 7 }, memoryStat: { flex: 1, backgroundColor: colors.cardLight, borderRadius: 14, paddingVertical: 11, alignItems: "center" }, memoryValue: { fontSize: 20, fontWeight: "900" }, memoryStatLabel: { color: colors.textMuted, fontSize: 9, marginTop: 2 }, memoryCaption: { color: colors.textMuted, fontSize: 9, fontWeight: "900", letterSpacing: 1.2, marginBottom: 8 }, tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 }, tag: { maxWidth: "100%", backgroundColor: "rgba(124,92,252,0.13)", borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 }, tagText: { color: "white", fontSize: 11, fontWeight: "700", maxWidth: 220 }, memoryMistake: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7 }, memoryMistakeText: { flex: 1, color: "white", fontSize: 11, lineHeight: 16 }, memoryCount: { color: colors.orange, fontSize: 10, fontWeight: "900" }, memoryInputRow: { flexDirection: "row", gap: 8 }, memoryInput: { flex: 1, minHeight: 44, backgroundColor: colors.cardLight, borderRadius: 13, color: "white", paddingHorizontal: 12, fontSize: 12 }, memoryAdd: { width: 44, height: 44, borderRadius: 13, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
-});
+  storageGrid: { flexDirection: "row", gap: 9 }, stat: { flex: 1, minHeight: 100, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 18, padding: 13, justifyContent: "center" }, statDot: { width: 9, height: 9, borderRadius: 5, marginBottom: 10 }, statValue: { color: colors.text, fontWeight: "900", fontSize: 16 }, modelRow: { marginTop: 9, backgroundColor: colors.card, borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }, modelMark: { width: 43, height: 43, borderRadius: 14, alignItems: "center", justifyContent: "center" }, actionRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 12 },
+  memoryStats: { flexDirection: "row", gap: 7 }, memoryStat: { flex: 1, backgroundColor: colors.cardLight, borderRadius: 14, paddingVertical: 11, alignItems: "center" }, memoryValue: { fontSize: 20, fontWeight: "900" }, memoryStatLabel: { color: colors.textMuted, fontSize: 9, marginTop: 2 }, memoryCaption: { color: colors.textMuted, fontSize: 9, fontWeight: "900", letterSpacing: 1.2, marginBottom: 8 }, tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 }, tag: { maxWidth: "100%", backgroundColor: "rgba(124,92,252,0.13)", borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6, flexDirection: "row", alignItems: "center", gap: 5 }, tagText: { color: colors.text, fontSize: 11, fontWeight: "700", maxWidth: 220 }, memoryMistake: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 7 }, memoryMistakeText: { flex: 1, color: colors.text, fontSize: 11, lineHeight: 16 }, memoryCount: { color: colors.orange, fontSize: 10, fontWeight: "900" }, memoryInputRow: { flexDirection: "row", gap: 8 }, memoryInput: { flex: 1, minHeight: 44, backgroundColor: colors.cardLight, borderRadius: 13, color: colors.text, paddingHorizontal: 12, fontSize: 12 }, memoryAdd: { width: 44, height: 44, borderRadius: 13, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+}));

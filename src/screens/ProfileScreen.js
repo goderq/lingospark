@@ -1,377 +1,41 @@
-import React from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
-import { useProgress } from "../store/ProgressContext";
-import { useAuth } from "../store/AuthContext";
-import { useCloudSync } from "../store/CloudSyncContext";
-import { colors } from "../theme";
-import { ProgressBar } from "../components/UI";
+import React from 'react';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, useTheme, createThemedStyles } from '../theme';
+import { useProgress } from '../store/ProgressContext';
+import { useAuth } from '../store/AuthContext';
+import { useCloudSync } from '../store/CloudSyncContext';
+import { ProgressBar } from '../components/UI';
+import AppearancePicker from '../components/AppearancePicker';
 
-export default function ProfileScreen({
-  onSettings,
-  onVocabulary,
-  onBackup,
-  onLevels,
-  onStreak,
-  onAccount,
-  onDiagnostics,
-}) {
+export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLevels, onStreak, onAccount, onDiagnostics }) {
+  useTheme();
   const { progress, reset } = useProgress();
   const { user, signOut } = useAuth();
   const { status, lastSyncedAt, syncNow } = useCloudSync();
-  const level = Math.floor(progress.totalXP / 100) + 1;
   const data = progress.stats || {};
-  const reviewAccuracy = data.reviewTotal
-    ? Math.round(((data.reviewCorrect || 0) / data.reviewTotal) * 100)
-    : 0;
-  const grammarAccuracy = data.grammarTotal
-    ? Math.round(((data.grammarCorrect || 0) / data.grammarTotal) * 100)
-    : 0;
-  const confirm = () =>
-    Alert.alert(
-      "Сбросить прогресс?",
-      "Пройденные уроки, XP и серия будут удалены.",
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Сбросить", style: "destructive", onPress: reset },
-      ],
-    );
-  const confirmSignOut = () =>
-    Alert.alert(
-      "Выйти из аккаунта?",
-      "Облачная копия останется в безопасности. На этом iPhone можно продолжить офлайн.",
-      [
-        { text: "Отмена", style: "cancel" },
-        { text: "Выйти", style: "destructive", onPress: signOut },
-      ],
-    );
-  const syncLabels = {
-    syncing: "Сохраняем прогресс…",
-    pending: "Есть новые изменения",
-    synced: lastSyncedAt
-      ? `Сохранено ${new Date(lastSyncedAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
-      : "Прогресс сохранён",
-    error: "Нет связи — повторим позже",
-    offline: "Только на этом iPhone",
-  };
-  return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <LinearGradient
-        colors={[colors.purple, colors.mint]}
-        style={styles.avatar}
-      >
-        <Text style={styles.initial}>
-          {progress.name.slice(0, 1).toUpperCase()}
-        </Text>
-      </LinearGradient>
-      <Text style={styles.name}>{progress.name}</Text>
-      <Text style={styles.subtitle}>
-        Уровень приложения {level} · английский{" "}
-        {progress.learnerLevel || "не определён"}
-      </Text>
-      {user ? (
-        <View style={styles.accountCard}>
-          <View style={styles.accountIcon}>
-            <Ionicons name="cloud-done" size={25} color={colors.mint} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>Облачный аккаунт</Text>
-            <Text style={styles.accountEmail} numberOfLines={1}>
-              {user.email}
-            </Text>
-            <Text style={styles.syncText}>{syncLabels[status]}</Text>
-          </View>
-          <Pressable onPress={syncNow} style={styles.syncButton}>
-            <Ionicons name="sync" size={20} color={colors.purple} />
-          </Pressable>
-          <Pressable onPress={confirmSignOut} style={styles.syncButton}>
-            <Ionicons name="log-out-outline" size={20} color={colors.pink} />
-          </Pressable>
-        </View>
-      ) : (
-        <Pressable onPress={onAccount} style={styles.accountCard}>
-          <View style={styles.accountIcon}>
-            <Ionicons name="cloud-upload" size={25} color={colors.purple} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>Сохраняй прогресс в облаке</Text>
-            <Text style={styles.accountEmail}>Войди или создай аккаунт</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={21} color={colors.textMuted} />
-        </Pressable>
-      )}
-      <View style={styles.stats}>
-        <Stat emoji="🔥" value={progress.streak} label="дней" />
-        <Stat emoji="⚡️" value={progress.totalXP} label="всего XP" />
-        <Stat emoji="✓" value={progress.completed.length} label="уроков" />
-      </View>
-      <View style={styles.card}>
-        <View style={styles.row}>
-          <Text style={styles.cardTitle}>До уровня {level + 1}</Text>
-          <Text style={styles.subtitle}>{progress.totalXP % 100} / 100 XP</Text>
-        </View>
-        <ProgressBar value={(progress.totalXP % 100) / 100} />
-      </View>
-      <Text style={styles.section}>Статистика</Text>
-      <View style={styles.metrics}>
-        <Metric label="Точность слов" value={`${reviewAccuracy}%`} />
-        <Metric label="Грамматика" value={`${grammarAccuracy}%`} />
-        <Metric label="Историй" value={data.storiesCompleted || 0} />
-        <Metric label="Диалогов" value={data.dialoguesCompleted || 0} />
-        <Metric label="Лучший блиц" value={`${data.gameBest || 0}/10`} />
-        <Metric label="Ошибок" value={progress.mistakes?.length || 0} />
-      </View>
-      <Pressable onPress={onSettings} style={styles.settingsCard}>
-        <View style={styles.settingsIcon}>
-          <Ionicons name="settings" size={24} color={colors.purple} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cardTitle}>Настройки приложения</Text>
-          <Text style={styles.subtitle}>
-            Текст · анимации · голос · сложность
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={21} color={colors.textMuted} />
-      </Pressable>
-      <View style={styles.profileLinks}>
-        <ProfileLink
-          icon="pulse"
-          title="Диагностика приложения"
-          detail="Облако · локальные модели · учебные данные"
-          onPress={onDiagnostics}
-        />
-        <ProfileLink
-          icon="book"
-          title="Офлайн-словарь"
-          detail="8 000+ слов · проверенная база"
-          onPress={onVocabulary}
-        />
-        <ProfileLink
-          icon="cloud-download"
-          title="Резервная копия"
-          detail="Сохранить или восстановить прогресс файлом"
-          onPress={onBackup}
-        />
-        <ProfileLink
-          icon="school"
-          title="Прогресс A1–C1"
-          detail="Курсы, точность и экзамены"
-          onPress={onLevels}
-        />
-        <ProfileLink
-          icon="flame"
-          title="Календарь серии"
-          detail={`${progress.streak} дней подряд`}
-          onPress={onStreak}
-        />
-      </View>
-      <Text style={styles.section}>Достижения</Text>
-      <View style={styles.stats}>
-        <Achievement
-          emoji="🌱"
-          name="Первый шаг"
-          active={progress.totalXP > 0}
-        />
-        <Achievement emoji="🔥" name="На огне" active={progress.streak >= 3} />
-        <Achievement
-          emoji="🏆"
-          name="Знаток"
-          active={progress.totalXP >= 300}
-        />
-      </View>
-      <Pressable onPress={confirm} style={styles.reset}>
-        <Ionicons name="refresh" color={colors.pink} size={18} />
-        <Text style={styles.resetText}>Сбросить прогресс</Text>
-      </Pressable>
-    </ScrollView>
-  );
+  const level = Math.floor(progress.totalXP / 100) + 1;
+  const metrics = [
+    ['Слова', data.reviewTotal ? Math.round(data.reviewCorrect / data.reviewTotal * 100) + '%' : 'Нет данных'],
+    ['Грамматика', data.grammarTotal ? Math.round(data.grammarCorrect / data.grammarTotal * 100) + '%' : 'Нет данных'],
+    ['Истории', data.storiesCompleted || 0], ['Диалоги', data.dialoguesCompleted || 0], ['Лучший блиц', (data.gameBest || 0) + '/10'], ['Ошибки для разбора', progress.mistakes?.length || 0],
+  ];
+  return <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
+    <View style={s.top}><View style={{ flex: 1 }}><Text style={s.eyebrow}>ТВОЙ ПРОГРЕСС</Text><Text style={s.title}>Каждый шаг важен</Text></View><Pressable accessibilityLabel="Настройки" onPress={onSettings} style={s.gear}><Ionicons name="settings-outline" size={23} color={colors.text} /></Pressable></View>
+    <View style={s.identity}><View style={s.avatar}><Text style={s.initial}>{progress.name.slice(0, 1).toUpperCase()}</Text></View><View style={{ flex: 1, gap: 6 }}><Text style={s.name}>{progress.name}</Text><Text style={s.muted}>{progress.learnerLevel ? 'Выбранный уровень: ' + progress.learnerLevel : 'Твой личный учебный маршрут'}</Text></View></View>
+    <View style={s.stats}>{[['flame-outline', progress.streak, 'дней подряд'], ['flash-outline', progress.totalXP, 'всего XP'], ['checkmark-circle-outline', progress.completed.length, 'тем пройдено']].map(([icon, value, label]) => <View key={label} style={s.stat}><Ionicons name={icon} size={22} color={colors.purple} /><Text style={s.number}>{value}</Text><Text style={s.small}>{label}</Text></View>)}</View>
+    <View style={s.card}><View style={s.top}><Text style={s.heading}>Уровень активности {level}</Text><Text style={s.muted}>{progress.totalXP % 100}/100 XP</Text></View><ProgressBar value={(progress.totalXP % 100) / 100} /><Text style={s.small}>XP отражает занятия. Уровень английского определяется отдельно.</Text></View>
+    <Text style={s.section}>Как тебе удобнее?</Text><AppearancePicker />
+    <Pressable onPress={onAccount} style={s.link}><View style={s.icon}><Ionicons name={user ? 'cloud-done-outline' : 'cloud-upload-outline'} size={24} color={colors.purple} /></View><View style={{ flex: 1, gap: 4 }}><Text style={s.heading}>{user ? 'Твой аккаунт' : 'Сохраняй прогресс в облаке'}</Text><Text style={s.muted}>{user ? ({ synced: 'Синхронизировано', pending: 'Изменения ожидают отправки', syncing: 'Сохраняем…', conflict: 'Нужно выбрать версию прогресса', error: 'Нужна проверка подключения' }[status] || 'Доступно локально') : 'Войти или создать аккаунт'}</Text></View><Ionicons name="chevron-forward" size={20} color={colors.textMuted} /></Pressable>
+    {user && <Pressable onPress={syncNow} style={s.inline}><Text style={s.accent}>Синхронизировать сейчас</Text><Text style={s.small}>{lastSyncedAt ? new Date(lastSyncedAt).toLocaleString('ru-RU') : 'Ожидаем сохранение'}</Text></Pressable>}
+    <Text style={s.section}>Результаты практики</Text><View style={s.grid}>{metrics.map(([label, value]) => <View key={label} style={s.metric}><Text style={s.metricValue}>{value}</Text><Text style={s.muted}>{label}</Text></View>)}</View>
+    <Text style={s.section}>Всё под рукой</Text>
+    {[['school-outline', 'Прогресс A1–C1', onLevels], ['calendar-outline', 'Календарь занятий', onStreak], ['book-outline', 'Мой словарь', onVocabulary], ['save-outline', 'Резервная копия', onBackup], ['options-outline', 'Настройки обучения', onSettings], ['pulse-outline', 'Диагностика', onDiagnostics]].map(([icon, label, onPress]) => <Pressable key={label} onPress={onPress} style={s.link}><View style={s.icon}><Ionicons name={icon} size={23} color={colors.purple} /></View><Text style={[s.heading, { flex: 1 }]}>{label}</Text><Ionicons name="chevron-forward" size={18} color={colors.textMuted} /></Pressable>)}
+    <Text style={s.section}>Твои достижения</Text><View style={s.achievements}>{[['🌱', 'Первый шаг', progress.totalXP > 0], ['🔥', 'На огне', progress.streak >= 3], ['🏆', 'Знаток', progress.totalXP >= 300]].map(([emoji, title, achieved]) => <View key={title} style={[s.achievement, !achieved && { opacity: 0.45 }]}><Text style={{ fontSize: 30 }}>{emoji}</Text><Text style={s.small}>{title}</Text></View>)}</View>
+    {!!user && <Pressable style={s.inline} onPress={() => Alert.alert('Выйти из аккаунта?', 'Облачная копия останется. Можно продолжить занятия локально.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Выйти', onPress: signOut }])}><Text style={s.muted}>Выйти из аккаунта</Text></Pressable>}
+    <Pressable style={s.inline} onPress={() => Alert.alert('Сбросить учебный прогресс?', 'Пройденные темы, XP и серия будут удалены.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Сбросить', style: 'destructive', onPress: reset }])}><Text style={{ color: colors.pink, fontSize: 13 }}>Сбросить прогресс</Text></Pressable>
+  </ScrollView>;
 }
-function Stat({ emoji, value, label }) {
-  return (
-    <View style={styles.stat}>
-      <Text style={styles.statEmoji}>{emoji}</Text>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-function Metric({ label, value }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricValue}>{value}</Text>
-      <Text style={styles.metricLabel}>{label}</Text>
-    </View>
-  );
-}
-function Achievement({ emoji, name, active }) {
-  return (
-    <View style={[styles.stat, { opacity: active ? 1 : 0.32 }]}>
-      <Text style={styles.achievement}>{emoji}</Text>
-      <Text style={styles.achievementName}>{name}</Text>
-    </View>
-  );
-}
-function ProfileLink({ icon, title, detail, onPress }) {
-  return (
-    <Pressable onPress={onPress} style={styles.profileLink}>
-      <Ionicons name={icon} size={22} color={colors.mint} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.linkDetail}>{detail}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={19} color={colors.textMuted} />
-    </Pressable>
-  );
-}
-const styles = StyleSheet.create({
-  content: { padding: 20, alignItems: "center", paddingBottom: 120 },
-  settingsCard: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.card,
-    borderRadius: 21,
-    padding: 15,
-    marginTop: 22,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  accountCard: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 11,
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 14,
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  accountIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(46,211,183,.10)",
-  },
-  accountEmail: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
-  syncText: { color: colors.mint, fontSize: 11, marginTop: 4 },
-  syncButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 12,
-    backgroundColor: colors.cardLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  settingsIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(124,92,252,.14)",
-  },
-  profileLinks: { width: "100%", gap: 8, marginTop: 10 },
-  profileLink: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  linkDetail: { color: colors.textMuted, fontSize: 11, marginTop: 3 },
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 5,
-  },
-  initial: { color: "white", fontSize: 40, fontWeight: "900" },
-  name: { color: "white", fontSize: 27, fontWeight: "900", marginTop: 12 },
-  subtitle: { color: colors.textMuted, marginTop: 5 },
-  stats: { flexDirection: "row", gap: 10, width: "100%", marginTop: 24 },
-  stat: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    paddingVertical: 15,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  statEmoji: { fontSize: 22 },
-  statValue: { color: "white", fontSize: 20, fontWeight: "800", marginTop: 5 },
-  statLabel: { color: colors.textMuted, fontSize: 11, marginTop: 3 },
-  card: {
-    width: "100%",
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    padding: 18,
-    marginTop: 20,
-    gap: 14,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  cardTitle: { color: "white", fontWeight: "700", fontSize: 16 },
-  section: {
-    width: "100%",
-    color: "white",
-    fontSize: 22,
-    fontWeight: "800",
-    marginTop: 25,
-  },
-  metrics: {
-    width: "100%",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginTop: 14,
-  },
-  metric: {
-    width: "31%",
-    minHeight: 78,
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 8,
-  },
-  metricValue: { color: "white", fontSize: 20, fontWeight: "900" },
-  metricLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    marginTop: 5,
-    textAlign: "center",
-  },
-  achievement: { fontSize: 34 },
-  achievementName: {
-    color: "white",
-    fontSize: 11,
-    fontWeight: "700",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  reset: { flexDirection: "row", gap: 7, padding: 18, marginTop: 22 },
-  resetText: { color: colors.pink, fontWeight: "700" },
-});
+const s = createThemedStyles(() => ({
+ content: { padding: 22, paddingBottom: 110, gap: 16 }, top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, eyebrow: { color: colors.textMuted, fontSize: 10, letterSpacing: 1.8, fontWeight: '700' }, title: { color: colors.text, fontSize: 27, fontWeight: '800', letterSpacing: -0.7, marginTop: 8 }, gear: { width: 46, height: 46, borderRadius: 16, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' }, identity: { flexDirection: 'row', alignItems: 'center', gap: 16, marginVertical: 8 }, avatar: { width: 76, height: 76, borderRadius: 25, backgroundColor: colors.accentFill, alignItems: 'center', justifyContent: 'center' }, initial: { color: colors.onAccent, fontSize: 33, fontWeight: '800' }, name: { color: colors.text, fontSize: 25, fontWeight: '800' }, muted: { color: colors.textMuted, fontSize: 13, lineHeight: 20 }, small: { color: colors.textMuted, fontSize: 11, lineHeight: 17 }, stats: { flexDirection: 'row', padding: 18, backgroundColor: colors.card, borderRadius: 24 }, stat: { flex: 1, gap: 8, alignItems: 'center' }, number: { color: colors.text, fontSize: 26, fontWeight: '800' }, card: { padding: 20, borderRadius: 24, backgroundColor: colors.card, gap: 16 }, heading: { color: colors.text, fontSize: 16, fontWeight: '700' }, section: { color: colors.text, fontSize: 21, fontWeight: '800', marginTop: 10, letterSpacing: -0.4 }, link: { flexDirection: 'row', alignItems: 'center', gap: 13, padding: 16, borderRadius: 20, backgroundColor: colors.card }, icon: { width: 44, height: 44, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentSoft }, inline: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }, accent: { color: colors.purple, fontSize: 13, fontWeight: '700' }, grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 }, metric: { width: '48%', flexGrow: 1, padding: 18, borderRadius: 20, backgroundColor: colors.card, gap: 8 }, metricValue: { color: colors.text, fontSize: 25, fontWeight: '800' }, achievements: { flexDirection: 'row', gap: 10 }, achievement: { flex: 1, alignItems: 'center', backgroundColor: colors.card, borderRadius: 20, padding: 16, gap: 10 },
+}));

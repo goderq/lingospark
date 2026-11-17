@@ -2,6 +2,7 @@ import { evaluateExercise } from '../utils/answer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { courseTutorContext } from '../utils/learningJourney';
 import { courseDialogueEvidence, learnerTurns } from '../utils/conversationCoach';
+import ToolSheet from '../components/ToolSheet';
 import {
   ActivityIndicator,
   Alert,
@@ -22,7 +23,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { ProgressBar } from "../components/UI";
 import { speak, stopSpeech } from "../utils/speech";
 import { useProgress } from "../store/ProgressContext";
@@ -108,6 +109,7 @@ function formatSpace(bytes) {
 }
 
 export default function AITutorScreen({ onImmersiveChange, onNavigate, practice, onPracticeConsumed }) {
+  useTheme();
   const [requestedPractice] = useState(practice);
   const [installed, setInstalled] = useState({});
   const [activeId, setActiveId] = useState(null);
@@ -210,6 +212,7 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate, practice,
 }
 
 function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation, onDirector }) {
+  useTheme();
   const [download, setDownload] = useState(getDownloadState());
   const [freeSpace, setFreeSpace] = useState(null);
   const [error, setError] = useState("");
@@ -277,14 +280,14 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
     >
       <View style={styles.heroRow}>
         <View style={styles.aiLogo}>
-          <Ionicons name="sparkles" color="white" size={28} />
+          <Ionicons name="sparkles" color={colors.text} size={28} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>РАБОТАЕТ НА IPHONE</Text>
           <Text style={styles.title}>ИИ-преподаватель</Text>
         </View>
         <Pressable onPress={onCenter} style={styles.headerButton}>
-          <Ionicons name="options-outline" color="white" size={22} />
+          <Ionicons name="options-outline" color={colors.text} size={22} />
         </Pressable>
       </View>
       <Text style={styles.lead}>
@@ -300,7 +303,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
       </View>
 
       <Pressable onPress={onDirector} style={styles.directorBanner}>
-        <View style={styles.directorIcon}><Ionicons name="sparkles" size={25} color="white" /></View>
+        <View style={styles.directorIcon}><Ionicons name="sparkles" size={25} color={colors.text} /></View>
         <View style={{ flex: 1 }}>
           <Text style={styles.privacyTitle}>ИИ-маршрут на сегодня</Text>
           <Text style={styles.smallMuted}>План на 10–30 минут из твоего прогресса и ошибок</Text>
@@ -309,7 +312,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
       </Pressable>
 
       <Pressable onPress={onPronunciation} style={styles.pronunciationBanner}>
-        <View style={styles.pronunciationIcon}><Ionicons name="mic" size={25} color="white" /></View>
+        <View style={styles.pronunciationIcon}><Ionicons name="mic" size={25} color={colors.text} /></View>
         <View style={{ flex: 1 }}>
           <Text style={styles.privacyTitle}>Лаборатория произношения</Text>
           <Text style={styles.smallMuted}>Запиши фразу, сравни результат и пройди экзамен</Text>
@@ -367,7 +370,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
             ) : isInstalled ? (
               <View style={styles.installedActions}>
                 <Pressable onPress={() => onStart(model)} style={[styles.startButton, { backgroundColor: model.color }]}>
-                  <Ionicons name="chatbubbles" size={19} color="white" />
+                  <Ionicons name="chatbubbles" size={19} color={colors.text} />
                   <Text style={styles.startText}>{activeId === model.id ? "Продолжить диалог" : "Выбрать и запустить"}</Text>
                 </Pressable>
                 <Pressable onPress={() => remove(model)} style={styles.deleteButton}>
@@ -400,10 +403,12 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
 }
 
 function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice, onPracticeConsumed }) {
+  useTheme();
   const { progress, toggleNotebook, addCustomWord, addReviewPhrase } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [coursePractice, setCoursePractice] = useState(null);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [lessonHelp, setLessonHelp] = useState(0);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
   useEffect(() => { setGoalSummaryOpen(false); }, [coursePractice?.topicId, coursePractice?.requestId]);
@@ -483,7 +488,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
       const modelSessions = allSessions.filter((item) => item.modelId === model.id);
       setSessions(modelSessions);
       const requestedId = practice?.requestId ? `ai-course-${model.id}-${practice.requestId}` : null;
-      const recent = requestedId ? modelSessions.find(item => item.id === requestedId) : modelSessions[0];
+      const recent = requestedId ? modelSessions.find(item => item.id === requestedId) : null;
       if (recent) {
         setSessionId(recent.id);
         setLevel(recent.level || "A2");
@@ -812,14 +817,14 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
       <View style={styles.chatPage}>
         <View style={styles.chatHeader}>
           <Pressable onPress={() => setHistoryOpen(false)} style={styles.headerButton}>
-            <Ionicons name="chevron-back" size={22} color="white" />
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={styles.chatTitle}>История разговоров</Text>
             <Text style={styles.chatStatus}>Хранится только на этом iPhone</Text>
           </View>
-          <Pressable onPress={newConversation} style={[styles.headerButton, { backgroundColor: colors.purple }]}>
-            <Ionicons name="add" size={24} color="white" />
+          <Pressable onPress={newConversation} style={[styles.headerButton, { backgroundColor: colors.accentSoft }]}>
+            <Ionicons name="add" size={24} color={colors.text} />
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.historyContent}>
@@ -860,41 +865,12 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
           <Text numberOfLines={1} style={styles.chatTitle}>Lingo · {model.title}</Text>
           <Text style={styles.chatStatus}>{modelReady ? "Локально · без интернета" : `Запуск модели · ${progressLabel}`}</Text>
         </View>
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Открыть голосовой разговор"
-            hitSlop={5}
-            pressRetentionOffset={16}
-            onPress={onVoice}
-            style={({ pressed }) => [styles.chatHeaderButton, styles.chatHeaderButtonPrimary, pressed && styles.chatHeaderButtonPressed]}
-          >
-            <Ionicons name="mic" size={21} color={colors.white} />
-            <Text style={[styles.chatHeaderButtonText, { color: "white" }]}>Голос</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Открыть историю разговоров"
-            hitSlop={5}
-            pressRetentionOffset={16}
-            onPress={() => setHistoryOpen(true)}
-            style={({ pressed }) => [styles.chatHeaderButton, pressed && styles.chatHeaderButtonPressed]}
-          >
-            <Ionicons name="time-outline" size={22} color={colors.white} />
-            <Text style={styles.chatHeaderButtonText}>История</Text>
-          </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Открыть выбор модели"
-            hitSlop={5}
-            pressRetentionOffset={16}
-            onPress={onModels}
-            style={({ pressed }) => [styles.chatHeaderButton, pressed && styles.chatHeaderButtonPressed]}
-          >
-            <Ionicons name="hardware-chip-outline" size={22} color={colors.white} />
-            <Text style={styles.chatHeaderButtonText}>Модель</Text>
-          </Pressable>
-        </View>
+        <Pressable accessibilityLabel="Инструменты разговора" onPress={() => { Keyboard.dismiss(); setToolsOpen(true); }} style={styles.headerButton}><Ionicons name="ellipsis-horizontal" size={25} color={colors.text} /></Pressable>
+        <ToolSheet visible={toolsOpen} onClose={() => setToolsOpen(false)} title="Твой разговор" actions={[
+          { title: 'Голосовой режим', detail: 'Практика речи с собеседником', icon: 'mic-outline', onPress: onVoice },
+          { title: 'История разговоров', detail: 'Открой сохранённый диалог вручную', icon: 'time-outline', onPress: () => setHistoryOpen(true) },
+          { title: 'Локальные модели', detail: 'Выбрать и скачать модель', icon: 'hardware-chip-outline', onPress: onModels },
+        ]} />
       </View>
 
       <View style={styles.optionsStrip}>
@@ -917,14 +893,14 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         <Text style={{ color: colors.textMuted, lineHeight: 21 }}>Помощь открывается по шагам; разговор не засчитывает прохождение курса.</Text>
         {dialogueTurns >= 2 && <Pressable onPress={() => setGoalSummaryOpen(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{goalSummaryOpen ? 'Свернуть итог по цели' : 'Посмотреть итог по цели'}</Text></Pressable>}
         {dialogueTurns >= 2 && goalSummaryOpen && <>
-          <Text style={{ color: 'white', fontWeight: '700' }}>Что получилось применить</Text>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>Что получилось применить</Text>
           {dialogueEvidence.map(item => <Text key={item.prompt} style={{ color: item.matched ? colors.mint : colors.textMuted, lineHeight: 22 }}>{item.matched ? '✓ Есть совпадение с образцом' : '○ Пока нет совпадения с образцом'}: {item.prompt}</Text>)}
           <Text style={{ color: colors.textMuted, fontSize: 12 }}>Проверяются только подготовленные формулировки в твоих репликах. Другой правильный ответ может не совпасть; это не оценка качества всего диалога.</Text>
           <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !!coursePractice.goalReached }} onPress={() => setCoursePractice(value => ({ ...value, goalReached: !value.goalReached }))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{coursePractice.goalReached ? '✓ По моей оценке, цель разговора достигнута' : 'Отметить: я смог добиться цели разговора'}</Text></Pressable>
-          {!!coursePractice.phrases?.length && <Text style={{ color: 'white', lineHeight: 23 }}>Полезные выражения: {coursePractice.phrases.map(item => item.english).join(' · ')}</Text>}
+          {!!coursePractice.phrases?.length && <Text style={{ color: colors.text, lineHeight: 23 }}>Полезные выражения: {coursePractice.phrases.map(item => item.english).join(' · ')}</Text>}
         </>}
         <Pressable onPress={() => setLessonHelp(value => Math.min(3, value + 1))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontWeight: '700' }}>{lessonHelp === 0 ? 'Нужен намёк' : lessonHelp === 1 ? 'Покажи начало фразы' : 'Покажи пример'}</Text></Pressable>
-        {lessonHelp > 0 && <Text style={{ color: 'white', lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
+        {lessonHelp > 0 && <Text style={{ color: colors.text, lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
         {lessonHelp >= 3 && !!coursePractice.phrases?.[0] && <Pressable onPress={() => addReviewPhrase({ ...coursePractice.phrases[0], topic })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>Добавить эту фразу в повторение</Text></Pressable>}
       </ScrollView>}
       <View style={styles.modeStrip}>
@@ -934,7 +910,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
             return (
               <Pressable key={item.id} onPress={() => { setDialogueMode(item.id); setCoursePractice(null); }} style={[styles.modeChip, active && styles.modeChipActive]}>
                 <Ionicons name={item.icon} size={15} color={active ? "white" : colors.textMuted} />
-                <Text style={[styles.modeText, active && { color: "white" }]}>{item.title}</Text>
+                <Text style={[styles.modeText, active && { color: colors.text }]}>{item.title}</Text>
               </Pressable>
             );
           })}
@@ -1023,7 +999,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
                       <View style={styles.toolGrid}>
                         <Pressable onPress={() => onNavigate?.({ type: "tab", target: "review" })} style={styles.toolButton}><Ionicons name="library" size={16} color={colors.mint} /><Text style={styles.toolText}>Слова</Text></Pressable>
                         <Pressable onPress={() => onNavigate?.({ type: "overlay", target: "tenses" })} style={styles.toolButton}><Ionicons name="time" size={16} color={colors.orange} /><Text style={styles.toolText}>Времена</Text></Pressable>
-                        <Pressable onPress={() => onNavigate?.({ type: "overlay", target: "grammarAcademy" })} style={styles.toolButton}><Ionicons name="school" size={16} color="#5EA8FF" /><Text style={styles.toolText}>Грамматика</Text></Pressable>
+                        <Pressable onPress={() => onNavigate?.({ type: "overlay", target: "grammarAcademy" })} style={styles.toolButton}><Ionicons name="school" size={16} color={colors.blue} /><Text style={styles.toolText}>Грамматика</Text></Pressable>
                         <Pressable onPress={() => onNavigate?.({ type: "overlay", target: "dictation" })} style={styles.toolButton}><Ionicons name="headset" size={16} color={colors.pink} /><Text style={styles.toolText}>Диктант</Text></Pressable>
                       </View>
                     </View> : null}
@@ -1054,9 +1030,9 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         </View>
       ) : null}
 
-      <View style={[styles.composer, { marginBottom: keyboardVisible ? 96 : 86 }]}>
+      <View style={[styles.composer, { marginBottom: keyboardVisible ? 0 : 82 }]}>
         <Pressable onPress={startListening} disabled={!modelReady || generating || speechTranscribing} style={[styles.micButton, listening && styles.micActive]}>
-          {speechTranscribing ? <ActivityIndicator size="small" color="white" /> : <Ionicons name={listening ? "stop" : "mic"} size={22} color="white" />}
+          {speechTranscribing ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name={listening ? "stop" : "mic"} size={22} color={colors.text} />}
         </Pressable>
         <TextInput
           value={input}
@@ -1075,7 +1051,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
           disabled={!generating && (!input.trim() || !modelReady)}
           style={[styles.sendButton, !generating && (!input.trim() || !modelReady) && { opacity: 0.35 }]}
         >
-          <Ionicons name={generating ? "stop" : "arrow-up"} size={22} color="white" />
+          <Ionicons name={generating ? "stop" : "arrow-up"} size={22} color={colors.onAccent} />
         </Pressable>
       </View>
       {Platform.OS === "ios" ? (
@@ -1084,7 +1060,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
             <Text style={styles.keyboardToolbarText}>Напиши фразу по-английски</Text>
             <Pressable onPress={Keyboard.dismiss} style={styles.keyboardDone}>
               <Text style={styles.keyboardDoneText}>Скрыть</Text>
-              <Ionicons name="chevron-down" size={18} color="white" />
+              <Ionicons name="chevron-down" size={18} color={colors.text} />
             </Pressable>
           </View>
         </InputAccessoryView>
@@ -1094,6 +1070,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
 }
 
 function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onAddWord, onBack, onRetry }) {
+  useTheme();
   const [addedWords, setAddedWords] = useState([]);
   const existingWords = new Set(
     (progress.customWords || []).map((item) => item.english.trim().toLowerCase()),
@@ -1108,7 +1085,7 @@ function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onA
     <View style={styles.analysisPage}>
       <View style={styles.chatHeader}>
         <Pressable onPress={onBack} style={styles.headerButton}>
-          <Ionicons name="chevron-back" size={22} color="white" />
+          <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.chatTitle}>Разбор разговора</Text>
@@ -1116,7 +1093,7 @@ function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onA
         </View>
         {!analyzing && analysis ? (
           <Pressable onPress={onRetry} style={styles.headerButton}>
-            <Ionicons name="refresh" size={21} color="white" />
+            <Ionicons name="refresh" size={21} color={colors.text} />
           </Pressable>
         ) : <View style={{ width: 42 }} />}
       </View>
@@ -1228,6 +1205,7 @@ function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onA
 }
 
 function MiniLesson({ exercises }) {
+  useTheme();
   const [selected, setSelected] = useState({});
   useEffect(() => {
     setSelected({});
@@ -1294,31 +1272,31 @@ function MiniLesson({ exercises }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   page: { flex: 1, backgroundColor: colors.background },
   modelContent: { padding: 24, paddingBottom: 116 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14, backgroundColor: colors.background },
   muted: { color: colors.textMuted, fontSize: 14 },
   heroRow: { flexDirection: "row", alignItems: "center", gap: 14, marginTop: 6 },
-  aiLogo: { width: 58, height: 58, borderRadius: 20, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
+  aiLogo: { width: 58, height: 58, borderRadius: 20, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
   eyebrow: { color: colors.mint, fontSize: 10, fontWeight: "900", letterSpacing: 1.7, marginBottom: 3 },
-  title: { color: "white", fontSize: 29, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 29, fontWeight: "900" },
   lead: { color: colors.textMuted, fontSize: 15, lineHeight: 22, marginTop: 18 },
   privacyCard: { flexDirection: "row", gap: 12, backgroundColor: "rgba(46,211,183,0.09)", borderColor: "rgba(46,211,183,0.22)", borderWidth: 1, borderRadius: 18, padding: 16, marginTop: 18 },
   pronunciationBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 18, padding: 14, marginTop: 12 },
-  pronunciationIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
+  pronunciationIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
   directorBanner: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "rgba(124,92,252,0.11)", borderColor: "rgba(124,92,252,0.32)", borderWidth: 1, borderRadius: 18, padding: 14, marginTop: 12 },
-  directorIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
-  privacyTitle: { color: "white", fontSize: 14, fontWeight: "800", marginBottom: 4 },
+  directorIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  privacyTitle: { color: colors.text, fontSize: 14, fontWeight: "800", marginBottom: 4 },
   smallMuted: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
   sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end", marginTop: 28, marginBottom: 12 },
-  sectionTitle: { color: "white", fontSize: 19, fontWeight: "900" },
+  sectionTitle: { color: colors.text, fontSize: 19, fontWeight: "900" },
   storage: { color: colors.textMuted, fontSize: 11 },
   modelCard: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 22, padding: 17, marginBottom: 14 },
   modelTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   modelIcon: { width: 46, height: 46, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 7, flexWrap: "wrap" },
-  modelTitle: { color: "white", fontSize: 18, fontWeight: "900" },
+  modelTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   recommended: { color: colors.purple, backgroundColor: "rgba(124,92,252,0.14)", fontSize: 8, fontWeight: "900", letterSpacing: 0.7, paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7 },
   modelSubtitle: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
   size: { fontSize: 13, fontWeight: "900" },
@@ -1328,33 +1306,33 @@ const styles = StyleSheet.create({
   installText: { fontSize: 14, fontWeight: "900" },
   installedActions: { flexDirection: "row", gap: 9, marginTop: 14 },
   startButton: { flex: 1, minHeight: 48, borderRadius: 15, flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "center" },
-  startText: { color: "white", fontSize: 14, fontWeight: "900" },
+  startText: { color: colors.text, fontSize: 14, fontWeight: "900" },
   deleteButton: { width: 48, height: 48, borderRadius: 15, backgroundColor: colors.cardLight, alignItems: "center", justifyContent: "center" },
   downloadBox: { marginTop: 15 },
   downloadLabels: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  downloadText: { color: "white", fontSize: 12, fontWeight: "800" },
+  downloadText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   cancelButton: { alignSelf: "center", padding: 9, marginTop: 4 },
   cancelText: { color: colors.pink, fontSize: 12, fontWeight: "800" },
   errorBox: { flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "rgba(255,92,138,0.1)", padding: 14, borderRadius: 14 },
-  errorText: { color: "white", fontSize: 12, lineHeight: 17, flex: 1 },
+  errorText: { color: colors.text, fontSize: 12, lineHeight: 17, flex: 1 },
   licenseText: { color: colors.textMuted, opacity: 0.7, textAlign: "center", fontSize: 10, marginTop: 8 },
   chatPage: { flex: 1, backgroundColor: colors.background },
   chatHeader: { minHeight: 74, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 14, borderBottomWidth: 1, borderColor: colors.border },
   onlineDot: { width: 10, height: 10, borderRadius: 5 },
-  chatTitle: { color: "white", fontSize: 17, fontWeight: "900" },
+  chatTitle: { color: colors.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
   chatStatus: { color: colors.textMuted, fontSize: 10, marginTop: 2 },
   headerActions: { flexDirection: "row", gap: 5 },
   headerButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   chatHeaderButton: { width: 54, height: 56, borderRadius: 17, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 2 },
-  chatHeaderButtonPrimary: { backgroundColor: colors.purple, borderColor: colors.purple },
+  chatHeaderButtonPrimary: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
   chatHeaderButtonPressed: { opacity: 0.65, transform: [{ scale: 0.94 }] },
   chatHeaderButtonText: { color: colors.textMuted, fontSize: 8, lineHeight: 10, fontWeight: "800" },
   optionsStrip: { borderBottomWidth: 1, borderColor: colors.border },
   chips: { paddingHorizontal: 14, paddingVertical: 10, gap: 7 },
   chip: { height: 34, minWidth: 44, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  chipActive: { backgroundColor: colors.purple },
+  chipActive: { backgroundColor: colors.accentSoft },
   chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "900" },
-  chipTextActive: { color: "white" },
+  chipTextActive: { color: colors.text },
   topicChip: { height: 34, paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   topicChipActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,0.14)" },
   topicText: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
@@ -1365,7 +1343,7 @@ const styles = StyleSheet.create({
   modeText: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
   modeHint: { color: colors.textMuted, fontSize: 9, marginTop: 5, paddingHorizontal: 16 },
   loadingModel: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 36, gap: 12 },
-  modelLoadingTitle: { color: "white", fontSize: 18, fontWeight: "900" },
+  modelLoadingTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   messages: { flex: 1 },
   messagesContent: { padding: 16, paddingBottom: 24, gap: 12 },
   missionCard: { backgroundColor: "rgba(255,159,67,0.08)", borderWidth: 1, borderColor: "rgba(255,159,67,0.32)", borderRadius: 19, padding: 14, gap: 10 },
@@ -1373,7 +1351,7 @@ const styles = StyleSheet.create({
   missionTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   missionIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: "rgba(255,159,67,0.14)", alignItems: "center", justifyContent: "center" },
   missionLabel: { color: colors.orange, fontSize: 8, fontWeight: "900", letterSpacing: 1.3 },
-  missionTitle: { color: "white", fontSize: 15, fontWeight: "900", marginTop: 2 },
+  missionTitle: { color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 },
   missionCount: { color: colors.orange, fontSize: 16, fontWeight: "900" },
   missionDescription: { color: colors.textMuted, fontSize: 11, lineHeight: 16 },
   missionDone: { color: colors.mint, fontSize: 10, fontWeight: "800" },
@@ -1383,12 +1361,12 @@ const styles = StyleSheet.create({
   messageRowUser: { justifyContent: "flex-end" },
   bubble: { maxWidth: "88%", padding: 14, borderRadius: 18 },
   aiBubble: { backgroundColor: colors.card, borderTopLeftRadius: 6 },
-  userBubble: { backgroundColor: colors.purple, borderTopRightRadius: 6 },
+  userBubble: { backgroundColor: colors.accentSoft, borderTopRightRadius: 6 },
   lingoLabel: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1.2, marginBottom: 7 },
-  commandLabel: { color: "rgba(255,255,255,0.7)", fontSize: 8, fontWeight: "900", letterSpacing: 1.1, marginBottom: 5 },
+  commandLabel: { color: colors.textMuted, fontSize: 8, fontWeight: "900", letterSpacing: 1.1, marginBottom: 5 },
   qualityBadge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.cardLight, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 4, marginBottom: 8 },
   qualityText: { color: colors.textMuted, fontSize: 8, fontWeight: "800" },
-  messageText: { color: "white", fontSize: 15, lineHeight: 21 },
+  messageText: { color: colors.text, fontSize: 16, lineHeight: 25 },
   thinkingRow: { flexDirection: "row", gap: 9, alignItems: "center" },
   speakButton: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 10, alignSelf: "flex-start" },
   speakText: { color: colors.purple, fontSize: 11, fontWeight: "800" },
@@ -1402,38 +1380,38 @@ const styles = StyleSheet.create({
   responsePanelTitle: { color: colors.textMuted, fontSize: 8, fontWeight: "900", letterSpacing: 1.1 },
   responseActionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   responseAction: { minWidth: "30%", flexGrow: 1, height: 36, borderRadius: 10, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 7 },
-  responseActionText: { color: "white", fontSize: 9, fontWeight: "800" },
+  responseActionText: { color: colors.text, fontSize: 9, fontWeight: "800" },
   toolGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   toolButton: { width: "48%", flexGrow: 1, height: 38, borderRadius: 10, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  toolText: { color: "white", fontSize: 9, fontWeight: "800" },
+  toolText: { color: colors.text, fontSize: 9, fontWeight: "800" },
   chatError: { marginHorizontal: 14, marginBottom: 7, backgroundColor: "rgba(255,159,67,0.12)", borderRadius: 12, padding: 10, flexDirection: "row", gap: 8, alignItems: "center" },
-  chatErrorText: { color: "white", fontSize: 11, lineHeight: 15, flex: 1 },
+  chatErrorText: { color: colors.text, fontSize: 11, lineHeight: 15, flex: 1 },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   micButton: { width: 46, height: 46, borderRadius: 16, backgroundColor: colors.cardLight, alignItems: "center", justifyContent: "center" },
   micActive: { backgroundColor: colors.pink },
-  input: { flex: 1, minHeight: 46, maxHeight: 108, color: "white", backgroundColor: colors.card, borderRadius: 16, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12, fontSize: 14 },
-  sendButton: { width: 46, height: 46, borderRadius: 16, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
+  input: { flex: 1, minHeight: 46, maxHeight: 108, color: colors.text, backgroundColor: colors.card, borderRadius: 16, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 12, fontSize: 14 },
+  sendButton: { width: 46, height: 46, borderRadius: 16, backgroundColor: colors.accentFill, alignItems: "center", justifyContent: "center" },
   backgroundHint: { color: colors.mint, fontSize: 10, textAlign: "center", marginTop: 9 },
   historyContent: { padding: 16, paddingBottom: 110, gap: 10 },
   historyCard: { minHeight: 74, borderRadius: 18, padding: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 11 },
   historyCardActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,0.09)" },
   historyIcon: { width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(124,92,252,0.13)", alignItems: "center", justifyContent: "center" },
-  historyTitle: { color: "white", fontSize: 14, fontWeight: "800" },
+  historyTitle: { color: colors.text, fontSize: 14, fontWeight: "800" },
   historyMeta: { color: colors.textMuted, fontSize: 10, marginTop: 5 },
   emptyHistory: { alignItems: "center", paddingTop: 90, gap: 10 },
   analysisBanner: { minHeight: 72, borderRadius: 19, borderWidth: 1, borderColor: "rgba(255,159,67,0.35)", backgroundColor: "rgba(255,159,67,0.09)", padding: 13, flexDirection: "row", alignItems: "center", gap: 11, marginTop: 4 },
   analysisBannerIcon: { width: 43, height: 43, borderRadius: 14, backgroundColor: "rgba(255,159,67,0.14)", alignItems: "center", justifyContent: "center" },
-  analysisBannerTitle: { color: "white", fontSize: 14, fontWeight: "900", marginBottom: 3 },
-  keyboardToolbar: { height: 46, backgroundColor: "#202331", borderTopWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 15 },
+  analysisBannerTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginBottom: 3 },
+  keyboardToolbar: { height: 46, backgroundColor: colors.card, borderTopWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 15 },
   keyboardToolbarText: { color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-  keyboardDone: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.purple, paddingHorizontal: 13, height: 32, borderRadius: 11 },
-  keyboardDoneText: { color: "white", fontSize: 12, fontWeight: "900" },
+  keyboardDone: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.accentSoft, paddingHorizontal: 13, height: 32, borderRadius: 11 },
+  keyboardDoneText: { color: colors.text, fontSize: 12, fontWeight: "900" },
   analysisPage: { flex: 1, backgroundColor: colors.background, paddingBottom: 86 },
   analysisContent: { padding: 18, paddingBottom: 36 },
   analysisLoading: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 38, gap: 13 },
   analysisPulse: { width: 76, height: 76, borderRadius: 25, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,92,252,0.13)", borderWidth: 1, borderColor: "rgba(124,92,252,0.35)" },
   analysisHero: { backgroundColor: "rgba(124,92,252,0.12)", borderWidth: 1, borderColor: "rgba(124,92,252,0.3)", padding: 18, borderRadius: 21 },
-  analysisSummary: { color: "white", fontSize: 16, lineHeight: 23, fontWeight: "700", marginTop: 8 },
+  analysisSummary: { color: colors.text, fontSize: 16, lineHeight: 23, fontWeight: "700", marginTop: 8 },
   analysisSection: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginTop: 24, marginBottom: 10 },
   scoreGrid: { flexDirection: "row", gap: 9 },
   scoreCard: { flex: 1, minHeight: 105, backgroundColor: colors.card, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center", gap: 4 },
@@ -1441,7 +1419,7 @@ const styles = StyleSheet.create({
   scoreLabel: { color: colors.textMuted, fontSize: 9, fontWeight: "700" },
   strengthCard: { backgroundColor: "rgba(46,211,183,0.08)", borderWidth: 1, borderColor: "rgba(46,211,183,0.22)", borderRadius: 18, padding: 15, gap: 11 },
   strengthRow: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
-  analysisText: { color: "white", fontSize: 13, lineHeight: 18, flex: 1 },
+  analysisText: { color: colors.text, fontSize: 13, lineHeight: 18, flex: 1 },
   mistakeCard: { backgroundColor: colors.card, borderRadius: 19, borderWidth: 1, borderColor: colors.border, padding: 15, marginBottom: 10 },
   mistakeNumber: { color: colors.orange, fontSize: 9, fontWeight: "900", letterSpacing: 1.2, marginBottom: 11 },
   phraseRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 8 },
@@ -1449,19 +1427,19 @@ const styles = StyleSheet.create({
   mistakeExplain: { color: colors.textMuted, fontSize: 12, lineHeight: 18, borderTopWidth: 1, borderColor: colors.border, paddingTop: 10, marginTop: 3 },
   noMistakes: { backgroundColor: colors.card, borderRadius: 18, padding: 15, flexDirection: "row", alignItems: "center", gap: 12 },
   wordCard: { backgroundColor: colors.card, borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 15, flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 9 },
-  wordEnglish: { color: "white", fontSize: 17, fontWeight: "900" },
+  wordEnglish: { color: colors.text, fontSize: 17, fontWeight: "900" },
   wordRussian: { color: colors.mint, fontSize: 12, fontWeight: "700", marginTop: 3 },
   wordExample: { color: colors.textMuted, fontSize: 11, fontStyle: "italic", marginTop: 6 },
-  wordAdd: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
+  wordAdd: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
   wordAdded: { backgroundColor: "rgba(46,211,183,0.13)", borderWidth: 1, borderColor: "rgba(46,211,183,0.28)" },
   exerciseCard: { backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 15 },
   exerciseCount: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
-  exercisePrompt: { color: "white", fontSize: 16, lineHeight: 22, fontWeight: "800", marginTop: 8, marginBottom: 13 },
+  exercisePrompt: { color: colors.text, fontSize: 16, lineHeight: 22, fontWeight: "800", marginTop: 8, marginBottom: 13 },
   exerciseOption: { minHeight: 46, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardLight, paddingHorizontal: 13, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   exerciseCorrect: { borderColor: colors.mint, backgroundColor: "rgba(46,211,183,0.1)" },
   exerciseWrong: { borderColor: colors.pink, backgroundColor: "rgba(255,92,138,0.1)" },
-  exerciseOptionText: { color: "white", fontSize: 13, lineHeight: 18, fontWeight: "700", flex: 1 },
+  exerciseOptionText: { color: colors.text, fontSize: 13, lineHeight: 18, fontWeight: "700", flex: 1 },
   exerciseExplain: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 11 },
   lessonResult: { backgroundColor: "rgba(124,92,252,0.12)", borderWidth: 1, borderColor: "rgba(124,92,252,0.3)", borderRadius: 19, padding: 15, flexDirection: "row", alignItems: "center", gap: 12 },
-  retryButton: { minHeight: 48, borderRadius: 15, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center", paddingHorizontal: 22 },
-});
+  retryButton: { minHeight: 48, borderRadius: 15, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center", paddingHorizontal: 22 },
+}));

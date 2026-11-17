@@ -37,7 +37,8 @@ import {
   thematicPacks,
 } from "../data/expansion";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
+import AppearancePicker from '../components/AppearancePicker';
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
 
@@ -51,10 +52,11 @@ Notifications.setNotificationHandler({
 });
 
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -63,6 +65,7 @@ function Header({ title, onClose }) {
 }
 
 export function BackupScreen({ onClose, initialMode = 'export' }) {
+  useTheme();
   const { progress, restoreProgress } = useProgress();
   const { user } = useAuth();
   const [code, setCode] = useState("");
@@ -217,6 +220,7 @@ export function BackupScreen({ onClose, initialMode = 'export' }) {
 }
 
 export function SettingsScreen({ onClose }) {
+  const appearance = useTheme();
   const { progress, updateSettings } = useProgress();
   const settings = {
     accent: "en-US",
@@ -286,8 +290,10 @@ export function SettingsScreen({ onClose }) {
   };
   return (
     <View style={s.container}>
-      <Header title="Настройки обучения" onClose={onClose} />
+      <Header title="Настройки" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
+        <Text style={s.sectionTitle}>Оформление</Text>
+        <AppearancePicker />
         <Text style={s.sectionTitle}>Напоминания</Text>
         <View style={s.card}>
           <SettingRow
@@ -367,9 +373,9 @@ export function SettingsScreen({ onClose }) {
           />
           <SettingRow
             title="Меньше анимаций"
-            detail="Отключить движения и оставить только смену цвета"
-            value={settings.reduceMotion}
-            onChange={(value) => updateSettings({ reduceMotion: value })}
+            detail={appearance.reduceMotion && !appearance.userReduceMotion ? 'Движение уменьшено в системных настройках' : 'Отключить движения и оставить только смену цвета'}
+            value={appearance.userReduceMotion || settings.reduceMotion}
+            onChange={(value) => { appearance.setReduceMotion(value); updateSettings({ reduceMotion: value }); }}
           />
           <SettingRow
             title="Вибрация ответов"
@@ -448,6 +454,7 @@ export function SettingsScreen({ onClose }) {
   );
 }
 function SettingRow({ title, detail, value, onChange }) {
+  useTheme();
   return (
     <View style={s.settingRow}>
       <View style={{ flex: 1 }}>
@@ -464,6 +471,7 @@ function SettingRow({ title, detail, value, onChange }) {
 }
 
 export function CommonMistakesScreen({ onClose }) {
+  useTheme();
   const { recordExercise } = useProgress();
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState("");
@@ -567,6 +575,7 @@ export function CommonMistakesScreen({ onClose }) {
 }
 
 export function PacksScreen({ onClose }) {
+  useTheme();
   const [pack, setPack] = useState(null);
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -652,6 +661,7 @@ export function PacksScreen({ onClose }) {
 }
 
 export function ShadowingScreen({ onClose }) {
+  useTheme();
   const { progress } = useProgress();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const state = useAudioRecorderState(recorder);
@@ -705,7 +715,7 @@ export function ShadowingScreen({ onClose }) {
         <View style={s.shadowPart}>
           <Text style={s.shadowText}>{line.parts[part]}</Text>
           <Pressable onPress={() => listen()} style={s.play}>
-            <Ionicons name="play" size={24} color="white" />
+            <Ionicons name="play" size={24} color={colors.onAccent} />
           </Pressable>
         </View>
         <Text style={s.shadowTranslation}>{line.translation}</Text>
@@ -724,7 +734,7 @@ export function ShadowingScreen({ onClose }) {
           <Ionicons
             name={state.isRecording ? "stop" : "mic"}
             size={31}
-            color="white"
+            color={colors.onAccent}
           />
         </Pressable>
         {recorded && (
@@ -744,7 +754,7 @@ export function ShadowingScreen({ onClose }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -761,9 +771,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontSize: 17, fontWeight: "800" },
+  headerTitle: { color: colors.text, fontSize: 17, fontWeight: "800" },
   content: { padding: 20, paddingBottom: 45 },
-  bigTitle: { color: "white", fontSize: 32, fontWeight: "900" },
+  bigTitle: { color: colors.text, fontSize: 32, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     textAlign: "center",
@@ -790,8 +800,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     borderRadius: 13,
   },
-  segmentActive: { backgroundColor: colors.purple },
-  segmentText: { color: "white", fontWeight: "800" },
+  segmentActive: { backgroundColor: colors.accentSoft },
+  segmentText: { color: colors.text, fontWeight: "800" },
   hero: { alignItems: "center", marginVertical: 15 },
   heroEmoji: { fontSize: 65 },
   codeBox: {
@@ -807,13 +817,13 @@ const s = StyleSheet.create({
     minHeight: 180,
     backgroundColor: colors.card,
     borderRadius: 19,
-    color: "white",
+    color: colors.text,
     padding: 15,
     textAlignVertical: "top",
     marginBottom: 15,
   },
   sectionTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 22,
     fontWeight: "900",
     marginBottom: 12,
@@ -824,7 +834,7 @@ const s = StyleSheet.create({
     padding: 16,
     marginBottom: 24,
   },
-  label: { color: "white", fontWeight: "800", marginBottom: 10, marginTop: 7 },
+  label: { color: colors.text, fontWeight: "800", marginBottom: 10, marginTop: 7 },
   choices: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 13 },
   choice: {
     paddingHorizontal: 13,
@@ -838,7 +848,7 @@ const s = StyleSheet.create({
     borderColor: colors.purple,
     backgroundColor: "rgba(124,92,252,.18)",
   },
-  choiceText: { color: "white", fontWeight: "700", fontSize: 12 },
+  choiceText: { color: colors.text, fontWeight: "700", fontSize: 12 },
   testVoice: {
     flexDirection: "row",
     gap: 7,
@@ -853,7 +863,7 @@ const s = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "800" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
   cardText: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
   center: {
     flex: 1,
@@ -861,7 +871,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     padding: 30,
   },
-  result: { color: "white", fontSize: 45, fontWeight: "900", marginTop: 15 },
+  result: { color: colors.text, fontSize: 45, fontWeight: "900", marginTop: 15 },
   topic: {
     color: colors.pink,
     fontSize: 11,
@@ -870,7 +880,7 @@ const s = StyleSheet.create({
     marginTop: 20,
   },
   prompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 28,
     fontWeight: "900",
     marginVertical: 15,
@@ -884,7 +894,7 @@ const s = StyleSheet.create({
     borderRadius: 18,
     marginBottom: 18,
   },
-  wrong: { color: "white", fontSize: 19, fontWeight: "700" },
+  wrong: { color: colors.text, fontSize: 19, fontWeight: "700" },
   option: {
     padding: 16,
     minHeight: 58,
@@ -894,7 +904,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
   },
-  optionText: { color: "white", fontSize: 16, fontWeight: "600" },
+  optionText: { color: colors.text, fontSize: 16, fontWeight: "600" },
   explanation: {
     flexDirection: "row",
     gap: 10,
@@ -933,7 +943,7 @@ const s = StyleSheet.create({
     marginTop: 25,
   },
   flashWord: {
-    color: "white",
+    color: colors.text,
     fontSize: 35,
     fontWeight: "900",
     textAlign: "center",
@@ -963,7 +973,7 @@ const s = StyleSheet.create({
     marginTop: 20,
   },
   shadowText: {
-    color: "white",
+    color: colors.text,
     fontSize: 28,
     lineHeight: 36,
     fontWeight: "900",
@@ -973,7 +983,7 @@ const s = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentFill,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 16,
@@ -996,7 +1006,7 @@ const s = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     alignSelf: "center",
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentFill,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 18,
@@ -1013,4 +1023,4 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   compareText: { color: colors.mint, fontWeight: "800" },
-});
+}));

@@ -15,7 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { speak } from "../utils/speech";
 import * as Haptics from "expo-haptics";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
@@ -29,6 +29,7 @@ import { getCourseDialogue } from '../data/courseDialogues';
 import { readLessonSession, lessonContentKey } from '../utils/lessonSession';
 
 export default function LessonScreen({ lesson, onClose }) {
+  useTheme();
   const {
     progress,
     clearLessonDraft,
@@ -72,7 +73,7 @@ export default function LessonScreen({ lesson, onClose }) {
   }, [serializedSession, finished, lesson.id, saveLessonDraft]);
   const feedbackAnim = useRef(new Animated.Value(0)).current;
   const resultAnim = useRef(new Animated.Value(0)).current;
-  const reduceMotion = progress.settings?.reduceMotion;
+  const reduceMotion = useTheme().reduceMotion || progress.settings?.reduceMotion;
   const largeText = progress.settings?.largeText;
   useEffect(() => {
     if (!checked) {
@@ -784,7 +785,7 @@ export default function LessonScreen({ lesson, onClose }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   top: {
     height: 62,
@@ -799,7 +800,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 30 },
   kind: { fontSize: 11, fontWeight: "900", letterSpacing: 1.5 },
   prompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 29,
     lineHeight: 36,
     fontWeight: "900",
@@ -818,7 +819,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 24,
   },
-  listenText: { color: "white", fontWeight: "700" },
+  listenText: { color: colors.text, fontWeight: "700" },
   options: { gap: 11 },
   option: {
     minHeight: 58,
@@ -836,7 +837,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(124,92,252,0.16)",
     borderColor: colors.purple,
   },
-  optionText: { flex: 1, color: "white", fontSize: 16, fontWeight: "600" },
+  optionText: { flex: 1, color: colors.text, fontSize: 16, fontWeight: "600" },
   optionTextLarge: { fontSize: 18, lineHeight: 25 },
   sentence: {
     minHeight: 78,
@@ -846,7 +847,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sentenceText: {
-    color: "white",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
     lineHeight: 28,
@@ -860,11 +861,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  wordText: { color: "white", fontWeight: "700", fontSize: 16 },
+  wordText: { color: colors.text, fontWeight: "700", fontSize: 16 },
   clear: { color: colors.textMuted, fontWeight: "700", marginTop: 17 },
   input: {
     minHeight: 100,
-    color: "white",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
     backgroundColor: colors.card,
@@ -883,7 +884,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   feedbackTitle: { fontWeight: "800", fontSize: 16 },
-  answer: { color: "white", marginTop: 5 },
+  answer: { color: colors.text, marginTop: 5 },
   wordAnalysis: { gap: 4, marginTop: 9 },
   missingWords: { color: colors.orange, fontSize: 13, fontWeight: "700" },
   extraWords: { color: colors.pink, fontSize: 13, fontWeight: "700" },
@@ -913,11 +914,11 @@ const styles = StyleSheet.create({
     borderColor: colors.pink,
   },
   tokenMissing: {
-    backgroundColor: "rgba(255,255,255,.06)",
+    backgroundColor: colors.border,
     borderColor: colors.textMuted,
     borderStyle: "dashed",
   },
-  tokenText: { color: "white", fontSize: 12, fontWeight: "800" },
+  tokenText: { color: colors.text, fontSize: 12, fontWeight: "800" },
   missingTokenText: {
     color: colors.textMuted,
     fontSize: 12,
@@ -939,7 +940,7 @@ const styles = StyleSheet.create({
   },
   party: { fontSize: 82 },
   resultTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 35,
     fontWeight: "900",
     marginTop: 16,
@@ -960,7 +961,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     paddingVertical: 13,
   },
-  resultStatValue: { color: "white", fontSize: 20, fontWeight: "900" },
+  resultStatValue: { color: colors.text, fontSize: 20, fontWeight: "900" },
   resultStatLabel: { color: colors.textMuted, fontSize: 10, marginTop: 3 },
   recommendation: {
     color: colors.textMuted,
@@ -970,7 +971,7 @@ const styles = StyleSheet.create({
   },
   remediationCount: { color: colors.orange, fontWeight: "900", fontSize: 12 },
   remediationTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 27,
     lineHeight: 35,
     fontWeight: "900",
@@ -992,10 +993,10 @@ const styles = StyleSheet.create({
   },
   comparisonWrong: { color: colors.pink, fontSize: 16, fontWeight: "700" },
   comparisonRight: { color: colors.mint, fontSize: 17, fontWeight: "800" },
-  retryLabel: { color: "white", fontWeight: "800", marginTop: 20, marginBottom: 9 },
+  retryLabel: { color: colors.text, fontWeight: "800", marginTop: 20, marginBottom: 9 },
   remediationInput: {
     minHeight: 62,
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     backgroundColor: colors.card,
     borderRadius: 17,
@@ -1012,7 +1013,7 @@ const styles = StyleSheet.create({
   },
   dialogueSpeaker: { color: colors.purple, fontSize: 11, fontWeight: "900" },
   dialogueLine: {
-    color: "white",
+    color: colors.text,
     fontSize: 24,
     lineHeight: 32,
     fontWeight: "800",
@@ -1039,4 +1040,4 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   savedText: { color: colors.mint, fontSize: 11, fontWeight: "800" },
-});
+}));

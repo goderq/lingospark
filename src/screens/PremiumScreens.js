@@ -17,16 +17,17 @@ import { extendedVocabularyTopics } from "../data/growthContent";
 import { ieltsReading, ieltsListening } from "../data/deepLearning";
 import { careerTracks, seasonTwoChapters } from "../data/premiumContent";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { answersMatch } from "../utils/answer";
 import ExplanationCard from "../components/ExplanationCard";
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -38,6 +39,7 @@ const words = [...vocabularyTopics, ...extendedVocabularyTopics].flatMap(
 );
 
 export function WrittenVocabularyScreen({ onClose }) {
+  useTheme();
   const { recordExercise, recordLexiconReview } = useProgress();
   const [seed] = useState(() => Date.now());
   const deck = useMemo(
@@ -166,6 +168,7 @@ export function WrittenVocabularyScreen({ onClose }) {
 }
 
 export function CareerCoursesScreen({ onClose }) {
+  useTheme();
   const { progress, completeCareer } = useProgress();
   const [track, setTrack] = useState(null);
   const [index, setIndex] = useState(0);
@@ -295,6 +298,7 @@ export function CareerCoursesScreen({ onClose }) {
 }
 
 export function StorySeasonTwoScreen({ onClose }) {
+  useTheme();
   const { progress, saveSeasonTwo } = useProgress();
   const saved = progress.seasonTwo || {};
   const [index, setIndex] = useState(
@@ -401,12 +405,13 @@ const mockQuestions = [
   ),
 ];
 export function FullIeltsMockScreen({ onClose }) {
+  useTheme();
   const [seed] = useState(Date.now);
   const deck = useMemo(() => sampleExamQuestions(mockQuestions, 20, seed), [seed]);
   return <PracticeScreen title="IELTS · учебная проверка чтения и слуха" sessionKey="exam-ielts-mock" presetDeck={deck} onClose={onClose} />;
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -423,9 +428,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "800", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "800", fontSize: 17 },
   content: { padding: 20, paddingBottom: 50 },
-  title: { color: "white", fontSize: 32, lineHeight: 39, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 32, lineHeight: 39, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     lineHeight: 22,
@@ -440,7 +445,7 @@ const s = StyleSheet.create({
     padding: 30,
   },
   bigEmoji: { fontSize: 70 },
-  result: { color: "white", fontSize: 47, fontWeight: "900", marginTop: 10 },
+  result: { color: colors.text, fontSize: 47, fontWeight: "900", marginTop: 10 },
   eyebrow: {
     color: colors.orange,
     fontSize: 11,
@@ -449,7 +454,7 @@ const s = StyleSheet.create({
     marginTop: 22,
   },
   prompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 34,
     lineHeight: 42,
     fontWeight: "900",
@@ -459,7 +464,7 @@ const s = StyleSheet.create({
   listenText: { color: colors.purple, fontWeight: "800" },
   input: {
     minHeight: 105,
-    color: "white",
+    color: colors.text,
     fontSize: 18,
     backgroundColor: colors.card,
     borderRadius: 19,
@@ -492,7 +497,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "800" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
   cardText: {
     color: colors.textMuted,
     fontSize: 12,
@@ -501,7 +506,7 @@ const s = StyleSheet.create({
   },
   level: { color: colors.purple, fontSize: 10, fontWeight: "900" },
   question: {
-    color: "white",
+    color: colors.text,
     fontSize: 26,
     lineHeight: 34,
     fontWeight: "900",
@@ -516,7 +521,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
   },
-  optionText: { color: "white", fontSize: 15, fontWeight: "650" },
+  optionText: { color: colors.text, fontSize: 15, fontWeight: "650" },
   correct: { borderColor: colors.mint },
   wrong: { borderColor: colors.orange },
   storyEmoji: { fontSize: 58, textAlign: "center", marginTop: 20 },
@@ -526,7 +531,7 @@ const s = StyleSheet.create({
     padding: 17,
     marginVertical: 16,
   },
-  storyText: { color: "white", fontSize: 16, lineHeight: 24 },
+  storyText: { color: colors.text, fontSize: 16, lineHeight: 24 },
   choice: {
     flexDirection: "row",
     gap: 10,
@@ -548,7 +553,7 @@ const s = StyleSheet.create({
     paddingTop: 5,
     fontWeight: "900",
   },
-  choiceText: { color: "white", lineHeight: 21, flex: 1 },
+  choiceText: { color: colors.text, lineHeight: 21, flex: 1 },
   audio: {
     alignItems: "center",
     backgroundColor: colors.card,
@@ -557,4 +562,4 @@ const s = StyleSheet.create({
     marginTop: 16,
   },
   band: { color: colors.mint, fontSize: 46, fontWeight: "900", marginTop: 12 },
-});
+}));

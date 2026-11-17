@@ -17,7 +17,7 @@ import { worldLocations } from "../data/lingoWorld";
 import WorldPathsScreen from './WorldPathsScreen';
 import { buildWorldMission, worldArcs, worldUnlocked, worldMemory, worldDecisionAvailable, readWorldDraft } from '../data/worldExpansion';
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { gradeAnswer } from "../utils/answer";
 import { balancedOptions } from "../utils/shuffle";
@@ -130,10 +130,11 @@ const worldEvents = [
 ];
 
 function Header({ title, onClose, right }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={s.headerRight}>{right}</View>
@@ -142,6 +143,7 @@ function Header({ title, onClose, right }) {
 }
 
 export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
+  useTheme();
   const { progress } = useProgress();
   const [location, setLocation] = useState(null);
   const [tab, setTab] = useState("map");
@@ -215,7 +217,8 @@ export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
       <WorldTabs tab={tab} setTab={setTab} />
       <ScrollView contentContainerStyle={s.mapContent}>
         <View style={s.worldHero}>
-          <Text style={s.worldEmoji}>🌍</Text>
+          <View style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: colors.accentSoft }}><Text style={{ color: colors.purple, fontSize: 10, fontWeight: '800', letterSpacing: 1.5 }}>ИСТОРИЯ / ЛОНДОН</Text></View>
+          <Text style={s.worldEmoji}>🏙️</Text>
           <Text style={s.worldTitle}>Твоя история в Лондоне</Text>
           <Text style={s.worldText}>
             Живые ситуации, свободные ответы и путь от первого прилёта до
@@ -225,6 +228,7 @@ export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
             value={completed.length / worldLocations.length}
             color={colors.mint}
           />
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 12 }}>{completed.length} из {worldLocations.length} глав · твои решения меняют историю</Text>
         </View>
 
         <View style={s.dailyEvent}>
@@ -337,6 +341,7 @@ export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
 }
 
 function WorldTabs({ tab, setTab }) {
+  useTheme();
   const tabs = [
     ["map", "map", "Карта"],
     ["phone", "chatbubble-ellipses", "Телефон"],
@@ -357,7 +362,7 @@ function WorldTabs({ tab, setTab }) {
             size={18}
             color={tab === id ? "white" : colors.textMuted}
           />
-          <Text style={[s.worldTabText, tab === id && { color: "white" }]}>
+          <Text style={[s.worldTabText, tab === id && { color: colors.text }]}>
             {label}
           </Text>
         </Pressable>
@@ -367,6 +372,7 @@ function WorldTabs({ tab, setTab }) {
 }
 
 function WorldJournal({ world, onLocation }) {
+  useTheme();
   const completed = world.completed || [];
   const draftLocation = worldLocations.find((item) => item.id === world.draft?.locationId);
   return <ScrollView contentContainerStyle={s.tabContent}>
@@ -395,6 +401,7 @@ function WorldJournal({ world, onLocation }) {
 }
 
 function PhoneTab({ world }) {
+  useTheme();
   const { completeWorldEvent, replyWorldMessage } = useProgress();
   const [eventAnswer, setEventAnswer] = useState("");
   const [replyTo, setReplyTo] = useState(null);
@@ -556,6 +563,7 @@ function PhoneTab({ world }) {
 }
 
 function HomeTab({ world }) {
+  useTheme();
   const { buyWorldHomeItem } = useProgress();
   const owned = world.homeItems || [];
   const money = world.money ?? 150;
@@ -619,6 +627,7 @@ function HomeTab({ world }) {
 }
 
 function PassportTab({ world }) {
+  useTheme();
   const completed = world.completed || [];
   const stars = world.stars || {};
   const totalStars = Object.values(stars).reduce(
@@ -695,6 +704,7 @@ function PassportTab({ world }) {
 }
 
 function WorldMission({ location: originalLocation, onBack }) {
+  useTheme();
   const { progress, completeWorldLocation, saveWorldDraft } = useProgress();
   const [location] = useState(() => buildWorldMission(originalLocation,progress.world));
   const [draft] = useState(() => readWorldDraft(progress.world,location));
@@ -1089,6 +1099,7 @@ function WorldMission({ location: originalLocation, onBack }) {
 }
 
 function Info({ icon, title, text }) {
+  useTheme();
   return (
     <View style={s.info}>
       <Ionicons name={icon} size={23} color={colors.purple} />
@@ -1100,7 +1111,7 @@ function Info({ icon, title, text }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   journalArc: { backgroundColor: colors.card, borderRadius: 18, padding: 15, marginTop: 10, gap: 8 },
   memory: { color: colors.mint, fontSize: 12, lineHeight: 19, marginVertical: 8 },
   container: { flex: 1, backgroundColor: colors.background },
@@ -1119,7 +1130,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "900", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "900", fontSize: 17 },
   headerRight: { minWidth: 40, alignItems: "flex-end" },
   worldCounter: { color: colors.mint, fontWeight: "900" },
   mapContent: { padding: 20, paddingBottom: 110 },
@@ -1132,7 +1143,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   worldEmoji: { fontSize: 62 },
-  worldTitle: { color: "white", fontSize: 25, fontWeight: "900", marginTop: 8 },
+  worldTitle: { color: colors.text, fontSize: 25, fontWeight: "900", marginTop: 8 },
   worldText: {
     color: colors.textMuted,
     lineHeight: 21,
@@ -1159,7 +1170,7 @@ const s = StyleSheet.create({
   },
   inventoryEmoji: { fontSize: 31 },
   inventoryTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 10,
     fontWeight: "800",
     textAlign: "center",
@@ -1181,7 +1192,7 @@ const s = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
   },
-  lockedLocation: { opacity: 0.42 },
+  lockedLocation: { opacity: 0.65 },
   locationIcon: {
     width: 53,
     height: 53,
@@ -1198,7 +1209,7 @@ const s = StyleSheet.create({
   level: { fontSize: 10, fontWeight: "900", letterSpacing: 1.1, marginTop: 4 },
   stars: { fontSize: 10 },
   locationTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     fontWeight: "900",
     marginTop: 5,
@@ -1206,7 +1217,7 @@ const s = StyleSheet.create({
   locationText: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   introContent: { padding: 24, paddingBottom: 50, alignItems: "center" },
   introEmoji: { fontSize: 82, marginTop: 20 },
-  introTitle: { color: "white", fontSize: 36, fontWeight: "900", marginTop: 9 },
+  introTitle: { color: colors.text, fontSize: 36, fontWeight: "900", marginTop: 9 },
   introText: {
     color: colors.textMuted,
     fontSize: 16,
@@ -1224,7 +1235,7 @@ const s = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
   },
-  infoTitle: { color: "white", fontWeight: "800" },
+  infoTitle: { color: colors.text, fontWeight: "800" },
   infoText: { color: colors.textMuted, fontSize: 11, marginTop: 3 },
   missionContent: { padding: 20, paddingBottom: 25 },
   lives: { color: colors.pink, fontWeight: "900", letterSpacing: 2 },
@@ -1248,7 +1259,7 @@ const s = StyleSheet.create({
   characterEmoji: { fontSize: 24 },
   speaker: { color: colors.orange, fontSize: 11, fontWeight: "900" },
   line: {
-    color: "white",
+    color: colors.text,
     fontSize: 16,
     lineHeight: 23,
     fontWeight: "700",
@@ -1256,7 +1267,7 @@ const s = StyleSheet.create({
   },
   speak: { padding: 6 },
   prompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 25,
     lineHeight: 33,
     fontWeight: "900",
@@ -1272,7 +1283,7 @@ const s = StyleSheet.create({
     marginBottom: 10,
   },
   optionText: {
-    color: "white",
+    color: colors.text,
     fontSize: 15,
     lineHeight: 21,
     fontWeight: "650",
@@ -1287,7 +1298,7 @@ const s = StyleSheet.create({
   },
   input: {
     minHeight: 115,
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     lineHeight: 24,
     backgroundColor: colors.card,
@@ -1307,7 +1318,7 @@ const s = StyleSheet.create({
   },
   feedbackTitle: { fontWeight: "900", fontSize: 16 },
   correctAnswer: {
-    color: "white",
+    color: colors.text,
     fontWeight: "800",
     fontSize: 16,
     marginTop: 8,
@@ -1333,7 +1344,7 @@ const s = StyleSheet.create({
   },
   resultEmoji: { fontSize: 82 },
   resultTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 31,
     fontWeight: "900",
     textAlign: "center",
@@ -1360,7 +1371,7 @@ const s = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1.2,
   },
-  outcomeText: { color: "white", lineHeight: 21, marginTop: 8 },
+  outcomeText: { color: colors.text, lineHeight: 21, marginTop: 8 },
   money: { color: colors.mint, fontWeight: "900", fontSize: 15 },
   worldTabs: {
     flexDirection: "row",
@@ -1376,10 +1387,10 @@ const s = StyleSheet.create({
     justifyContent: "center",
     gap: 2,
   },
-  worldTabActive: { backgroundColor: colors.purple },
+  worldTabActive: { backgroundColor: colors.accentSoft },
   worldTabText: { color: colors.textMuted, fontSize: 9, fontWeight: "800" },
   tabContent: { padding: 20, paddingBottom: 110 },
-  tabTitle: { color: "white", fontSize: 32, fontWeight: "900" },
+  tabTitle: { color: colors.text, fontSize: 32, fontWeight: "900" },
   tabSubtitle: { color: colors.textMuted, lineHeight: 21, marginTop: 6 },
   dailyEvent: {
     backgroundColor: colors.card,
@@ -1389,7 +1400,7 @@ const s = StyleSheet.create({
     borderColor: "rgba(244,185,66,.25)",
   },
   dailyEmoji: { fontSize: 42 },
-  dailyTitle: { color: "white", fontSize: 19, fontWeight: "900", marginTop: 7 },
+  dailyTitle: { color: colors.text, fontSize: 19, fontWeight: "900", marginTop: 7 },
   dailyPrompt: {
     color: colors.textMuted,
     lineHeight: 20,
@@ -1407,7 +1418,7 @@ const s = StyleSheet.create({
     marginTop: 7,
   },
   eventOptionText: {
-    color: "white",
+    color: colors.text,
     fontSize: 12,
     lineHeight: 17,
     fontWeight: "700",
@@ -1437,7 +1448,7 @@ const s = StyleSheet.create({
   },
   messageAvatarText: { color: colors.purple, fontWeight: "900", fontSize: 18 },
   messageTop: { flexDirection: "row", justifyContent: "space-between" },
-  messageFrom: { color: "white", fontWeight: "900" },
+  messageFrom: { color: colors.text, fontWeight: "900" },
   messageDate: { color: colors.textMuted, fontSize: 9 },
   messageText: { color: colors.textMuted, lineHeight: 19, marginTop: 5 },
   replyButton: {
@@ -1454,7 +1465,7 @@ const s = StyleSheet.create({
     padding: 10,
   },
   replyOptionText: {
-    color: "white",
+    color: colors.text,
     fontSize: 11,
     lineHeight: 16,
     fontWeight: "700",
@@ -1471,7 +1482,7 @@ const s = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 1,
   },
-  sentReplyText: { color: "white", fontSize: 11, lineHeight: 16, marginTop: 4 },
+  sentReplyText: { color: colors.text, fontSize: 11, lineHeight: 16, marginTop: 4 },
   emptyTab: {
     alignItems: "center",
     backgroundColor: colors.card,
@@ -1510,13 +1521,13 @@ const s = StyleSheet.create({
   roomItem: {
     minWidth: 82,
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,.06)",
+    backgroundColor: colors.border,
     borderRadius: 15,
     padding: 9,
   },
   roomItemEmoji: { fontSize: 31 },
   roomItemText: {
-    color: "white",
+    color: colors.text,
     fontSize: 9,
     fontWeight: "800",
     marginTop: 4,
@@ -1558,25 +1569,25 @@ const s = StyleSheet.create({
     borderRadius: 27,
     padding: 25,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.13)",
+    borderColor: colors.border,
   },
   passportEmoji: { fontSize: 57 },
   passportLabel: {
-    color: "rgba(255,255,255,.6)",
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 2,
     marginTop: 8,
   },
   passportEnding: {
-    color: "white",
+    color: colors.text,
     fontSize: 23,
     fontWeight: "900",
     textAlign: "center",
     marginTop: 10,
   },
   passportMeta: {
-    color: "rgba(255,255,255,.65)",
+    color: colors.textMuted,
     textAlign: "center",
     marginTop: 7,
   },
@@ -1620,7 +1631,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  choiceTitle: { color: "white", fontWeight: "900", fontSize: 16 },
+  choiceTitle: { color: colors.text, fontWeight: "900", fontSize: 16 },
   choiceText: {
     color: colors.textMuted,
     lineHeight: 18,
@@ -1634,4 +1645,4 @@ const s = StyleSheet.create({
     padding: 15,
     marginTop: 18,
   },
-});
+}));

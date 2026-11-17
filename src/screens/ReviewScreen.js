@@ -33,7 +33,7 @@ import {
   wordsByLevel,
 } from "../data/wordBank";
 import { wordThemes } from "../data/wordThemes";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
 import { evaluateExercise } from "../utils/answer";
@@ -61,6 +61,7 @@ const modes = [
 const takeRandom = sampleWithoutReplacement;
 
 export default function ReviewScreen() {
+  useTheme();
   useScreenTiming('words_open');
   const {
     progress,
@@ -81,7 +82,7 @@ export default function ReviewScreen() {
   const [mode, setMode] = useState(draft.mode ?? "typing");
   const [amount, setAmount] = useState(draft.amount ?? 10);
   const [directionMode, setDirectionMode] = useState(draft.directionMode ?? "mixed");
-  const [deck, setDeck] = useState(draft.deck ?? null);
+  const [deck, setDeck] = useState(null);
   const [index, setIndex] = useState(draft.index ?? 0);
   const [phase, setPhase] = useState(draft.phase ?? "learn");
   const [answer, setAnswer] = useState(draft.answer ?? "");
@@ -282,7 +283,7 @@ export default function ReviewScreen() {
               }}
               style={[styles.catalogOption, catalogMode === id && styles.catalogOptionActive]}
             >
-              <Text style={[styles.catalogTitle, catalogMode === id && { color: "white" }]}>{title}</Text>
+              <Text style={[styles.catalogTitle, catalogMode === id && { color: colors.text }]}>{title}</Text>
               <Text style={styles.catalogSubtitle}>{subtitle}</Text>
             </Pressable>
           ))}
@@ -328,14 +329,14 @@ export default function ReviewScreen() {
               ]}
             >
               <Text
-                style={[styles.levelName, level === item && { color: "white" }]}
+                style={[styles.levelName, level === item && { color: colors.text }]}
               >
                 {item}
               </Text>
               <Text
                 style={[
                   styles.levelCount,
-                  level === item && { color: "rgba(255,255,255,.75)" },
+                  level === item && { color: colors.textMuted },
                 ]}
               >
                 {item === "Все" ? activeWordBankSize : activeCountsByLevel[item]}
@@ -378,7 +379,7 @@ export default function ReviewScreen() {
             ["all", "Все"],
           ].map(([id, label]) => (
             <Pressable key={id} onPress={() => setStatusFilter(id)} style={[styles.filterChip, statusFilter === id && styles.filterChipActive]}>
-              <Text style={[styles.filterText, statusFilter === id && { color: "white" }]}>{label}</Text>
+              <Text style={[styles.filterText, statusFilter === id && { color: colors.text }]}>{label}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -420,7 +421,7 @@ export default function ReviewScreen() {
               <Text
                 style={[
                   styles.segmentText,
-                  amount === item && { color: "white" },
+                  amount === item && { color: colors.text },
                 ]}
               >
                 {item}
@@ -658,10 +659,7 @@ export default function ReviewScreen() {
         {phase === "learn" ? (
           <>
             <LinearGradient
-              colors={[
-                `${levelColors[card.level]}DD`,
-                `${levelColors[card.level]}55`,
-              ]}
+              colors={[colors.card, colors.cardLight]}
               style={styles.studyCard}
             >
               <Text style={styles.cardEmoji}>{activeCard.emoji}</Text>
@@ -678,7 +676,7 @@ export default function ReviewScreen() {
               {!!activeCard.example && <Text style={styles.wordExample}>{activeCard.example}</Text>}
               {!!activeCard.exampleRu && <Text style={styles.wordExampleRu}>{activeCard.exampleRu}</Text>}
               <Pressable onPress={speak} style={styles.speakButton}>
-                <Ionicons name="volume-high" size={21} color="white" />
+                <Ionicons name="volume-high" size={21} color={colors.text} />
                 <Text style={styles.speakText}>Послушать</Text>
               </Pressable>
             </LinearGradient>
@@ -708,7 +706,7 @@ export default function ReviewScreen() {
         ) : (
           <>
             <LinearGradient
-              colors={["rgba(124,92,252,.85)", "rgba(68,46,145,.5)"]}
+              colors={[colors.accentSoft, colors.card]}
               style={styles.testCard}
             >
               <Text style={styles.directionBadge}>
@@ -722,7 +720,7 @@ export default function ReviewScreen() {
               </Text>
               {mode === "listening" ? (
                 <Pressable onPress={speak} style={styles.bigListen}>
-                  <Ionicons name="headset" size={58} color="white" />
+                  <Ionicons name="headset" size={58} color={colors.text} />
                   <Text style={styles.bigListenText}>Нажми и послушай</Text>
                 </Pressable>
               ) : (
@@ -875,6 +873,7 @@ export default function ReviewScreen() {
 }
 
 function MiniStat({ value, label, color }) {
+  useTheme();
   return (
     <View style={styles.miniStat}>
       <Text style={[styles.miniValue, { color }]}>{value}</Text>
@@ -883,7 +882,7 @@ function MiniStat({ value, label, color }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1 },
   setup: { padding: 20, paddingBottom: 125 },
   hero: {
@@ -895,7 +894,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   heroEmoji: { fontSize: 60 },
-  setupTitle: { color: "white", fontSize: 32, fontWeight: "900", marginTop: 8 },
+  setupTitle: { color: colors.text, fontSize: 32, fontWeight: "900", marginTop: 8 },
   setupSubtitle: { color: colors.textMuted, textAlign: "center", marginTop: 6 },
   catalogSwitch: { flexDirection: "row", gap: 9, marginTop: 12 },
   catalogOption: {
@@ -933,7 +932,7 @@ const styles = StyleSheet.create({
   },
   dailyEmoji: { fontSize: 25 },
   dailyLabel: { color: colors.orange, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
-  dailyTitle: { color: "white", fontSize: 21, fontWeight: "900", marginTop: 2 },
+  dailyTitle: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 2 },
   dailyText: { color: colors.textMuted, fontSize: 11, marginTop: 2 },
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   miniStat: {
@@ -979,7 +978,7 @@ const styles = StyleSheet.create({
   },
   themeActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,.12)" },
   themeEmoji: { fontSize: 27 },
-  themeTitle: { color: "white", fontWeight: "800", fontSize: 12, marginTop: 8 },
+  themeTitle: { color: colors.text, fontWeight: "800", fontSize: 12, marginTop: 8 },
   themeCount: { color: colors.textMuted, fontSize: 9, marginTop: 4 },
   filterRow: { gap: 7, paddingRight: 20 },
   filterChip: {
@@ -990,7 +989,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  filterChipActive: { backgroundColor: colors.purple, borderColor: colors.purple },
+  filterChipActive: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
   filterText: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
   availableText: { color: colors.textMuted, fontSize: 10, marginTop: 8 },
   modes: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -1004,7 +1003,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   modeActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,.11)" },
-  modeTitle: { color: "white", fontSize: 14, fontWeight: "900", marginTop: 8 },
+  modeTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 8 },
   modeText: { color: colors.textMuted, fontSize: 9, lineHeight: 13, marginTop: 3 },
   progressCard: {
     backgroundColor: colors.card,
@@ -1018,7 +1017,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   progressValue: { color: colors.mint, fontWeight: "900" },
-  cardTitle: { color: "white", fontWeight: "800", fontSize: 15 },
+  cardTitle: { color: colors.text, fontWeight: "800", fontSize: 15 },
   cardText: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
   segmented: { flexDirection: "row", gap: 7 },
   segment: {
@@ -1029,7 +1028,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: colors.card,
   },
-  segmentActive: { backgroundColor: colors.purple },
+  segmentActive: { backgroundColor: colors.accentSoft },
   segmentText: { color: colors.textMuted, fontWeight: "900" },
   directionList: { gap: 8, marginBottom: 18 },
   directionChoice: {
@@ -1097,19 +1096,19 @@ const styles = StyleSheet.create({
     padding: 25,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,.12)",
+    borderColor: colors.border,
   },
   cardEmoji: { fontSize: 48 },
   englishWord: {
-    color: "white",
+    color: colors.text,
     fontSize: 39,
     fontWeight: "900",
     textAlign: "center",
     marginTop: 12,
   },
-  transcription: { color: "rgba(255,255,255,.7)", fontSize: 15, marginTop: 7 },
+  transcription: { color: colors.textMuted, fontSize: 15, marginTop: 7 },
   partOfSpeech: {
-    color: "rgba(255,255,255,.82)",
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -1119,18 +1118,18 @@ const styles = StyleSheet.create({
   divider: {
     width: 55,
     height: 2,
-    backgroundColor: "rgba(255,255,255,.25)",
+    backgroundColor: colors.track,
     marginVertical: 18,
   },
   russianWord: {
-    color: "white",
+    color: colors.text,
     fontSize: 19,
     lineHeight: 27,
     fontWeight: "700",
     textAlign: "center",
   },
   wordExample: {
-    color: "rgba(255,255,255,.68)",
+    color: colors.textMuted,
     textAlign: "center",
     fontStyle: "italic",
     fontSize: 12,
@@ -1138,14 +1137,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   wordExampleRu: {
-    color: "rgba(255,255,255,.64)",
+    color: colors.textMuted,
     fontSize: 13,
     lineHeight: 19,
     textAlign: "center",
     marginTop: 3,
   },
   otherMeanings: {
-    color: "rgba(255,255,255,.62)",
+    color: colors.textMuted,
     fontSize: 12,
     lineHeight: 18,
     textAlign: "center",
@@ -1153,11 +1152,11 @@ const styles = StyleSheet.create({
   },
   editTranslation: { backgroundColor: colors.card, padding: 14, borderRadius: 18, marginTop: 11 },
   editLabel: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1 },
-  editInput: { color: "white", borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 12 },
+  editInput: { color: colors.text, borderBottomWidth: 1, borderBottomColor: colors.border, paddingVertical: 12 },
   editActions: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 11 },
   resetTranslation: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
-  saveTranslation: { backgroundColor: colors.purple, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 11 },
-  saveTranslationText: { color: "white", fontSize: 10, fontWeight: "900" },
+  saveTranslation: { backgroundColor: colors.accentSoft, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 11 },
+  saveTranslationText: { color: colors.text, fontSize: 10, fontWeight: "900" },
   speakButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -1165,7 +1164,7 @@ const styles = StyleSheet.create({
     padding: 13,
     marginTop: 18,
   },
-  speakText: { color: "white", fontWeight: "800" },
+  speakText: { color: colors.text, fontWeight: "800" },
   learningHint: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1190,22 +1189,22 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   directionBadge: {
-    color: "rgba(255,255,255,.7)",
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.2,
   },
   testPrompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 36,
     lineHeight: 43,
     fontWeight: "900",
     textAlign: "center",
     marginTop: 24,
   },
-  testInstruction: { color: "rgba(255,255,255,.52)", marginTop: 18 },
+  testInstruction: { color: colors.textMuted, marginTop: 18 },
   bigListen: { alignItems: "center", marginTop: 24 },
-  bigListenText: { color: "white", fontWeight: "800", marginTop: 10 },
+  bigListenText: { color: colors.text, fontWeight: "800", marginTop: 10 },
   answerBox: {
     minHeight: 59,
     borderRadius: 18,
@@ -1217,7 +1216,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   input: {
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     fontWeight: "600",
     paddingVertical: 16,
@@ -1234,7 +1233,7 @@ const styles = StyleSheet.create({
   },
   choiceCorrect: { borderColor: colors.mint, backgroundColor: "rgba(41,205,170,.12)" },
   choiceWrong: { borderColor: colors.pink, backgroundColor: "rgba(236,72,153,.12)" },
-  choiceOptionText: { color: "white", fontSize: 14, fontWeight: "700" },
+  choiceOptionText: { color: colors.text, fontSize: 14, fontWeight: "700" },
   letterAnswer: {
     minHeight: 62,
     marginTop: 14,
@@ -1247,11 +1246,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.border,
   },
-  letterAnswerText: { color: "white", fontSize: 22, fontWeight: "900", letterSpacing: 2 },
+  letterAnswerText: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: 2 },
   letters: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 7, marginVertical: 14 },
   letter: { minWidth: 43, height: 45, paddingHorizontal: 11, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,92,252,.20)", borderWidth: 1, borderColor: colors.purple },
   letterUsed: { opacity: 0.18 },
-  letterText: { color: "white", fontSize: 18, fontWeight: "900" },
+  letterText: { color: colors.text, fontSize: 18, fontWeight: "900" },
   feedback: {
     flexDirection: "row",
     gap: 12,
@@ -1262,7 +1261,7 @@ const styles = StyleSheet.create({
   feedbackTitle: { fontSize: 17, fontWeight: "900" },
   explanationDetail: { color: colors.textMuted, lineHeight: 21, marginTop: 12 },
   correctAnswer: {
-    color: "white",
+    color: colors.text,
     fontSize: 19,
     fontWeight: "800",
     marginTop: 5,
@@ -1280,7 +1279,7 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 15,
   },
-  listenText: { color: "white", fontWeight: "700" },
+  listenText: { color: colors.text, fontWeight: "700" },
   result: {
     flex: 1,
     alignItems: "center",
@@ -1289,7 +1288,7 @@ const styles = StyleSheet.create({
   },
   resultEmoji: { fontSize: 80 },
   resultTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 46,
     fontWeight: "900",
     marginTop: 12,
@@ -1301,4 +1300,4 @@ const styles = StyleSheet.create({
     marginTop: 9,
   },
   resultButtons: { width: "100%", gap: 9, marginTop: 25 },
-});
+}));

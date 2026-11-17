@@ -1,3 +1,4 @@
+import { useTheme } from '../theme';
 import {useEffect,useRef} from 'react';
 import {now,recordTiming,finishScreenTransition} from '../utils/performance';
 export default function useScreenTiming(name){

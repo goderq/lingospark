@@ -11,12 +11,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { lessons } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { ProgressBar, XPBadge } from "../components/UI";
 import { nextLearningStep } from '../utils/learningContinuation';
 const baseLevel = (value) => value.replace("+", "");
 const levels = ["Все", "A1", "A2", "B1", "B2", "C1"];
 export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialLevel = 'Все' }) {
+  useTheme();
   const { progress, isUnlocked } = useProgress();
   const [filter, setFilter] = useState(initialLevel);
   const [query, setQuery] = useState("");
@@ -65,7 +66,7 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
       </Text>
       <Pressable onPress={() => onLesson(current)} style={s.continue}>
         <View style={s.continueIcon}>
-          <Ionicons name="play" size={25} color="white" />
+          <Ionicons name="play" size={25} color={colors.text} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={s.continueLabel}>ПРОДОЛЖИТЬ КУРС</Text>
@@ -74,7 +75,7 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
             {currentLevel} · до следующего уровня {remaining} уроков
           </Text>
         </View>
-        <Ionicons name="chevron-forward" size={22} color="white" />
+        <Ionicons name="chevron-forward" size={22} color={colors.text} />
       </Pressable>
       <View style={s.progressCard}>
         <View style={s.progressRow}>
@@ -112,7 +113,7 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
               <Text
                 style={[
                   s.levelSummaryCode,
-                  filter === stage && { color: "white" },
+                  filter === stage && { color: colors.text },
                 ]}
               >
                 {stage}
@@ -152,7 +153,7 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
             style={[s.filter, filter === level && s.filterActive]}
           >
             <Text
-              style={[s.filterText, filter === level && { color: "white" }]}
+              style={[s.filterText, filter === level && { color: colors.text }]}
             >
               {level}
             </Text>
@@ -285,9 +286,9 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
     />
   );
 }
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   content: { padding: 20, paddingBottom: 120 },
-  title: { color: "white", fontSize: 35, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 35, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     fontSize: 16,
@@ -298,7 +299,7 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 13,
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentSoft,
     borderRadius: 23,
     padding: 16,
     marginBottom: 14,
@@ -307,23 +308,23 @@ const s = StyleSheet.create({
     width: 51,
     height: 51,
     borderRadius: 17,
-    backgroundColor: "rgba(255,255,255,.16)",
+    backgroundColor: colors.track,
     alignItems: "center",
     justifyContent: "center",
   },
   continueLabel: {
-    color: "rgba(255,255,255,.7)",
+    color: colors.textMuted,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.2,
   },
   continueTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 19,
     fontWeight: "900",
     marginTop: 3,
   },
-  continueText: { color: "rgba(255,255,255,.72)", fontSize: 12, marginTop: 3 },
+  continueText: { color: colors.textMuted, fontSize: 12, marginTop: 3 },
   progressCard: {
     backgroundColor: colors.card,
     borderRadius: 20,
@@ -332,7 +333,7 @@ const s = StyleSheet.create({
     gap: 12,
   },
   progressRow: { flexDirection: "row", justifyContent: "space-between" },
-  progressTitle: { color: "white", fontWeight: "700" },
+  progressTitle: { color: colors.text, fontWeight: "700" },
   progressValue: { color: colors.mint, fontWeight: "800" },
   levelOverview: { gap: 9, paddingBottom: 12 },
   levelSummary: {
@@ -345,12 +346,12 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   levelSummaryActive: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.accentSoft,
     borderColor: colors.purple,
   },
   levelSummaryCode: { color: colors.purple, fontWeight: "900", fontSize: 13 },
   levelSummaryPercent: {
-    color: "white",
+    color: colors.text,
     fontWeight: "900",
     fontSize: 17,
     marginTop: 4,
@@ -365,7 +366,7 @@ const s = StyleSheet.create({
     borderRadius: 16,
     paddingHorizontal: 14,
   },
-  searchInput: { flex: 1, color: "white", fontSize: 15 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 15 },
   filters: { gap: 8, paddingVertical: 12 },
   filter: {
     minWidth: 48,
@@ -375,7 +376,7 @@ const s = StyleSheet.create({
     backgroundColor: colors.card,
     alignItems: "center",
   },
-  filterActive: { backgroundColor: colors.purple },
+  filterActive: { backgroundColor: colors.accentSoft },
   filterText: { color: colors.textMuted, fontWeight: "900" },
   lesson: {
     flexDirection: "row",
@@ -407,7 +408,7 @@ const s = StyleSheet.create({
   body: { flex: 1 },
   unit: { fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
   lessonTitle: {
-    color: "white",
+    color: colors.text,
     fontWeight: "800",
     fontSize: 17,
     marginTop: 5,
@@ -431,8 +432,8 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  checkpointTitle: { color: "white", fontWeight: "900" },
+  checkpointTitle: { color: colors.text, fontWeight: "900" },
   checkpointText: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
   empty: { alignItems: "center", padding: 35 },
   emptyEmoji: { fontSize: 48 },
-});
+}));

@@ -23,7 +23,7 @@ import {
 import { grammarQuestions } from "../data/practice";
 import { extendedVocabularyTopics } from "../data/growthContent";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { answersMatch } from "../utils/answer";
@@ -31,10 +31,11 @@ import ExplanationCard from "../components/ExplanationCard";
 
 const today = () => new Date().toISOString().slice(0, 10);
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -42,6 +43,7 @@ function Header({ title, onClose }) {
   );
 }
 function Timer({ minutes }) {
+  useTheme();
   const [seconds, setSeconds] = useState(minutes * 60);
   useEffect(() => {
     const id = setInterval(
@@ -69,6 +71,7 @@ function Timer({ minutes }) {
 }
 
 export function SpacedRepetitionScreen({ onClose }) {
+  useTheme();
   const { progress, recordLexiconReview } = useProgress();
   const [started, setStarted] = useState(false);
   const [index, setIndex] = useState(0);
@@ -209,6 +212,7 @@ export function SpacedRepetitionScreen({ onClose }) {
 }
 
 export function BranchingDialoguesScreen({ onClose }) {
+  useTheme();
   const { progress, recordBranchingDialogue } = useProgress();
   const [dialogue, setDialogue] = useState(null);
   const [nodeId, setNodeId] = useState(null);
@@ -358,6 +362,7 @@ export function BranchingDialoguesScreen({ onClose }) {
 }
 
 function QuizModule({ title, items, listening, onFinish, onClose }) {
+  useTheme();
   const [itemIndex, setItemIndex] = useState(0);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [selected, setSelected] = useState("");
@@ -425,7 +430,7 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
               }
               style={s.play}
             >
-              <Ionicons name="play" size={30} color="white" />
+              <Ionicons name="play" size={30} color={colors.text} />
             </Pressable>
             <Text style={s.cardText}>
               Запись можно прослушать несколько раз
@@ -469,6 +474,7 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
 }
 
 export function IeltsScreen({ onClose }) {
+  useTheme();
   const { progress, recordIelts } = useProgress();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder);
@@ -570,7 +576,7 @@ export function IeltsScreen({ onClose }) {
             Говори 1–2 минуты. Используй причину, пример и вывод.
           </Text>
           <Pressable onPress={recorderState.isRecording ? stopSpeakingRecording : startSpeakingRecording} style={[s.recordSpeaking, recorderState.isRecording && { backgroundColor: colors.pink }]}>
-            <Ionicons name={recorderState.isRecording ? "stop" : "mic"} size={29} color="white" />
+            <Ionicons name={recorderState.isRecording ? "stop" : "mic"} size={29} color={colors.onAccent} />
             <Text style={s.recordSpeakingText}>{recorderState.isRecording ? `Остановить · ${Math.round((recorderState.durationMillis || 0) / 1000)} сек` : "Записать свой ответ"}</Text>
           </Pressable>
           {hasRecording && <Pressable onPress={playSpeakingRecording} style={s.playMine}><Ionicons name="play" size={20} color={colors.mint}/><Text style={s.playMineText}>Прослушать мою запись</Text></Pressable>}
@@ -702,6 +708,7 @@ export function IeltsScreen({ onClose }) {
 }
 
 export function SmartCoachScreen({ onClose }) {
+  useTheme();
   const { progress, resolveMistake, recordGrammar } = useProgress();
   const mistakes = progress.mistakes || [];
   const [started, setStarted] = useState(false);
@@ -898,6 +905,7 @@ export function SmartCoachScreen({ onClose }) {
 }
 
 function Stat({ value, label, color }) {
+  useTheme();
   return (
     <View style={s.stat}>
       <Text style={[s.statValue, { color }]}>{value}</Text>
@@ -906,6 +914,7 @@ function Stat({ value, label, color }) {
   );
 }
 function Skill({ label, value, color }) {
+  useTheme();
   return (
     <View style={s.skill}>
       <View style={s.rowTop}>
@@ -917,7 +926,7 @@ function Skill({ label, value, color }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -934,16 +943,16 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontSize: 17, fontWeight: "800" },
+  headerTitle: { color: colors.text, fontSize: 17, fontWeight: "800" },
   content: { padding: 20, paddingBottom: 50 },
   timerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   timer: { alignSelf: "flex-end", flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,159,67,.14)", borderRadius: 13, paddingHorizontal: 11, paddingVertical: 8, marginBottom: 10 },
   timerText: { color: colors.orange, fontWeight: "900", fontVariant: ["tabular-nums"] },
-  recordSpeaking: { minHeight: 58, borderRadius: 18, backgroundColor: colors.purple, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 18 },
-  recordSpeakingText: { color: "white", fontWeight: "900" },
+  recordSpeaking: { minHeight: 58, borderRadius: 18, backgroundColor: colors.accentFill, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 9, marginTop: 18 },
+  recordSpeakingText: { color: colors.text, fontWeight: "900" },
   playMine: { minHeight: 54, borderRadius: 17, backgroundColor: "rgba(46,211,183,.13)", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 10 },
   playMineText: { color: colors.mint, fontWeight: "800" },
-  title: { color: "white", fontSize: 33, lineHeight: 40, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 33, lineHeight: 40, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     lineHeight: 22,
@@ -977,7 +986,7 @@ const s = StyleSheet.create({
   },
   bigEmoji: { fontSize: 72 },
   result: {
-    color: "white",
+    color: colors.text,
     fontSize: 35,
     fontWeight: "900",
     textAlign: "center",
@@ -1000,7 +1009,7 @@ const s = StyleSheet.create({
     marginTop: 20,
   },
   flashWord: {
-    color: "white",
+    color: colors.text,
     fontSize: 38,
     fontWeight: "900",
     textAlign: "center",
@@ -1031,7 +1040,7 @@ const s = StyleSheet.create({
   },
   tapHint: { color: colors.textMuted, marginTop: 20 },
   rateTitle: {
-    color: "white",
+    color: colors.text,
     textAlign: "center",
     fontWeight: "800",
     marginBottom: 12,
@@ -1062,7 +1071,7 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "800" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
   cardText: {
     color: colors.textMuted,
     fontSize: 12,
@@ -1092,7 +1101,7 @@ const s = StyleSheet.create({
     opacity: 0.65,
   },
   historySpeaker: { color: colors.purple, fontSize: 10, fontWeight: "900" },
-  historyLine: { color: "white", marginTop: 4 },
+  historyLine: { color: colors.text, marginTop: 4 },
   historyAnswer: { color: colors.mint, fontSize: 12, marginTop: 6 },
   speech: {
     backgroundColor: colors.card,
@@ -1102,13 +1111,13 @@ const s = StyleSheet.create({
   },
   speaker: { color: colors.purple, fontSize: 12, fontWeight: "900" },
   speechText: {
-    color: "white",
+    color: colors.text,
     fontSize: 22,
     lineHeight: 30,
     fontWeight: "800",
     marginVertical: 12,
   },
-  chooseTitle: { color: "white", fontWeight: "900", marginVertical: 16 },
+  chooseTitle: { color: colors.text, fontWeight: "900", marginVertical: 16 },
   choice: {
     flexDirection: "row",
     gap: 11,
@@ -1130,7 +1139,7 @@ const s = StyleSheet.create({
     paddingTop: 5,
     fontWeight: "900",
   },
-  choiceText: { color: "white", fontSize: 15, lineHeight: 21, flex: 1 },
+  choiceText: { color: colors.text, fontSize: 15, lineHeight: 21, flex: 1 },
   audioBox: {
     alignItems: "center",
     backgroundColor: colors.card,
@@ -1152,9 +1161,9 @@ const s = StyleSheet.create({
     padding: 17,
     marginTop: 18,
   },
-  passageText: { color: "white", lineHeight: 24 },
+  passageText: { color: colors.text, lineHeight: 24 },
   question: {
-    color: "white",
+    color: colors.text,
     fontSize: 25,
     lineHeight: 33,
     fontWeight: "900",
@@ -1169,11 +1178,11 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
   },
-  optionText: { color: "white", fontSize: 15, fontWeight: "650" },
+  optionText: { color: colors.text, fontSize: 15, fontWeight: "650" },
   correct: { borderColor: colors.mint },
   wrong: { borderColor: colors.orange },
   prompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     lineHeight: 25,
     backgroundColor: colors.card,
@@ -1183,7 +1192,7 @@ const s = StyleSheet.create({
   },
   editor: {
     minHeight: 220,
-    color: "white",
+    color: colors.text,
     fontSize: 16,
     lineHeight: 24,
     backgroundColor: colors.card,
@@ -1206,7 +1215,7 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginVertical: 5,
   },
-  checkText: { color: "white", flex: 1 },
+  checkText: { color: colors.text, flex: 1 },
   row: {
     flexDirection: "row",
     gap: 12,
@@ -1231,7 +1240,7 @@ const s = StyleSheet.create({
     marginTop: 18,
   },
   speakingPrompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 24,
     lineHeight: 33,
     fontWeight: "900",
@@ -1279,7 +1288,7 @@ const s = StyleSheet.create({
   skillValue: { fontWeight: "900" },
   answerInput: {
     minHeight: 110,
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     backgroundColor: colors.card,
     borderRadius: 18,
@@ -1295,4 +1304,4 @@ const s = StyleSheet.create({
   },
   feedbackTitle: { fontWeight: "900" },
   feedbackText: { color: colors.textMuted, lineHeight: 21, marginTop: 10 },
-});
+}));

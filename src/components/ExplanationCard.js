@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Alert,Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { useProgressActions } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import {reportReasons} from '../utils/contentQuality';
 import { errorFeedback } from '../utils/errorFeedback';
 import { evaluateExercise } from '../utils/answer';
+import { ScreenEntrance } from './Motion';
 import {
   explainSelectedOption,
   getExplanationExamples,
@@ -29,6 +30,7 @@ export default function ExplanationCard({
   accentColor,
   showStatus = true,
 }) {
+  useTheme();
   const { recordExercise,reportContentIssue } = useProgressActions();
   const [reportOpen,setReportOpen]=useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -260,27 +262,29 @@ export default function ExplanationCard({
 }
 
 function Action({ icon, title, active, onPress }) {
+  useTheme();
   return (
     <Pressable onPress={onPress} style={[styles.action, active && styles.actionActive]}>
       <Ionicons name={icon} size={16} color={active ? "white" : colors.textMuted} />
-      <Text style={[styles.actionText, active && { color: "white" }]}>{title}</Text>
+      <Text style={[styles.actionText, active && { color: colors.text }]}>{title}</Text>
     </Pressable>
   );
 }
 
 function Section({ icon, title, text, color }) {
+  useTheme();
   return (
-    <View style={styles.section}>
+    <ScreenEntrance transitionKey={title} style={styles.section}>
       <View style={styles.sectionTitleRow}>
         <Ionicons name={icon} size={17} color={color} />
         <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
       </View>
       <Text style={styles.sectionText}>{text}</Text>
-    </View>
+    </ScreenEntrance>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   card: {
     backgroundColor: colors.card,
     borderRadius: 20,
@@ -292,7 +296,7 @@ const styles = StyleSheet.create({
   icon: { width: 38, height: 38, borderRadius: 13, alignItems: "center", justifyContent: "center" },
   headerText: { flex: 1 },
   status: { fontWeight: "900", fontSize: 15 },
-  short: { color: "white", lineHeight: 21, marginTop: 5 },
+  short: { color: colors.text, lineHeight: 21, marginTop: 5 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 14 },
   action: {
     flexDirection: "row",
@@ -303,7 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: colors.cardLight,
   },
-  actionActive: { backgroundColor: colors.purple },
+  actionActive: { backgroundColor: colors.accentSoft },
   actionText: { color: colors.textMuted, fontWeight: "800", fontSize: 11 },
   section: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 13, marginTop: 13 },
   sectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 7 },
@@ -327,10 +331,10 @@ const styles = StyleSheet.create({
   saveText: { color: colors.orange, fontWeight: "900", fontSize: 12 },
   practice: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 14, paddingTop: 14 },
   practiceLabel: { color: colors.mint, fontSize: 10, fontWeight: "900", letterSpacing: 1.1 },
-  practicePrompt: { color: "white", fontSize: 18, lineHeight: 25, fontWeight: "800", marginVertical: 12 },
+  practicePrompt: { color: colors.text, fontSize: 18, lineHeight: 25, fontWeight: "800", marginVertical: 12 },
   practiceOption: { backgroundColor: colors.cardLight, borderRadius: 13, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 7 },
   practiceCorrect: { borderColor: colors.mint },
   practiceWrong: { borderColor: colors.orange },
-  practiceOptionText: { color: "white", fontWeight: "700" },
+  practiceOptionText: { color: colors.text, fontWeight: "700" },
   practiceResult: { fontWeight: "800", lineHeight: 20, marginTop: 5 },
-});
+}));

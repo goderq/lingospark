@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../store/AuthContext";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 
 const errorText = (error) => {
   const message = error?.message || "Не удалось подключиться. Попробуй ещё раз.";
@@ -32,6 +32,7 @@ const errorText = (error) => {
 };
 
 export default function AuthScreen({ optional = false, onClose }) {
+  useTheme();
   const { signIn, signUp, enterGuestMode } = useAuth();
   const { progress } = useProgress();
   const [mode, setMode] = useState("login");
@@ -91,11 +92,11 @@ export default function AuthScreen({ optional = false, onClose }) {
         >
           {optional && onClose ? (
             <Pressable onPress={onClose} style={styles.close}>
-              <Ionicons name="close" size={27} color="white" />
+              <Ionicons name="close" size={27} color={colors.text} />
             </Pressable>
           ) : null}
-          <LinearGradient colors={[colors.purple, "#5B3DE8"]} style={styles.logo}>
-            <Ionicons name="flash" size={38} color="white" />
+          <LinearGradient colors={[colors.accentFill, "#49309C"]} style={styles.logo}>
+            <Ionicons name="flash" size={38} color={colors.onAccent} />
           </LinearGradient>
           <Text style={styles.title}>Твой прогресс всегда рядом</Text>
           <Text style={styles.subtitle}>
@@ -177,10 +178,10 @@ export default function AuthScreen({ optional = false, onClose }) {
           ) : null}
           <Pressable disabled={busy} onPress={submit} style={styles.primary}>
             {busy ? (
-              <ActivityIndicator color="white" />
+              <ActivityIndicator color={colors.onAccent} />
             ) : (
               <>
-                <Ionicons name={mode === "login" ? "log-in" : "person-add"} size={20} color="white" />
+                <Ionicons name={mode === "login" ? "log-in" : "person-add"} size={20} color={colors.onAccent} />
                 <Text style={styles.primaryText}>
                   {mode === "login" ? "Войти" : "Создать аккаунт"}
                 </Text>
@@ -200,6 +201,7 @@ export default function AuthScreen({ optional = false, onClose }) {
 }
 
 function Field({ icon, ...props }) {
+  useTheme();
   return (
     <View style={styles.field}>
       <Ionicons name={icon} size={20} color={colors.textMuted} />
@@ -212,26 +214,26 @@ function Field({ icon, ...props }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   screen: { flex: 1, backgroundColor: colors.background },
   content: { padding: 28, paddingTop: 58, paddingBottom: 42, alignItems: "center" },
   close: { position: "absolute", right: 20, top: 18, padding: 8, zIndex: 2 },
   logo: { width: 74, height: 74, borderRadius: 24, alignItems: "center", justifyContent: "center" },
-  title: { color: "white", fontSize: 29, lineHeight: 34, fontWeight: "900", textAlign: "center", marginTop: 22 },
+  title: { color: colors.text, fontSize: 29, lineHeight: 34, fontWeight: "900", textAlign: "center", marginTop: 22 },
   subtitle: { color: colors.textMuted, fontSize: 15, lineHeight: 22, textAlign: "center", marginTop: 10, marginBottom: 25 },
   switcher: { width: "100%", flexDirection: "row", backgroundColor: colors.card, borderRadius: 17, padding: 4, marginBottom: 16 },
   switch: { flex: 1, height: 45, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  switchActive: { backgroundColor: colors.purple },
+  switchActive: { backgroundColor: colors.accentSoft },
   switchText: { color: colors.textMuted, fontWeight: "800" },
-  switchTextActive: { color: "white" },
+  switchTextActive: { color: colors.text },
   field: { width: "100%", minHeight: 58, flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: colors.card, borderRadius: 18, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, marginBottom: 11 },
-  input: { flex: 1, color: "white", fontSize: 16, minHeight: 56 },
+  input: { flex: 1, color: colors.text, fontSize: 16, minHeight: 56 },
   message: { width: "100%", flexDirection: "row", gap: 9, alignItems: "flex-start", backgroundColor: "rgba(255,159,67,.12)", borderRadius: 16, padding: 13, marginBottom: 12 },
   messageSuccess: { backgroundColor: "rgba(46,211,183,.12)" },
-  messageText: { flex: 1, color: "white", lineHeight: 19 },
-  primary: { width: "100%", minHeight: 58, borderRadius: 18, backgroundColor: colors.purple, flexDirection: "row", gap: 9, alignItems: "center", justifyContent: "center", marginTop: 4 },
-  primaryText: { color: "white", fontSize: 17, fontWeight: "900" },
+  messageText: { flex: 1, color: colors.text, lineHeight: 19 },
+  primary: { width: "100%", minHeight: 58, borderRadius: 18, backgroundColor: colors.accentFill, flexDirection: "row", gap: 9, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  primaryText: { color: colors.onAccent, fontSize: 17, fontWeight: "900" },
   offline: { padding: 16 },
   offlineText: { color: colors.mint, fontWeight: "800" },
   note: { color: colors.textMuted, fontSize: 11, lineHeight: 16, textAlign: "center", maxWidth: 310 },
-});
+}));

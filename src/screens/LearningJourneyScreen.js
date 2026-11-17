@@ -7,12 +7,14 @@ import { evaluateExercise } from '../utils/answer';
 import { balancedOptions } from '../utils/shuffle';
 import { speak, stopSpeech } from '../utils/speech';
 import { useProgress } from '../store/ProgressContext';
-import { colors } from '../theme';
+import { colors , useTheme, createThemedStyles } from '../theme';
 import ExplanationCard from '../components/ExplanationCard';
+import { ScreenEntrance } from '../components/Motion';
 import { getCoursePracticePhrases } from '../data/courseDialogues';
 import useScreenTiming from '../components/useScreenTiming';
 
 export default function LearningJourneyScreen({ topicId = 'greetings', onClose, onCourse, onTest, onRetention, onAI, onWorld }) {
+  useTheme();
   useScreenTiming('journey_open');
   const { progress } = useProgress();
   const journey = getJourney(topicId);
@@ -53,6 +55,7 @@ export default function LearningJourneyScreen({ topicId = 'greetings', onClose, 
 }
 
 export function JourneyStage({ journey, stage, onClose, onDone, onComplete }) {
+  useTheme();
   const { progress, saveJourneyDraft, completeJourneyStage } = useProgress();
   const draft = progress.journeys?.[journey.id]?.draft;
   const initial = readJourneyDraft(journey.id, stage.id, draft);
@@ -115,7 +118,7 @@ export function JourneyStage({ journey, stage, onClose, onDone, onComplete }) {
         <Text style={s.label}>{index + 1} ИЗ {stage.exercises.length} · {journey.title}</Text>
         <Text style={s.muted}>{stage.intro}</Text>
         {!!exercise.line && <View style={s.card}><Text style={s.example}>{exercise.speaker || 'Собеседник'}: {exercise.line}</Text><Button title="Послушать реплику" onPress={() => speak(exercise.line, { language: 'en-US' })} secondary /></View>}
-        <Text style={s.title}>{exercise.prompt}</Text>
+        <ScreenEntrance transitionKey={exercise.id}><Text style={s.title}>{exercise.prompt}</Text></ScreenEntrance>
         {stage.mode === 'listen' && <View style={s.card}>
           <Button title="Послушать" onPress={() => speak(exercise.speak, { language: 'en-US', rate: 0.9 })} />
           <Button title="Медленнее" onPress={() => speak(exercise.speak, { language: 'en-US', rate: 0.65 })} secondary />
@@ -132,14 +135,16 @@ export function JourneyStage({ journey, stage, onClose, onDone, onComplete }) {
   </KeyboardAvoidingView>;
 }
 
-function Header({ title, onClose }) { return <View style={s.header}><Pressable accessibilityLabel="Назад" onPress={onClose} style={s.back}><Ionicons name="chevron-back" size={25} color="white" /></Pressable><Text style={s.stepTitle}>{title}</Text></View>; }
-function Button({ title, onPress, secondary, disabled }) { return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[s.button, secondary && s.secondary, disabled && { opacity: 0.4 }]}><Text style={s.buttonText}>{title}</Text></Pressable>; }
-const s = StyleSheet.create({
+function Header({ title, onClose }) {
+  useTheme(); return <View style={s.header}><Pressable accessibilityLabel="Назад" onPress={onClose} style={s.back}><Ionicons name="chevron-back" size={25} color={colors.text} /></Pressable><Text style={s.stepTitle}>{title}</Text></View>; }
+function Button({ title, onPress, secondary, disabled }) {
+  useTheme(); return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[s.button, secondary && s.secondary, disabled && { opacity: 0.4 }]}><Text style={s.buttonText}>{title}</Text></Pressable>; }
+const s = createThemedStyles(() => ({
   root: { flex: 1, backgroundColor: colors.background }, content: { padding: 20, paddingBottom: 45, gap: 18 },
   header: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }, back: { minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: colors.card },
-  title: { fontSize: 25, fontWeight: '800', color: 'white' }, stepTitle: { fontSize: 19, fontWeight: '800', color: 'white', flexShrink: 1 }, label: { color: colors.purple, fontWeight: '800', fontSize: 13 },
-  body: { color: 'white', fontSize: 17, lineHeight: 26 }, muted: { color: colors.textMuted, fontSize: 15, lineHeight: 23 }, example: { color: colors.mint, fontSize: 19, lineHeight: 28 },
+  title: { fontSize: 25, fontWeight: '800', color: colors.text }, stepTitle: { fontSize: 19, fontWeight: '800', color: colors.text, flexShrink: 1 }, label: { color: colors.purple, fontWeight: '800', fontSize: 13 },
+  body: { color: colors.text, fontSize: 17, lineHeight: 26 }, muted: { color: colors.textMuted, fontSize: 15, lineHeight: 23 }, example: { color: colors.mint, fontSize: 19, lineHeight: 28 },
   card: { backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 18, gap: 12 }, selected: { borderColor: colors.purple },
-  button: { backgroundColor: colors.purple, borderRadius: 16, padding: 17, minHeight: 52, alignItems: 'center' }, secondary: { backgroundColor: colors.cardLight }, buttonText: { color: 'white', fontSize: 16, fontWeight: '700', textAlign: 'center' },
-  input: { backgroundColor: colors.card, borderRadius: 16, color: 'white', padding: 20, fontSize: 19, minHeight: 65 }, tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, minHeight: 50 }, tile: { backgroundColor: colors.cardLight, padding: 14, borderRadius: 13 },
-});
+  button: { backgroundColor: colors.accentFill, borderRadius: 16, padding: 17, minHeight: 52, alignItems: 'center' }, secondary: { backgroundColor: colors.cardLight }, buttonText: { color: colors.onAccent, fontSize: 16, fontWeight: '700', textAlign: 'center' },
+  input: { backgroundColor: colors.card, borderRadius: 16, color: colors.text, padding: 20, fontSize: 19, minHeight: 65 }, tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, minHeight: 50 }, tile: { backgroundColor: colors.cardLight, padding: 14, borderRadius: 13 },
+}));

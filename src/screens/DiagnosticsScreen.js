@@ -21,11 +21,12 @@ import { lessons } from "../data/course";
 import { tenseModules } from "../data/advancedCourse";
 import { grammarTracks } from "../data/grammarAcademy";
 import { extendedWordBankSize, wordBankSize } from "../data/wordBank";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 
 const yesNo = (value) => (value ? "Готово" : "Не установлено");
 
 export default function DiagnosticsScreen({ onClose }) {
+  useTheme();
   const { user } = useAuth();
   const { progress, localUpdatedAt, storageError } = useProgress();
   const {
@@ -93,7 +94,7 @@ export default function DiagnosticsScreen({ onClose }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={onClose} style={styles.back}>
-          <Ionicons name="chevron-back" size={24} color="white" />
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Диагностика</Text>
         <Pressable onPress={refresh} style={styles.back}>
@@ -160,10 +161,12 @@ export default function DiagnosticsScreen({ onClose }) {
 }
 
 function Section({ title, children }) {
+  useTheme();
   return <View style={styles.section}><Text style={styles.sectionTitle}>{title}</Text><View style={styles.card}>{children}</View></View>;
 }
 
 function Row({ icon, label, value, good }) {
+  useTheme();
   return (
     <View style={styles.row}>
       <Ionicons name={icon} size={19} color={good ? colors.mint : colors.textMuted} />
@@ -174,26 +177,27 @@ function Row({ icon, label, value, good }) {
 }
 
 function Action({ title, icon, onPress, disabled }) {
+  useTheme();
   return <Pressable disabled={disabled} onPress={onPress} style={[styles.action, disabled && { opacity: 0.4 }]}><Ionicons name={icon} size={18} color={colors.purple} /><Text style={styles.actionText}>{title}</Text></Pressable>;
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: { height: 60, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   back: { width: 40, height: 40, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  headerTitle: { color: "white", fontSize: 18, fontWeight: "900" },
+  headerTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   content: { padding: 20, paddingBottom: 50 },
   hero: { alignItems: "center", padding: 22, backgroundColor: colors.card, borderRadius: 24, borderWidth: 1, borderColor: colors.border },
-  title: { color: "white", fontSize: 24, fontWeight: "900", marginTop: 10 },
+  title: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: 10 },
   muted: { color: colors.textMuted, fontSize: 11, marginTop: 6 },
   section: { marginTop: 22 },
   sectionTitle: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.3, marginBottom: 8 },
   card: { backgroundColor: colors.card, borderRadius: 22, borderWidth: 1, borderColor: colors.border, padding: 15, gap: 3 },
   row: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
-  label: { color: "white", fontWeight: "800", fontSize: 13 },
+  label: { color: colors.text, fontWeight: "800", fontSize: 13 },
   value: { color: colors.textMuted, fontSize: 10, marginTop: 3 },
   error: { color: colors.pink, fontSize: 11, lineHeight: 17, paddingVertical: 8 },
   actions: { flexDirection: "row", gap: 9, marginTop: 13 },
   action: { flex: 1, minHeight: 46, borderRadius: 15, backgroundColor: colors.cardLight, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7 },
-  actionText: { color: "white", fontSize: 11, fontWeight: "800" },
-});
+  actionText: { color: colors.text, fontSize: 11, fontWeight: "800" },
+}));

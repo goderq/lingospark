@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton } from "../components/UI";
 import { evaluateExercise } from "../utils/answer";
 import { expandExplanation } from "../utils/explanations";
@@ -27,6 +27,7 @@ const fallbackExplanation = (item) => {
 };
 
 export default function MistakesScreen({ onClose }) {
+  useTheme();
   const { progress, resolveMistake, toggleNotebook } = useProgress();
   const mistakes = progress.mistakes || [];
   const rules = useMemo(
@@ -94,7 +95,7 @@ export default function MistakesScreen({ onClose }) {
             }}
             style={styles.back}
           >
-            <Ionicons name="chevron-back" size={25} color="white" />
+            <Ionicons name="chevron-back" size={25} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>Тренировка ошибок</Text>
           <Text style={styles.counter}>{filtered.length}</Text>
@@ -155,7 +156,7 @@ export default function MistakesScreen({ onClose }) {
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={onClose} style={styles.back}>
-          <Ionicons name="chevron-back" size={25} color="white" />
+          <Ionicons name="chevron-back" size={25} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Мои ошибки</Text>
         <View style={{ width: 40 }} />
@@ -275,7 +276,7 @@ export default function MistakesScreen({ onClose }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -292,7 +293,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "800", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "800", fontSize: 17 },
   counter: {
     color: colors.orange,
     fontWeight: "900",
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   content: { padding: 20, paddingBottom: 50, gap: 12 },
-  title: { color: "white", fontSize: 34, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 34, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     lineHeight: 21,
@@ -318,9 +319,9 @@ const styles = StyleSheet.create({
   },
   masteryTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   masteryEyebrow: { color: colors.purple, fontSize: 10, fontWeight: "900", letterSpacing: 1.2 },
-  masteryTitle: { color: "white", fontSize: 18, fontWeight: "900", marginTop: 4 },
+  masteryTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginTop: 4 },
   ruleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border },
-  ruleTopic: { color: "white", fontWeight: "800", fontSize: 13 },
+  ruleTopic: { color: colors.text, fontWeight: "800", fontSize: 13 },
   ruleMeta: { color: colors.textMuted, fontSize: 10, marginTop: 3 },
   ruleStatus: { borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6 },
   filters: { gap: 8, paddingVertical: 6 },
@@ -337,7 +338,7 @@ const styles = StyleSheet.create({
     borderColor: colors.purple,
   },
   filterText: { color: colors.textMuted, fontWeight: "800", fontSize: 12 },
-  filterTextActive: { color: "white" },
+  filterTextActive: { color: colors.text },
   empty: {
     alignItems: "center",
     backgroundColor: colors.card,
@@ -347,7 +348,7 @@ const styles = StyleSheet.create({
   },
   emptyEmoji: { fontSize: 55 },
   emptyTitle: {
-    color: "white",
+    color: colors.text,
     fontSize: 21,
     fontWeight: "800",
     marginTop: 12,
@@ -373,7 +374,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   date: { color: colors.textMuted, fontSize: 10 },
-  prompt: { color: "white", fontSize: 17, fontWeight: "700", marginTop: 10 },
+  prompt: { color: colors.text, fontSize: 17, fontWeight: "700", marginTop: 10 },
   answerRow: {
     flexDirection: "row",
     gap: 7,
@@ -384,7 +385,7 @@ const styles = StyleSheet.create({
   previousAnswer: { color: colors.pink, fontSize: 12, marginTop: 7 },
   practice: { flexGrow: 1, padding: 22, paddingBottom: 35 },
   practicePrompt: {
-    color: "white",
+    color: colors.text,
     fontSize: 29,
     lineHeight: 37,
     fontWeight: "900",
@@ -392,7 +393,7 @@ const styles = StyleSheet.create({
   },
   input: {
     minHeight: 100,
-    color: "white",
+    color: colors.text,
     fontSize: 17,
     backgroundColor: colors.card,
     borderRadius: 18,
@@ -425,4 +426,4 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   whyText: { flex: 1, color: colors.textMuted, fontSize: 12, lineHeight: 18 },
-});
+}));

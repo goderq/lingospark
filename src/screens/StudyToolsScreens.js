@@ -4,16 +4,17 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { grammarTracks } from "../data/grammarAcademy";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import { expandExplanation } from "../utils/explanations";
 
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -21,6 +22,7 @@ function Header({ title, onClose }) {
   );
 }
 export function NotebookScreen({ onClose }) {
+  useTheme();
   const { progress, toggleNotebook } = useProgress();
   const items = progress.notebook || [];
   return (
@@ -65,6 +67,7 @@ export function NotebookScreen({ onClose }) {
 }
 
 export function ArticlesPrepositionsScreen({ onClose }) {
+  useTheme();
   const { toggleNotebook, progress } = useProgress();
   const [topic, setTopic] = useState("articles");
   const [started, setStarted] = useState(false);
@@ -228,7 +231,7 @@ export function ArticlesPrepositionsScreen({ onClose }) {
     </View>
   );
 }
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -245,9 +248,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontWeight: "800", fontSize: 17 },
+  headerTitle: { color: colors.text, fontWeight: "800", fontSize: 17 },
   content: { padding: 20, paddingBottom: 50 },
-  title: { color: "white", fontSize: 33, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 33, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     lineHeight: 22,
@@ -261,7 +264,7 @@ const s = StyleSheet.create({
     padding: 28,
   },
   emptyEmoji: { fontSize: 60 },
-  cardTitle: { color: "white", fontSize: 18, fontWeight: "900", marginTop: 10 },
+  cardTitle: { color: colors.text, fontSize: 18, fontWeight: "900", marginTop: 10 },
   cardText: {
     color: colors.textMuted,
     textAlign: "center",
@@ -278,7 +281,7 @@ const s = StyleSheet.create({
   level: { color: colors.purple, fontSize: 10, fontWeight: "900" },
   topic: { color: colors.textMuted, fontSize: 11, flex: 1 },
   rule: {
-    color: "white",
+    color: colors.text,
     fontSize: 16,
     lineHeight: 23,
     fontWeight: "700",
@@ -291,7 +294,7 @@ const s = StyleSheet.create({
     marginTop: 12,
   },
   exampleLabel: { color: colors.mint, fontSize: 9, fontWeight: "900" },
-  exampleText: { color: "white", marginTop: 5 },
+  exampleText: { color: colors.text, marginTop: 5 },
   tabs: { flexDirection: "row", gap: 10 },
   tab: {
     flex: 1,
@@ -304,14 +307,14 @@ const s = StyleSheet.create({
   },
   tabActive: { borderColor: colors.purple },
   tabEmoji: { fontSize: 34 },
-  tabTitle: { color: "white", fontWeight: "900", marginTop: 7 },
+  tabTitle: { color: colors.text, fontWeight: "900", marginTop: 7 },
   theory: {
     backgroundColor: colors.card,
     borderRadius: 21,
     padding: 17,
     marginVertical: 18,
   },
-  theoryTitle: { color: "white", lineHeight: 23 },
+  theoryTitle: { color: colors.text, lineHeight: 23 },
   formula: { color: colors.purple, fontWeight: "900", marginTop: 10 },
   center: {
     flex: 1,
@@ -319,7 +322,7 @@ const s = StyleSheet.create({
     justifyContent: "center",
     padding: 30,
   },
-  result: { color: "white", fontSize: 46, fontWeight: "900", marginTop: 12 },
+  result: { color: colors.text, fontSize: 46, fontWeight: "900", marginTop: 12 },
   meta: {
     color: colors.purple,
     fontSize: 11,
@@ -328,7 +331,7 @@ const s = StyleSheet.create({
     marginTop: 22,
   },
   question: {
-    color: "white",
+    color: colors.text,
     fontSize: 28,
     lineHeight: 36,
     fontWeight: "900",
@@ -343,7 +346,7 @@ const s = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: 10,
   },
-  optionText: { color: "white", fontSize: 16, fontWeight: "650" },
+  optionText: { color: colors.text, fontSize: 16, fontWeight: "650" },
   correct: { borderColor: colors.mint },
   wrong: { borderColor: colors.orange },
   explain: {
@@ -356,4 +359,4 @@ const s = StyleSheet.create({
   explainText: { color: colors.textMuted, lineHeight: 20, marginTop: 7 },
   save: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 11 },
   saveText: { color: colors.orange, fontSize: 12, fontWeight: "800" },
-});
+}));

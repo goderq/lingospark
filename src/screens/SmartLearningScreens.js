@@ -14,13 +14,14 @@ import { wordBank } from "../data/wordBank";
 import { tenseModules } from "../data/advancedCourse";
 import { grammarTracks } from "../data/grammarAcademy";
 import { useProgress } from "../store/ProgressContext";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 
 function Header({ title, onClose }) {
+  useTheme();
   return (
     <View style={s.header}>
       <Pressable onPress={onClose} style={s.back}>
-        <Ionicons name="chevron-back" size={24} color="white" />
+        <Ionicons name="chevron-back" size={24} color={colors.text} />
       </Pressable>
       <Text style={s.headerTitle}>{title}</Text>
       <View style={{ width: 40 }} />
@@ -31,6 +32,7 @@ function Header({ title, onClose }) {
 const categories = ["Все", "Курсы", "Времена", "Правила", "Слова"];
 
 export function SmartSearchScreen({ onClose, onLesson, onNavigate }) {
+  useTheme();
   const { progress, toggleFavorite } = useProgress();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("Все");
@@ -178,7 +180,7 @@ export function SmartSearchScreen({ onClose, onLesson, onNavigate }) {
               style={[s.chip, category === item && s.chipActive]}
             >
               <Text
-                style={[s.chipText, category === item && { color: "white" }]}
+                style={[s.chipText, category === item && { color: colors.text }]}
               >
                 {item}
               </Text>
@@ -257,6 +259,7 @@ export function SmartSearchScreen({ onClose, onLesson, onNavigate }) {
 }
 
 export function BookmarksScreen({ onClose, onLesson, onNavigate }) {
+  useTheme();
   const { progress, toggleFavorite, toggleNotebook } = useProgress();
   const [filter, setFilter] = useState("Все");
   const favorites = (progress.favorites || []).map((item) => ({
@@ -311,7 +314,7 @@ export function BookmarksScreen({ onClose, onLesson, onNavigate }) {
               onPress={() => setFilter(item)}
               style={[s.chip, filter === item && s.chipActive]}
             >
-              <Text style={[s.chipText, filter === item && { color: "white" }]}>
+              <Text style={[s.chipText, filter === item && { color: colors.text }]}>
                 {item}
               </Text>
             </Pressable>
@@ -370,7 +373,7 @@ export function BookmarksScreen({ onClose, onLesson, onNavigate }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
     height: 60,
@@ -387,9 +390,9 @@ const s = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  headerTitle: { color: "white", fontSize: 17, fontWeight: "900" },
+  headerTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
   content: { padding: 20, paddingBottom: 55 },
-  title: { color: "white", fontSize: 34, fontWeight: "900" },
+  title: { color: colors.text, fontSize: 34, fontWeight: "900" },
   subtitle: {
     color: colors.textMuted,
     lineHeight: 21,
@@ -407,7 +410,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  searchInput: { flex: 1, color: "white", fontSize: 15 },
+  searchInput: { flex: 1, color: colors.text, fontSize: 15 },
   chips: { gap: 8, paddingVertical: 14 },
   chip: {
     paddingHorizontal: 14,
@@ -417,7 +420,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipActive: { backgroundColor: colors.purple, borderColor: colors.purple },
+  chipActive: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
   chipText: { color: colors.textMuted, fontWeight: "800", fontSize: 12 },
   resultCount: {
     color: colors.textMuted,
@@ -451,7 +454,7 @@ const s = StyleSheet.create({
     textTransform: "uppercase",
     marginBottom: 3,
   },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "900" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   cardText: {
     color: colors.textMuted,
     fontSize: 11,
@@ -466,4 +469,4 @@ const s = StyleSheet.create({
     marginTop: 15,
   },
   emptyEmoji: { fontSize: 52, marginBottom: 12 },
-});
+}));

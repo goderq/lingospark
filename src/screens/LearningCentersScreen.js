@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useProgress } from "../store/ProgressContext";
 import { tenseModules } from "../data/advancedCourse";
 import { grammarTracks } from "../data/grammarAcademy";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { ProgressBar } from "../components/UI";
 
 const grammarItems = [
@@ -23,6 +23,7 @@ const examItems = [
 ];
 
 export function GrammarCenterScreen({ onClose, onNavigate }) {
+  useTheme();
   const { progress } = useProgress();
   const grammarDone = progress.completedGrammarTracks?.length || 0;
   const tensesDone = progress.completedTenses?.length || 0;
@@ -43,6 +44,7 @@ export function GrammarCenterScreen({ onClose, onNavigate }) {
 }
 
 export function ExamCenterScreen({ onClose, onNavigate }) {
+  useTheme();
   const { progress } = useProgress();
   const levelScores = Object.values(progress.levelExamBest || {});
   const passedLevels = levelScores.filter((score) => score >= 12).length;
@@ -69,11 +71,12 @@ export function ExamCenterScreen({ onClose, onNavigate }) {
 }
 
 function CenterLayout({ title, subtitle, icon, progress, progressText, items, onClose, onNavigate }) {
+  useTheme();
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Pressable onPress={onClose} style={styles.back}>
-          <Ionicons name="chevron-back" size={24} color="white" />
+          <Ionicons name="chevron-back" size={24} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>{title}</Text>
         <View style={{ width: 40 }} />
@@ -104,21 +107,21 @@ function CenterLayout({ title, subtitle, icon, progress, progressText, items, on
   );
 }
 
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   header: { height: 60, paddingHorizontal: 18, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   back: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  headerTitle: { color: "white", fontSize: 17, fontWeight: "900" },
+  headerTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
   content: { padding: 20, paddingBottom: 45 },
   hero: { alignItems: "center", backgroundColor: colors.card, borderRadius: 27, padding: 24, borderWidth: 1, borderColor: colors.border },
   heroIcon: { width: 66, height: 66, borderRadius: 22, backgroundColor: "rgba(124,92,252,.16)", alignItems: "center", justifyContent: "center" },
-  title: { color: "white", fontSize: 28, fontWeight: "900", marginTop: 14 },
+  title: { color: colors.text, fontSize: 28, fontWeight: "900", marginTop: 14 },
   subtitle: { color: colors.textMuted, textAlign: "center", lineHeight: 21, marginTop: 7 },
   progress: { width: "100%", marginTop: 20 },
   progressText: { color: colors.mint, fontSize: 11, fontWeight: "800", marginTop: 8 },
   section: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.2, marginTop: 24, marginBottom: 10 },
   card: { minHeight: 82, flexDirection: "row", alignItems: "center", gap: 13, backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },
   cardIcon: { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "900" },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "900" },
   cardText: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 3 },
-});
+}));

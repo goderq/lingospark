@@ -5,12 +5,13 @@ import { lessons } from '../data/course';
 import { useProgress } from '../store/ProgressContext';
 import { retentionDeck, retentionSummary } from '../utils/retention';
 import { evaluateExercise } from '../utils/answer';
-import { colors } from '../theme';
+import { colors , useTheme, createThemedStyles } from '../theme';
 import ExplanationCard from '../components/ExplanationCard';
 
 const date = value => new Date(value).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 export default function RetentionScreen({ onClose }) {
+  useTheme();
   const { progress, recordRetention } = useProgress();
   const [session, setSession] = useState(null);
   const [answers, setAnswers] = useState([]);
@@ -44,7 +45,7 @@ export default function RetentionScreen({ onClose }) {
     <View style={s.root}>
       <View style={s.header}>
         <Pressable accessibilityLabel="Назад" hitSlop={10} onPress={session ? () => setSession(null) : onClose} style={s.back}>
-          <Ionicons name="chevron-back" size={26} color="white" />
+          <Ionicons name="chevron-back" size={26} color={colors.text} />
         </Pressable>
         <Text style={s.title}>Проверка памяти</Text>
       </View>
@@ -87,17 +88,17 @@ export default function RetentionScreen({ onClose }) {
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   root: { flex: 1, backgroundColor: colors.background },
   header: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 14 },
   back: { minWidth: 48, minHeight: 48, justifyContent: 'center', alignItems: 'center', borderRadius: 24, backgroundColor: colors.card },
   content: { padding: 20, paddingBottom: 50, gap: 18 },
-  title: { color: 'white', fontSize: 21, fontWeight: '800', flexShrink: 1 },
+  title: { color: colors.text, fontSize: 21, fontWeight: '800', flexShrink: 1 },
   body: { color: colors.textMuted, fontSize: 16, lineHeight: 24 },
   accent: { color: colors.mint, fontSize: 16, fontWeight: '700' },
   card: { backgroundColor: colors.card, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: colors.border, gap: 10 },
-  selected: { borderColor: colors.purple, backgroundColor: '#252044' },
-  option: { color: 'white', fontSize: 18, lineHeight: 26 },
-  button: { backgroundColor: colors.purple, padding: 20, borderRadius: 20, alignItems: 'center' },
-  buttonText: { color: 'white', fontSize: 18, fontWeight: '800' },
-});
+  selected: { borderColor: colors.purple, backgroundColor: colors.accentSoft },
+  option: { color: colors.text, fontSize: 18, lineHeight: 26 },
+  button: { backgroundColor: colors.accentFill, padding: 20, borderRadius: 20, alignItems: 'center' },
+  buttonText: { color: colors.onAccent, fontSize: 18, fontWeight: '800' },
+}));

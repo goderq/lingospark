@@ -14,7 +14,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from "expo-speech-recognition";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { ProgressBar } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
@@ -103,6 +103,7 @@ const todayScenario = () => SCENARIOS[Math.floor(Date.now() / 86400000) % SCENAR
 const speechOnly = (text) => String(text || "").split("РУССКИЙ КОММЕНТАРИЙ:")[0].trim();
 
 export default function VoiceCoachScreen({ model, onClose }) {
+  useTheme();
   const { progress, addCustomWord } = useProgress();
   const [stage, setStage] = useState("setup");
   const [scenario, setScenario] = useState(todayScenario());
@@ -389,7 +390,7 @@ export default function VoiceCoachScreen({ model, onClose }) {
     <View style={s.container}>
       <View style={s.sessionHeader}>
         <Pressable onPress={onClose} style={s.headerButton}>
-          <Ionicons name="close" size={25} color="white" />
+          <Ionicons name="close" size={25} color={colors.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.sessionTitle}>{scenario.emoji} {scenario.title}</Text>
@@ -463,8 +464,8 @@ export default function VoiceCoachScreen({ model, onClose }) {
           onPress={status === "listening" ? stopListening : startListening}
           style={[s.micOrb, status === "listening" && s.micListening, (status === "thinking" || status === "speaking") && s.micBusy]}
         >
-          {status === "thinking" || status === "transcribing" ? <ActivityIndicator size="large" color="white" /> : (
-            <Ionicons name={status === "listening" ? "stop" : status === "speaking" ? "volume-high" : "mic"} size={42} color="white" />
+          {status === "thinking" || status === "transcribing" ? <ActivityIndicator size="large" color={colors.text} /> : (
+            <Ionicons name={status === "listening" ? "stop" : status === "speaking" ? "volume-high" : "mic"} size={42} color={colors.text} />
           )}
         </Pressable>
         {error ? <Text style={s.errorText}>{error}</Text> : null}
@@ -474,6 +475,7 @@ export default function VoiceCoachScreen({ model, onClose }) {
 }
 
 function VoiceSetup(props) {
+  useTheme();
   const {
     model, modelReady, scenario, setScenario, level, setLevel, mode, setMode,
     strictness, setStrictness, responseLength, setResponseLength, speechRate,
@@ -483,7 +485,7 @@ function VoiceSetup(props) {
   return (
     <View style={s.container}>
       <View style={s.sessionHeader}>
-        <Pressable onPress={onClose} style={s.headerButton}><Ionicons name="chevron-back" size={24} color="white" /></Pressable>
+        <Pressable onPress={onClose} style={s.headerButton}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.sessionTitle}>Голосовой тренер</Text>
           <Text style={s.sessionMeta}>{model.title} модель · локально</Text>
@@ -515,7 +517,7 @@ function VoiceSetup(props) {
         <View style={s.segmentRow}>
           {LEVELS.map((item) => (
             <Pressable key={item} onPress={() => setLevel(item)} style={[s.levelButton, level === item && s.segmentActive]}>
-              <Text style={[s.segmentText, level === item && { color: "white" }]}>{item}</Text>
+              <Text style={[s.segmentText, level === item && { color: colors.text }]}>{item}</Text>
             </Pressable>
           ))}
         </View>
@@ -536,7 +538,7 @@ function VoiceSetup(props) {
         </Pressable>
 
         <Pressable disabled={!modelReady} onPress={onStart} style={[s.startButton, !modelReady && { opacity: 0.45 }]}>
-          {modelReady ? <Ionicons name="mic" size={22} color="white" /> : <ActivityIndicator color="white" />}
+          {modelReady ? <Ionicons name="mic" size={22} color={colors.onAccent} /> : <ActivityIndicator color={colors.onAccent} />}
           <Text style={s.startText}>{modelReady ? `Начать · ${scenario.title}` : "Запускаю модель…"}</Text>
         </Pressable>
       </ScrollView>
@@ -545,6 +547,7 @@ function VoiceSetup(props) {
 }
 
 function OptionRow({ options, value, onChange }) {
+  useTheme();
   return (
     <View style={s.optionRow}>
       {options.map(([id, title, text]) => (
@@ -558,6 +561,7 @@ function OptionRow({ options, value, onChange }) {
 }
 
 function VoiceResult({ scenario, analysis, analyzing, progress, onAddWord, onRetry, onClose }) {
+  useTheme();
   const [selected, setSelected] = useState({});
   const [added, setAdded] = useState([]);
   if (analyzing) return (
@@ -572,7 +576,7 @@ function VoiceResult({ scenario, analysis, analyzing, progress, onAddWord, onRet
   return (
     <View style={s.container}>
       <View style={s.sessionHeader}>
-        <Pressable onPress={onClose} style={s.headerButton}><Ionicons name="close" size={24} color="white" /></Pressable>
+        <Pressable onPress={onClose} style={s.headerButton}><Ionicons name="close" size={24} color={colors.text} /></Pressable>
         <View style={{ flex: 1 }}><Text style={s.sessionTitle}>Результат · {scenario.title}</Text><Text style={s.sessionMeta}>Сохранено в истории ИИ</Text></View>
       </View>
       <ScrollView contentContainerStyle={s.resultContent}>
@@ -601,17 +605,17 @@ function VoiceResult({ scenario, analysis, analyzing, progress, onAddWord, onRet
             {selected[index] ? <Text style={s.taskExplain}>{exercise.explanation}</Text> : null}
           </View>
         ))}
-        <Pressable onPress={onRetry} style={s.startButton}><Ionicons name="refresh" size={21} color="white" /><Text style={s.startText}>Новый разговор</Text></Pressable>
+        <Pressable onPress={onRetry} style={s.startButton}><Ionicons name="refresh" size={21} color={colors.onAccent} /><Text style={s.startText}>Новый разговор</Text></Pressable>
       </ScrollView>
     </View>
   );
 }
 
-const s = StyleSheet.create({
+const s = createThemedStyles(() => ({
   container: { flex: 1, backgroundColor: colors.background },
   sessionHeader: { minHeight: 68, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderColor: colors.border },
   headerButton: { width: 42, height: 42, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  sessionTitle: { color: "white", fontSize: 17, fontWeight: "900" },
+  sessionTitle: { color: colors.text, fontSize: 17, fontWeight: "900" },
   sessionMeta: { color: colors.textMuted, fontSize: 10, marginTop: 3 },
   finishButton: { height: 38, borderRadius: 12, backgroundColor: "rgba(255,159,67,.14)", paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   finishText: { color: colors.orange, fontSize: 11, fontWeight: "900" },
@@ -619,34 +623,34 @@ const s = StyleSheet.create({
   dailyCard: { minHeight: 96, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: "rgba(255,159,67,.08)", padding: 15, flexDirection: "row", alignItems: "center", gap: 12 },
   dailyIcon: { width: 54, height: 54, borderRadius: 18, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   dailyLabel: { color: colors.orange, fontSize: 9, fontWeight: "900", letterSpacing: 1.3 },
-  cardTitle: { color: "white", fontSize: 16, fontWeight: "900", marginTop: 3 },
+  cardTitle: { color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 3 },
   cardText: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   section: { color: colors.textMuted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5, marginTop: 24, marginBottom: 10 },
   scenarioGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   scenarioCard: { width: "48%", minHeight: 112, borderRadius: 20, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 14 },
   scenarioActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,.12)" },
   scenarioEmoji: { fontSize: 27 },
-  scenarioTitle: { color: "white", fontSize: 14, fontWeight: "900", marginTop: 8 },
+  scenarioTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 8 },
   scenarioSteps: { color: colors.textMuted, fontSize: 10, marginTop: 4 },
   segmentRow: { flexDirection: "row", gap: 7 },
   levelButton: { flex: 1, height: 45, borderRadius: 14, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  segmentActive: { backgroundColor: colors.purple },
+  segmentActive: { backgroundColor: colors.accentSoft },
   segmentText: { color: colors.textMuted, fontSize: 13, fontWeight: "900" },
   optionRow: { flexDirection: "row", gap: 9, marginBottom: 9 },
   optionCard: { flex: 1, minHeight: 72, borderRadius: 17, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, padding: 12, flexDirection: "row", alignItems: "center", gap: 9 },
   optionActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,.1)" },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.textMuted, alignItems: "center", justifyContent: "center" },
   radioActive: { borderColor: colors.purple },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.purple },
-  optionTitle: { color: "white", fontSize: 12, fontWeight: "900" },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.accentSoft },
+  optionTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
   optionText: { color: colors.textMuted, fontSize: 9, lineHeight: 13, marginTop: 3 },
   toggleRow: { minHeight: 70, borderRadius: 17, backgroundColor: colors.card, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 },
   toggle: { width: 48, height: 28, borderRadius: 14, backgroundColor: colors.cardLight, padding: 3 },
-  toggleOn: { backgroundColor: colors.purple },
-  toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: "white" },
+  toggleOn: { backgroundColor: colors.accentSoft },
+  toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: colors.card },
   toggleKnobOn: { alignSelf: "flex-end" },
-  startButton: { minHeight: 56, borderRadius: 18, backgroundColor: colors.purple, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 22, paddingHorizontal: 18 },
-  startText: { color: "white", fontSize: 15, fontWeight: "900" },
+  startButton: { minHeight: 56, borderRadius: 18, backgroundColor: colors.accentFill, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 22, paddingHorizontal: 18 },
+  startText: { color: colors.text, fontSize: 15, fontWeight: "900" },
   goalBlock: { padding: 14, borderBottomWidth: 1, borderColor: colors.border },
   goalTop: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
   goalLabel: { color: colors.textMuted, fontSize: 9, fontWeight: "900", letterSpacing: 1.2 },
@@ -659,25 +663,25 @@ const s = StyleSheet.create({
   dialogueContent: { padding: 16, gap: 10 },
   subtitleBubble: { maxWidth: "88%", borderRadius: 18, padding: 13 },
   aiSubtitle: { alignSelf: "flex-start", backgroundColor: colors.card, borderTopLeftRadius: 5 },
-  userSubtitle: { alignSelf: "flex-end", backgroundColor: colors.purple, borderTopRightRadius: 5 },
-  subtitleSpeaker: { color: "rgba(255,255,255,.55)", fontSize: 8, fontWeight: "900", letterSpacing: 1.2, marginBottom: 6 },
-  subtitleText: { color: "white", fontSize: 15, lineHeight: 21 },
+  userSubtitle: { alignSelf: "flex-end", backgroundColor: colors.accentSoft, borderTopRightRadius: 5 },
+  subtitleSpeaker: { color: colors.textMuted, fontSize: 8, fontWeight: "900", letterSpacing: 1.2, marginBottom: 6 },
+  subtitleText: { color: colors.text, fontSize: 15, lineHeight: 21 },
   replay: { flexDirection: "row", gap: 5, alignItems: "center", marginTop: 9 },
   replayText: { color: colors.purple, fontSize: 10, fontWeight: "800" },
   voiceControls: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, alignItems: "center", borderTopWidth: 1, borderColor: colors.border },
   hintCard: { width: "100%", minHeight: 51, borderRadius: 15, backgroundColor: "rgba(255,159,67,.09)", padding: 11, flexDirection: "row", alignItems: "center", gap: 8 },
-  hintText: { color: "white", flex: 1, fontSize: 10, lineHeight: 15 },
+  hintText: { color: colors.text, flex: 1, fontSize: 10, lineHeight: 15 },
   showHint: { flexDirection: "row", alignItems: "center", gap: 6, height: 40 },
   showHintText: { color: colors.orange, fontSize: 11, fontWeight: "800" },
   statusText: { color: colors.textMuted, fontSize: 11, fontWeight: "700", marginTop: 10, marginBottom: 8 },
-  micOrb: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center", shadowColor: colors.purple, shadowOpacity: .45, shadowRadius: 18, shadowOffset: { width: 0, height: 5 } },
+  micOrb: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center", shadowColor: colors.purple, shadowOpacity: .45, shadowRadius: 18, shadowOffset: { width: 0, height: 5 } },
   micListening: { backgroundColor: colors.pink, shadowColor: colors.pink, transform: [{ scale: 1.06 }] },
   micBusy: { backgroundColor: "#51467D" },
   errorText: { color: colors.pink, fontSize: 10, textAlign: "center", marginTop: 8 },
   resultLoading: { flex: 1, alignItems: "center", justifyContent: "center", gap: 13, paddingHorizontal: 32 },
   resultContent: { padding: 18, paddingBottom: 38 },
   resultHero: { borderRadius: 22, backgroundColor: "rgba(124,92,252,.12)", borderWidth: 1, borderColor: "rgba(124,92,252,.3)", padding: 18, alignItems: "center", gap: 10 },
-  resultTitle: { color: "white", fontSize: 18, lineHeight: 24, fontWeight: "900", textAlign: "center" },
+  resultTitle: { color: colors.text, fontSize: 18, lineHeight: 24, fontWeight: "900", textAlign: "center" },
   resultScores: { flexDirection: "row", gap: 9, marginTop: 13 },
   resultScore: { flex: 1, minHeight: 86, backgroundColor: colors.card, borderRadius: 17, alignItems: "center", justifyContent: "center" },
   resultScoreValue: { color: colors.mint, fontSize: 23, fontWeight: "900" },
@@ -687,15 +691,15 @@ const s = StyleSheet.create({
   rightPhrase: { color: colors.mint, fontSize: 13, fontWeight: "700", marginBottom: 7 },
   successCard: { backgroundColor: "rgba(46,211,183,.1)", borderRadius: 18, padding: 15, flexDirection: "row", alignItems: "center", gap: 10 },
   wordRow: { minHeight: 67, backgroundColor: colors.card, borderRadius: 17, padding: 13, flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  wordEnglish: { color: "white", fontSize: 16, fontWeight: "900" },
+  wordEnglish: { color: colors.text, fontSize: 16, fontWeight: "900" },
   wordRussian: { color: colors.mint, fontSize: 11, marginTop: 3 },
-  addWord: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.purple, alignItems: "center", justifyContent: "center" },
+  addWord: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" },
   taskCard: { backgroundColor: colors.card, borderRadius: 19, padding: 14, marginBottom: 10 },
   taskNumber: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1.1 },
-  taskPrompt: { color: "white", fontSize: 14, lineHeight: 20, fontWeight: "800", marginVertical: 10 },
+  taskPrompt: { color: colors.text, fontSize: 14, lineHeight: 20, fontWeight: "800", marginVertical: 10 },
   taskOption: { minHeight: 42, borderRadius: 12, backgroundColor: colors.cardLight, borderWidth: 1, borderColor: colors.border, justifyContent: "center", paddingHorizontal: 12, marginBottom: 7 },
   taskCorrect: { borderColor: colors.mint, backgroundColor: "rgba(46,211,183,.1)" },
   taskWrong: { borderColor: colors.pink, backgroundColor: "rgba(255,92,138,.1)" },
-  taskOptionText: { color: "white", fontSize: 12, fontWeight: "700" },
+  taskOptionText: { color: colors.text, fontSize: 12, fontWeight: "700" },
   taskExplain: { color: colors.textMuted, fontSize: 10, lineHeight: 15, marginTop: 4 },
-});
+}));

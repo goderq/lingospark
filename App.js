@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BackHandler, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { AppState, BackHandler, Keyboard, Pressable, Text, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { ProgressProvider, useProgressSelector, useProgressActions } from "./src/store/ProgressContext";
@@ -16,7 +16,7 @@ import { mainTabs, navigationTarget, practiceAlias } from './src/utils/appNaviga
 
 import AuthScreen from "./src/screens/AuthScreen";
 
-import { colors } from "./src/theme";
+import { colors , useTheme, createThemedStyles , ThemeProvider } from "./src/theme";
 import { lessons } from "./src/data/course";
 import {markStartup,beginScreenTransition} from './src/utils/performance';
 
@@ -104,11 +104,14 @@ const CourseTestScreen = React.lazy(() => import("./src/screens/CourseTestScreen
 const QuickSessionScreen = React.lazy(() => import("./src/screens/QuickSessionScreen"));
 const PracticeScreen = React.lazy(() => import("./src/screens/PracticeScreen"));
 
+import { ScreenFrame, MotionPressable } from './src/components/Motion';
+
 const NAV_KEY = "@lingospark/navigation-v1";
 export default function App() {
   return (
+    <ThemeProvider>
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <ThemeStatusBar />
       <AuthProvider>
         <ProgressProvider>
           <CloudSyncProvider>
@@ -119,12 +122,21 @@ export default function App() {
         </ProgressProvider>
       </AuthProvider>
     </SafeAreaProvider>
+    </ThemeProvider>
   );
 }
 
+function ThemeStatusBar() {
+  const { scheme } = useTheme();
+  return <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />;
+}
+
 function AppContent() {
+  const appearance = useTheme();
   const { ready, onboarded, dailyGoal, loadError } = useProgressSelector(state => ({ ready: state.ready, onboarded: state.progress.onboarded, dailyGoal: state.progress.dailyGoal, loadError: state.loadError }));
   const { finishOnboarding } = useProgressActions();
+  const savedReduceMotion = useProgressSelector(state => !!state.progress.settings?.reduceMotion);
+  useEffect(() => { if (savedReduceMotion && !appearance.userReduceMotion) appearance.setReduceMotion(true); }, [savedReduceMotion, appearance.userReduceMotion]);
   const progress = { onboarded, dailyGoal };
   const {
     ready: authReady,
@@ -136,7 +148,7 @@ function AppContent() {
   const [overlay, rawSetOverlay] = useState(null);
   const setTab = useCallback(value => { if (value !== tab) beginScreenTransition(value); rawSetTab(value); }, [tab]);
   const setOverlay = useCallback(value => { beginScreenTransition(value?.type); rawSetOverlay(value); }, []);
-  const [recentScreens, setRecentScreens] = useState([]);
+
   const [aiImmersive, setAiImmersive] = useState(false);
   const [worldImmersive, setWorldImmersive] = useState(false);
   const [aiPractice, setAiPractice] = useState(null);
@@ -148,95 +160,22 @@ function AppContent() {
       finishOnboarding(accountName, progress.dailyGoal || 30);
     }
   }, [user?.id, cloudRestoring, progress.onboarded, accountName, loadError]);
-  const serializeOverlay = (value) =>
-    value
-      ? value.type === "lesson"
-        ? { type: "lesson", lessonId: value.lesson.id, returnTo: value.returnTo }
-        : { type: value.type, level: value.level, topicId: value.topicId }
-      : null;
-  const hydrateOverlay = (value) => {
-    if (!value) return null;
-    if (value.type === "lesson") {
-      const lesson = lessons.find((item) => item.id === value.lessonId);
-      return lesson ? { type: "lesson", lesson, returnTo: value.returnTo } : null;
-    }
-    return value;
-  };
+
+  useEffect(() => { AsyncStorage.removeItem(NAV_KEY).catch(() => {}).finally(() => setNavigationReady(true)); }, []);
+
   useEffect(() => {
-    AsyncStorage.getItem(NAV_KEY)
-      .then((raw) => {
-        if (!raw) return;
-        const saved = JSON.parse(raw);
-        // Always enter through the lightweight home screen. Restoring an AI,
-        // speech or unfinished lesson screen during process launch can invoke
-        // a native module before iOS has finished activating the application.
-        setTab("home");
-        setOverlay(null);
-        setRecentScreens(saved.recentScreens || []);
-      })
-      .catch(() => {})
-      .finally(() => setNavigationReady(true));
+    let backgrounded = AppState.currentState === 'background';
+    const listener = AppState.addEventListener('change', next => {
+      if (next === 'background') backgrounded = true;
+      if (backgrounded && next === 'active') {
+        Keyboard.dismiss(); rawSetTab('home'); rawSetOverlay(null);
+        setAiPractice(null); setAiImmersive(false); setWorldImmersive(false);
+        backgrounded = false;
+      }
+    });
+    return () => listener.remove();
   }, []);
-  useEffect(() => {
-    if (!navigationReady) return;
-    AsyncStorage.setItem(
-      NAV_KEY,
-      JSON.stringify({
-        tab,
-        overlay: serializeOverlay(overlay),
-        recentScreens,
-      }),
-    ).catch(() => {});
-  }, [tab, overlay, recentScreens, navigationReady]);
-  useEffect(() => {
-    if (!navigationReady) return;
-    const serialized = serializeOverlay(overlay);
-    const key = serialized
-      ? `${serialized.type}-${serialized.lessonId || serialized.topicId || serialized.level || ""}`
-      : `tab-${tab}`;
-    if (key === "tab-home") return;
-    const labels = {
-      course: "Курс",
-      learn: 'Обучение',
-      world: 'Английская жизнь',
-      journey: 'Учебная тема',
-      quickSession: 'Занятие на 10 минут',
-      ai: "ИИ-преподаватель",
-      review: "Слова",
-      profile: "Профиль",
-      learningHub: "Каталог",
-      grammarCenter: "Центр грамматики",
-      examCenter: "Центр экзаменов",
-      settings: "Настройки",
-      diagnostics: "Диагностика",
-      tenses: "Времена",
-      adaptive: "Урок для тебя",
-      dictation: "Диктант",
-      dialogues: "Диалоги",
-      mistakes: "Мои ошибки",
-      grammarAcademy: "Академия грамматики",
-      skillSprint: "Гибкая практика",
-      levelProgress: "Прогресс A1–C1",
-      streakCalendar: "Календарь серии",
-      smartSearch: "Поиск",
-      bookmarks: "Закладки",
-      lingoWorld: "Английская жизнь",
-    };
-    const title =
-      ['journey', 'courseTest'].includes(serialized?.type) ? lessons.find(item => item.id === serialized.topicId)?.title || 'Учебная тема' :
-      serialized?.type === "lesson"
-        ? lessons.find((item) => item.id === serialized.lessonId)?.title ||
-          "Урок"
-        : labels[serialized?.type || tab] || "Раздел обучения";
-    setRecentScreens((current) =>
-      current[0]?.key === key
-        ? current
-        : [
-            { key, title, tab: serialized ? null : tab, overlay: serialized },
-            ...current.filter((item) => item.key !== key),
-          ].slice(0, 5),
-    );
-  }, [tab, overlay, navigationReady]);
+
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
       "hardwareBackPress",
@@ -258,35 +197,35 @@ function AppContent() {
   };
   if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
   if (!user && !guestMode) return <AuthScreen />;
-  if (loadError && !cloudRestoring) return <SafeAreaView style={styles.safe}><RecoveryScreen error={loadError} /></SafeAreaView>;
+  if (loadError && !cloudRestoring) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><RecoveryScreen error={loadError} /></ScreenFrame>;
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
-  if (practiceAlias(overlay?.type)) return <SafeAreaView style={styles.safe}><PracticeScreen key={overlay.type} {...practiceAlias(overlay.type)} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></SafeAreaView>;
+  if (practiceAlias(overlay?.type)) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><PracticeScreen key={overlay.type} {...practiceAlias(overlay.type)} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></ScreenFrame>;
   if (overlay?.type === "account")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <AuthScreen optional onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "levelProgress")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LevelProgressScreen
           onClose={() => setOverlay(null)}
           onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "streakCalendar")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <StreakCalendarScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "smartSearch")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SmartSearchScreen
           onClose={() => setOverlay(null)}
           onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
@@ -297,11 +236,11 @@ function AppContent() {
             } else setOverlay({ type });
           }}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "bookmarks" || overlay?.type === "favorites")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <BookmarksScreen
           onClose={() => setOverlay(null)}
           onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
@@ -312,113 +251,113 @@ function AppContent() {
             } else setOverlay({ type });
           }}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === 'course')
-    return <SafeAreaView style={styles.safe}><CourseScreen initialLevel={overlay.level} onClose={() => setOverlay(null)} onLesson={lesson => setOverlay({ type: 'journey', topicId: lesson.id })} onCheckpoint={level => setOverlay({ type: 'courseCheckpoint', level })} /></SafeAreaView>;
+    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><CourseScreen initialLevel={overlay.level} onClose={() => setOverlay(null)} onLesson={lesson => setOverlay({ type: 'journey', topicId: lesson.id })} onCheckpoint={level => setOverlay({ type: 'courseCheckpoint', level })} /></ScreenFrame>;
   if (overlay?.type === 'review')
-    return <SafeAreaView style={styles.safe}><View style={styles.overlayBack}><Pressable onPress={() => setOverlay(null)} style={styles.backButton}><Text style={styles.backText}>← Обучение</Text></Pressable><Pressable onPress={() => setOverlay({ type: 'vocabulary' })} style={styles.backButton}><Text style={styles.backText}>Словарь →</Text></Pressable></View><ReviewScreen /></SafeAreaView>;
-  if (overlay?.type === 'courseTest') return <SafeAreaView style={styles.safe}><CourseTestScreen topicId={overlay.topicId} onClose={() => setOverlay({ type: 'journey', topicId: overlay.topicId })} /></SafeAreaView>;
-  if (overlay?.type === 'quickSession') return <SafeAreaView style={styles.safe}><QuickSessionScreen onClose={() => setOverlay(null)} onJourney={topicId => setOverlay({ type: 'journey', topicId })} onRetention={() => setOverlay({ type: 'retention' })} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></SafeAreaView>;
+    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><View style={styles.overlayBack}><Pressable onPress={() => setOverlay(null)} style={styles.backButton}><Text style={styles.backText}>← Обучение</Text></Pressable><Pressable onPress={() => setOverlay({ type: 'vocabulary' })} style={styles.backButton}><Text style={styles.backText}>Словарь →</Text></Pressable></View><ReviewScreen /></ScreenFrame>;
+  if (overlay?.type === 'courseTest') return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><CourseTestScreen topicId={overlay.topicId} onClose={() => setOverlay({ type: 'journey', topicId: overlay.topicId })} /></ScreenFrame>;
+  if (overlay?.type === 'quickSession') return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><QuickSessionScreen onClose={() => setOverlay(null)} onJourney={topicId => setOverlay({ type: 'journey', topicId })} onRetention={() => setOverlay({ type: 'retention' })} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
   if (overlay?.type === 'journey')
-    return <SafeAreaView style={styles.safe}><LearningJourneyScreen topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></SafeAreaView>;
+    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><LearningJourneyScreen topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
   if (overlay?.type === "lingoWorld")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LingoWorldScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "lesson")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LessonScreen
           lesson={overlay.lesson}
           onClose={() => setOverlay(overlay.returnTo ? { type: overlay.returnTo, topicId: overlay.lesson.id } : null)}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "courseCheckpoint")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LevelCheckpointScreen
           level={overlay.level}
           onClose={() => setOverlay(null)}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "notebook")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <NotebookScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "articlesPrepositions")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <ArticlesPrepositionsScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "skillSprint")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SkillSprintScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "phrases")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <PhrasebookScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "dictation")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <DictationScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "dialogues")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <DialogueScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "mistakes")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <MistakesScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "placement")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <PlacementScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "grammar")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <GrammarScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "stories")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <StoriesScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "game")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <WordGameScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "plan")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <PlanScreen
           onClose={() => setOverlay(null)}
           onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
@@ -429,350 +368,350 @@ function AppContent() {
             } else setOverlay({ type });
           }}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "vocabulary")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <VocabularyScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "exam")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <WeeklyExamScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "rewards")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <RewardsScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "activity")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <ActivityScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "pronunciation")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <PronunciationScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "backup")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <BackupScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "settings")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SettingsScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "diagnostics")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <DiagnosticsScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "commonMistakes")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <CommonMistakesScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "packs")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <PacksScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "shadowing")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <ShadowingScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "tenses")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <TensesScreen
           onClose={() => setOverlay(null)}
           onChallenge={() => setOverlay({ type: "tenseChallenge" })}
           onWeak={() => setOverlay({ type: "weakTenses" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "levels")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LevelMapScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "irregular")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <IrregularVerbsScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "grammarAcademy")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <GrammarAcademyScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "tenseChallenge")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <TenseChallengeScreen onClose={() => setOverlay({ type: "tenses" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "weakTenses")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <TenseChallengeScreen
           mode="weak"
           onClose={() => setOverlay({ type: "tenses" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "learningHub")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LearningHubScreen
           onClose={() => setOverlay(null)}
           onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
           onNavigate={navigate}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "grammarCenter")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <GrammarCenterScreen
           onClose={() => setOverlay({ type: "learningHub" })}
           onNavigate={(type) => setOverlay({ type })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "examCenter")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <ExamCenterScreen
           onClose={() => setOverlay({ type: "learningHub" })}
           onNavigate={(type) => setOverlay({ type })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "analytics")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LearningAnalyticsScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "sentenceBuilder")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SentenceBuilderScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "c1Exam")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <C1ExamScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "retention")
-    return <SafeAreaView style={styles.safe}><RetentionScreen onClose={() => setOverlay(null)} /></SafeAreaView>;
+    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><RetentionScreen onClose={() => setOverlay(null)} /></ScreenFrame>;
   if (overlay?.type === "adaptive")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <AdaptiveLessonScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "reviewCalendar")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <ReviewCalendarScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "dailyChallenge")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <DailyChallengeScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "achievements")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <AchievementsScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "skills")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SkillsScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "missions")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <MissionsScreen onClose={() => setOverlay(null)} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "lexicon")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LexiconScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "listeningLab")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <ListeningLabScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "writingStudio")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <WritingStudioScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "levelExams")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LevelExamsScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "minimalPairs")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <MinimalPairsScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "spacedRepetition")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SpacedRepetitionScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "branchingDialogues")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <BranchingDialoguesScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "ielts")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <IeltsScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "smartCoach")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SmartCoachScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "workEnglish")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <WorkEnglishScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "readingLab")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <ReadingLabScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "storyGame")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <StoryGameScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "marathons")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <MarathonsScreen onClose={() => setOverlay({ type: "learningHub" })} />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "dailyMixedExam")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <DailyMixedExamScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "knowledgeMap")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <SkillEvidenceScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "writtenVocabulary")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <WrittenVocabularyScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "careerCourses")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <CareerCoursesScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "storySeasonTwo")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <StorySeasonTwoScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   if (overlay?.type === "fullIeltsMock")
     return (
-      <SafeAreaView style={styles.safe}>
+      <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <FullIeltsMockScreen
           onClose={() => setOverlay({ type: "learningHub" })}
         />
-      </SafeAreaView>
+      </ScreenFrame>
     );
   const openLesson = (lesson) => setOverlay({ type: "lesson", lesson });
   return (
-    <SafeAreaView edges={["top"]} style={styles.safe}>
+    <ScreenFrame transitionKey={overlay?.type || tab} edges={["top"]} style={styles.safe}>
       <View style={styles.body}>
         {tab === "home" && (
           <HomeScreen
@@ -812,14 +751,7 @@ function AppContent() {
             onSearch={() => setOverlay({ type: "smartSearch" })}
             onBookmarks={() => setOverlay({ type: "bookmarks" })}
             onLingoWorld={() => navigate('world')}
-            recentScreens={recentScreens}
-            onRecent={(item) => {
-              if (item.overlay) setOverlay(hydrateOverlay(item.overlay));
-              else {
-                setOverlay(null);
-                navigate(item.tab || 'home');
-              }
-            }}
+
           />
         )}
         {tab === 'learn' && <LearningHomeScreen onNavigate={navigate} onJourney={(topicId = 'greetings') => setOverlay({ type: 'journey', topicId })} onCourse={level => setOverlay({ type: 'course', level })} />}
@@ -850,12 +782,13 @@ function AppContent() {
         )}
       </View>
       {!aiImmersive && !(tab === 'world' && worldImmersive) && <TabBar tab={tab} setTab={setTab} />}
-    </SafeAreaView>
+    </ScreenFrame>
   );
 }
 
 const tabs = mainTabs;
 function TabBar({ tab, setTab }) {
+  useTheme();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   useEffect(() => {
     const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
@@ -871,7 +804,7 @@ function TabBar({ tab, setTab }) {
       {tabs.map(([id, icon, label]) => {
         const active = id === tab;
         return (
-          <Pressable accessibilityRole="tab" accessibilityLabel={id === 'world' ? 'Английская жизнь' : label} accessibilityState={{ selected: active }} key={id} onPress={() => setTab(id)} style={styles.tab}>
+          <MotionPressable containerStyle={{ flex: 1 }} accessibilityRole="tab" accessibilityLabel={id === 'world' ? 'Английская жизнь' : label} accessibilityState={{ selected: active }} key={id} onPress={() => setTab(id)} style={[styles.tab, active && { backgroundColor: colors.accentSoft }]}>
             <Ionicons
               name={active ? icon : `${icon}-outline`}
               size={24}
@@ -880,13 +813,13 @@ function TabBar({ tab, setTab }) {
             <Text style={[styles.tabText, active && { color: colors.purple }]}>
               {label}
             </Text>
-          </Pressable>
+          </MotionPressable>
         );
       })}
     </View>
   );
 }
-const styles = StyleSheet.create({
+const styles = createThemedStyles(() => ({
   safe: { flex: 1, backgroundColor: colors.background },
   body: { flex: 1 },
   overlayBack: { paddingHorizontal: 20, flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
@@ -894,18 +827,19 @@ const styles = StyleSheet.create({
   backText: { color: colors.purple, fontSize: 17, fontWeight: '700' },
   tabs: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 10,
-    height: 72,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    minHeight: 78,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(22,25,39,0.97)",
-    borderRadius: 25,
-    borderWidth: 1,
+    backgroundColor: colors.card,
+    borderRadius: 0,
+    borderTopWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  tab: { flex: 1, alignItems: "center", justifyContent: "center", gap: 4 },
+  tab: { minHeight: 58, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 4 },
   tabText: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
-});
+}));

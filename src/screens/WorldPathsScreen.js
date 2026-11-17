@@ -3,13 +3,14 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {Alert,Keyboard,KeyboardAvoidingView,Platform,Pressable,ScrollView,StyleSheet,Text,TextInput,View} from 'react-native';
 import {Ionicons} from '@expo/vector-icons';
 import {useProgress} from '../store/ProgressContext';
-import {colors} from '../theme';
+import {colors, useTheme, createThemedStyles } from '../theme';
 import {PrimaryButton,ProgressBar} from '../components/UI';
 import {balancedOptions} from '../utils/shuffle';
 import {newRentalDialogue,availableRentalIntents,dialogueHelp,replyToLandlord,evaluateWorldQuestion,worldQuestionHelp} from '../utils/worldDialogue';
 import {lifePaths,pathProgress,pathQuestions,rentalListings,rentalBudget,rentalInitialCost,rentalQuestions} from '../data/worldPaths';
 
 export default function WorldPathsScreen({onClose}){
+  useTheme();
   const {progress,saveWorldPathDraft,completeWorldPathChapter,completeWorldRental,restartWorldLifePath,restartWorldRental}=useProgress();
   const world=progress.world || {};
   const [activity,setActivity]=useState(null);
@@ -52,7 +53,7 @@ export default function WorldPathsScreen({onClose}){
   const result=activity?.mode==='rental'?world.rental?.outcome:pathProgress(world,path || lifePaths[0]).decisions?.[chapter?.id]?.outcome;
   return <KeyboardAvoidingView style={s.page} behavior={Platform.OS==='ios'?'padding':undefined}>
     <View style={s.header}>
-      <Pressable style={s.back} onPress={()=>activity?setActivity(null):onClose()}><Ionicons name="chevron-back" size={24} color="white" /></Pressable>
+      <Pressable style={s.back} onPress={()=>activity?setActivity(null):onClose()}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
       <Text style={s.headerText}>{activity ? (path?.title || 'Поиск жилья') : 'Твой жизненный путь'}</Text>
       <Text style={s.muted}>{activity && activity.step==='questions'?`♥ ${activity.lives}`:''}</Text>
     </View>
@@ -126,4 +127,4 @@ export default function WorldPathsScreen({onClose}){
   </KeyboardAvoidingView>;
 }
 
-const s=StyleSheet.create({page:{flex:1,backgroundColor:colors.background},header:{height:62,paddingHorizontal:18,flexDirection:'row',alignItems:'center',gap:12},back:{width:42,height:42,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:colors.card},headerText:{flex:1,color:'white',fontSize:18,fontWeight:'900'},content:{padding:20,paddingBottom:50,gap:16},title:{color:'white',fontSize:27,fontWeight:'900'},heading:{color:'white',fontSize:17,fontWeight:'800',lineHeight:24},text:{color:colors.textMuted,fontSize:14,lineHeight:22},muted:{color:colors.textMuted,fontSize:11,lineHeight:18},card:{backgroundColor:colors.card,padding:18,borderRadius:22,gap:12,borderWidth:1,borderColor:colors.border},document:{color:'white',fontSize:15,lineHeight:24},option:{padding:16,borderRadius:17,borderWidth:1,borderColor:colors.border,backgroundColor:colors.cardLight,gap:8},optionText:{color:'white',fontSize:15,lineHeight:22},dim:{opacity:.55},correct:{borderColor:colors.mint},success:{color:colors.mint,fontSize:15,lineHeight:23},error:{color:colors.orange,fontSize:15,lineHeight:23},eyebrow:{color:colors.purple,fontSize:11,fontWeight:'900',letterSpacing:1},input:{minHeight:105,color:'white',backgroundColor:colors.card,borderRadius:18,padding:16,fontSize:17,textAlignVertical:'top'}});
+const s=createThemedStyles(() => ({page:{flex:1,backgroundColor:colors.background},header:{height:62,paddingHorizontal:18,flexDirection:'row',alignItems:'center',gap:12},back:{width:42,height:42,borderRadius:16,alignItems:'center',justifyContent:'center',backgroundColor:colors.card},headerText:{flex:1,color:colors.text,fontSize:18,fontWeight:'900'},content:{padding:20,paddingBottom:50,gap:16},title:{color:colors.text,fontSize:27,fontWeight:'900'},heading:{color:colors.text,fontSize:17,fontWeight:'800',lineHeight:24},text:{color:colors.textMuted,fontSize:14,lineHeight:22},muted:{color:colors.textMuted,fontSize:11,lineHeight:18},card:{backgroundColor:colors.card,padding:18,borderRadius:22,gap:12,borderWidth:1,borderColor:colors.border},document:{color:colors.text,fontSize:15,lineHeight:24},option:{padding:16,borderRadius:17,borderWidth:1,borderColor:colors.border,backgroundColor:colors.cardLight,gap:8},optionText:{color:colors.text,fontSize:15,lineHeight:22},dim:{opacity:.55},correct:{borderColor:colors.mint},success:{color:colors.mint,fontSize:15,lineHeight:23},error:{color:colors.orange,fontSize:15,lineHeight:23},eyebrow:{color:colors.purple,fontSize:11,fontWeight:'900',letterSpacing:1},input:{minHeight:105,color:colors.text,backgroundColor:colors.card,borderRadius:18,padding:16,fontSize:17,textAlignVertical:'top'}}));

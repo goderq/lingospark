@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme";
+import { colors , useTheme, createThemedStyles } from "../theme";
 import { ProgressBar } from "../components/UI";
 import { lessons } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
@@ -66,7 +66,7 @@ function buildCandidates(progress, memory) {
       type: "overlay",
       target: "grammarAcademy",
       icon: "school",
-      color: "#5EA8FF",
+      color: colors.blue,
       title: "Грамматика по слабым местам",
       reason: grammarAccuracy === null ? "Пройди короткий блок, чтобы определить слабую тему." : `Текущая точность грамматики ${grammarAccuracy}% — её стоит закрепить.`,
       minutes: 5,
@@ -75,7 +75,7 @@ function buildCandidates(progress, memory) {
       type: "overlay",
       target: "tenses",
       icon: "time",
-      color: "#5EA8FF",
+      color: colors.blue,
       title: "Следующий блок времён",
       reason: `Пройдено блоков времён: ${(progress.completedTenses || []).length}. Пора расширить активную грамматику.`,
       minutes: 5,
@@ -131,6 +131,7 @@ function fitPlan(candidates, duration) {
 }
 
 export default function AIDirectorScreen({ onClose, onOpenChat, onOpenPronunciation, onNavigate }) {
+  useTheme();
   const { progress } = useProgress();
   const [duration, setDuration] = useState(progress.dailyGoal >= 30 ? 30 : progress.dailyGoal >= 20 ? 20 : 10);
   const [memory, setMemory] = useState(null);
@@ -163,7 +164,7 @@ export default function AIDirectorScreen({ onClose, onOpenChat, onOpenPronunciat
   return (
     <ScrollView style={s.page} contentContainerStyle={s.content} showsVerticalScrollIndicator={false}>
       <View style={s.header}>
-        <Pressable onPress={onClose} style={s.round}><Ionicons name="chevron-back" size={24} color="white" /></Pressable>
+        <Pressable onPress={onClose} style={s.round}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
         <View style={{ flex: 1 }}><Text style={s.title}>ИИ-маршрут</Text><Text style={s.muted}>Один план связывает всё обучение</Text></View>
         <View style={s.planBadge}><Ionicons name="sparkles" size={18} color={colors.purple} /></View>
       </View>
@@ -176,7 +177,7 @@ export default function AIDirectorScreen({ onClose, onOpenChat, onOpenPronunciat
       </View>
 
       <Text style={s.section}>СКОЛЬКО ЕСТЬ ВРЕМЕНИ</Text>
-      <View style={s.durationRow}>{DURATIONS.map((item) => <Pressable key={item} onPress={() => setDuration(item)} style={[s.duration, duration === item && s.durationActive]}><Text style={[s.durationValue, duration === item && { color: "white" }]}>{item}</Text><Text style={s.durationLabel}>минут</Text></Pressable>)}</View>
+      <View style={s.durationRow}>{DURATIONS.map((item) => <Pressable key={item} onPress={() => setDuration(item)} style={[s.duration, duration === item && s.durationActive]}><Text style={[s.durationValue, duration === item && { color: colors.text }]}>{item}</Text><Text style={s.durationLabel}>минут</Text></Pressable>)}</View>
 
       <Text style={s.section}>ПОРЯДОК ЗАНЯТИЯ</Text>
       {steps.map((step, index) => {
@@ -187,7 +188,7 @@ export default function AIDirectorScreen({ onClose, onOpenChat, onOpenPronunciat
             <View style={s.stepHeader}><Text style={s.stepNumber}>ШАГ {index + 1}</Text><Text style={s.minutes}>{step.minutes} мин</Text></View>
             <Text style={[s.stepTitle, isDone && { color: colors.textMuted }]}>{step.title}</Text>
             <Text style={s.reason}>{step.reason}</Text>
-            <View style={s.actions}><Pressable onPress={() => start(step)} style={s.startButton}><Text style={s.startText}>{isDone ? "Открыть снова" : "Начать"}</Text><Ionicons name="arrow-forward" size={17} color="white" /></Pressable><Pressable onPress={() => toggle(step.id)} style={[s.doneButton, isDone && s.doneButtonActive]}><Ionicons name={isDone ? "checkmark-circle" : "ellipse-outline"} size={19} color={isDone ? colors.mint : colors.textMuted} /><Text style={[s.doneText, isDone && { color: colors.mint }]}>{isDone ? "Готово" : "Отметить"}</Text></Pressable></View>
+            <View style={s.actions}><Pressable onPress={() => start(step)} style={s.startButton}><Text style={s.startText}>{isDone ? "Открыть снова" : "Начать"}</Text><Ionicons name="arrow-forward" size={17} color={colors.onAccent} /></Pressable><Pressable onPress={() => toggle(step.id)} style={[s.doneButton, isDone && s.doneButtonActive]}><Ionicons name={isDone ? "checkmark-circle" : "ellipse-outline"} size={19} color={isDone ? colors.mint : colors.textMuted} /><Text style={[s.doneText, isDone && { color: colors.mint }]}>{isDone ? "Готово" : "Отметить"}</Text></Pressable></View>
           </View>
         </View>;
       })}
@@ -197,10 +198,10 @@ export default function AIDirectorScreen({ onClose, onOpenChat, onOpenPronunciat
   );
 }
 
-const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: colors.background }, content: { padding: 20, paddingBottom: 130 }, header: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 }, round: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, title: { color: "white", fontSize: 27, fontWeight: "900" }, muted: { color: colors.textMuted, fontSize: 11, marginTop: 3 }, planBadge: { width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(124,92,252,0.13)", alignItems: "center", justifyContent: "center" },
-  hero: { backgroundColor: "rgba(124,92,252,0.13)", borderWidth: 1, borderColor: "rgba(124,92,252,0.35)", borderRadius: 24, padding: 20 }, heroLabel: { color: colors.purple, fontSize: 10, letterSpacing: 1.6, fontWeight: "900" }, heroTitle: { color: "white", fontSize: 23, lineHeight: 29, fontWeight: "900", marginTop: 8 }, heroText: { color: colors.textMuted, lineHeight: 20, marginTop: 7 }, heroProgress: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 17 }, progressText: { color: "white", fontWeight: "900", fontSize: 12 }, section: { color: colors.textMuted, fontSize: 10, letterSpacing: 1.5, fontWeight: "900", marginTop: 24, marginBottom: 10 },
-  durationRow: { flexDirection: "row", gap: 9 }, duration: { flex: 1, height: 66, borderRadius: 17, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, durationActive: { backgroundColor: colors.purple, borderColor: colors.purple }, durationValue: { color: colors.textMuted, fontSize: 20, fontWeight: "900" }, durationLabel: { color: colors.textMuted, fontSize: 9, marginTop: 2 },
-  step: { flexDirection: "row", gap: 12, backgroundColor: colors.card, borderRadius: 21, borderWidth: 1, borderColor: colors.border, padding: 15, marginBottom: 11 }, stepDone: { opacity: 0.82, borderColor: "rgba(46,211,183,0.25)" }, stepLine: { alignItems: "center" }, stepIcon: { width: 47, height: 47, borderRadius: 15, alignItems: "center", justifyContent: "center" }, connector: { width: 2, flex: 1, minHeight: 60, backgroundColor: colors.border, marginTop: 8 }, stepHeader: { flexDirection: "row", justifyContent: "space-between" }, stepNumber: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1.1 }, minutes: { color: colors.textMuted, fontSize: 10, fontWeight: "800" }, stepTitle: { color: "white", fontSize: 16, lineHeight: 21, fontWeight: "900", marginTop: 5 }, reason: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 13 }, startButton: { minHeight: 40, flex: 1, borderRadius: 12, backgroundColor: colors.purple, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }, startText: { color: "white", fontSize: 11, fontWeight: "900" }, doneButton: { minHeight: 40, paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.cardLight, flexDirection: "row", alignItems: "center", gap: 5 }, doneButtonActive: { backgroundColor: "rgba(46,211,183,0.1)" }, doneText: { color: colors.textMuted, fontSize: 10, fontWeight: "800" },
+const s = createThemedStyles(() => ({
+  page: { flex: 1, backgroundColor: colors.background }, content: { padding: 20, paddingBottom: 130 }, header: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 18 }, round: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" }, title: { color: colors.text, fontSize: 27, fontWeight: "900" }, muted: { color: colors.textMuted, fontSize: 11, marginTop: 3 }, planBadge: { width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(124,92,252,0.13)", alignItems: "center", justifyContent: "center" },
+  hero: { backgroundColor: "rgba(124,92,252,0.13)", borderWidth: 1, borderColor: "rgba(124,92,252,0.35)", borderRadius: 24, padding: 20 }, heroLabel: { color: colors.purple, fontSize: 10, letterSpacing: 1.6, fontWeight: "900" }, heroTitle: { color: colors.text, fontSize: 23, lineHeight: 29, fontWeight: "900", marginTop: 8 }, heroText: { color: colors.textMuted, lineHeight: 20, marginTop: 7 }, heroProgress: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 17 }, progressText: { color: colors.text, fontWeight: "900", fontSize: 12 }, section: { color: colors.textMuted, fontSize: 10, letterSpacing: 1.5, fontWeight: "900", marginTop: 24, marginBottom: 10 },
+  durationRow: { flexDirection: "row", gap: 9 }, duration: { flex: 1, height: 66, borderRadius: 17, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }, durationActive: { backgroundColor: colors.accentSoft, borderColor: colors.purple }, durationValue: { color: colors.textMuted, fontSize: 20, fontWeight: "900" }, durationLabel: { color: colors.textMuted, fontSize: 9, marginTop: 2 },
+  step: { flexDirection: "row", gap: 12, backgroundColor: colors.card, borderRadius: 21, borderWidth: 1, borderColor: colors.border, padding: 15, marginBottom: 11 }, stepDone: { opacity: 0.82, borderColor: "rgba(46,211,183,0.25)" }, stepLine: { alignItems: "center" }, stepIcon: { width: 47, height: 47, borderRadius: 15, alignItems: "center", justifyContent: "center" }, connector: { width: 2, flex: 1, minHeight: 60, backgroundColor: colors.border, marginTop: 8 }, stepHeader: { flexDirection: "row", justifyContent: "space-between" }, stepNumber: { color: colors.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1.1 }, minutes: { color: colors.textMuted, fontSize: 10, fontWeight: "800" }, stepTitle: { color: colors.text, fontSize: 16, lineHeight: 21, fontWeight: "900", marginTop: 5 }, reason: { color: colors.textMuted, fontSize: 11, lineHeight: 17, marginTop: 6 }, actions: { flexDirection: "row", gap: 8, marginTop: 13 }, startButton: { minHeight: 40, flex: 1, borderRadius: 12, backgroundColor: colors.accentFill, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 }, startText: { color: colors.text, fontSize: 11, fontWeight: "900" }, doneButton: { minHeight: 40, paddingHorizontal: 10, borderRadius: 12, backgroundColor: colors.cardLight, flexDirection: "row", alignItems: "center", gap: 5 }, doneButtonActive: { backgroundColor: "rgba(46,211,183,0.1)" }, doneText: { color: colors.textMuted, fontSize: 10, fontWeight: "800" },
   explain: { flexDirection: "row", gap: 10, backgroundColor: "rgba(46,211,183,0.07)", borderRadius: 17, padding: 14, marginTop: 10 }, explainText: { flex: 1, color: colors.textMuted, fontSize: 11, lineHeight: 17 },
-});
+}));

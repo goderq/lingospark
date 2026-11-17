@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import { colors } from '../theme';
+import { colors , useTheme } from '../theme';
 
 // Additional dictionary senses stay available without crowding a new word's card.
 export default function WordMeanings({ word }) {
+  useTheme();
   const [expanded, setExpanded] = useState(false);
   const alternatives = [...new Set(word.translations || [])].filter(value => value && value !== word.russian);
   if (!alternatives.length) return null;
