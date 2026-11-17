@@ -149,7 +149,7 @@ async function main() {
   assert.equal(tree.root.findByType('TextInput').props.value, 'Hel');
   await act(async () => tree.unmount());
   // Actual App navigation with native APIs mocked: a saved route is ignored,
-  // and returning from the background starts at Today without deleting progress.
+  // backgrounding preserves the live screen, and a new mount starts at Today.
   storage.set('@lingospark/navigation-v1', JSON.stringify({ tab: 'ai', overlay: { type: 'review' }, recentScreens: [] }));
   const App = load('App.js').default;
   await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
@@ -158,12 +158,30 @@ async function main() {
   const learningTab = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Обучение');
   await act(async () => { learningTab.props.onPress(); await flush(); });
   assert.equal(homeSelected(), false);
+  const search = tree.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === 'Найти тему');
+  await act(async () => search.props.onChangeText('Знакомство'));
   await act(async () => { emit('appstate', 'inactive'); emit('appstate', 'active'); });
   assert.equal(homeSelected(), false, 'temporary inactive state must not interrupt an exercise');
   await act(async () => { emit('appstate', 'background'); emit('appstate', 'inactive'); emit('appstate', 'active'); await flush(); });
-  assert.equal(homeSelected(), true); assert.equal(progress.totalXP, 40);
+  assert.equal(homeSelected(), false, 'backgrounding must preserve the active tab');
+  assert.equal(tree.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === 'Найти тему').props.value, 'Знакомство');
+  const todayTab = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Сегодня');
+  await act(async () => { todayTab.props.onPress(); await flush(); });
+  const practiceLink = tree.root.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === 'Практика'));
+  await act(async () => { practiceLink.props.onPress(); await flush(); });
+  const resumeOverlay = tree.root.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === 'Продолжить сохранённое занятие'));
+  await act(async () => { resumeOverlay.props.onPress(); await flush(); });
+  await act(async () => tree.root.findByType('TextInput').props.onChangeText('Hello there'));
+  await act(async () => { emit('appstate', 'background'); emit('appstate', 'active'); await flush(); });
+  assert.equal(tree.root.findByType('TextInput').props.value, 'Hello there', 'backgrounding must preserve an open exercise and typed answer');
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt));
+  assert.equal(progress.totalXP, 40);
   assert.equal(storage.has('@lingospark/navigation-v1'), false, 'old navigation state must be removed');
   await act(async () => tree.unmount());
-  console.log('Interface passed: persisted light/dark/system themes, no input remount, two cached style sheets, rapid preference writes, system reduced motion, core screens, cold start and background navigation reset. Native layout/keyboard still require iPhone checks.');
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.equal(homeSelected(), true, 'a new application instance must start at Today');
+  assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start must not automatically reopen the last exercise');
+  await act(async () => tree.unmount());
+  console.log('Interface passed: persisted themes, no input remount, cached styles, reduced motion, core screens, background preserves tab/search/exercise/input, cold start opens Today. Native layout/keyboard still require iPhone checks.');
 }
 main().catch(cause => { console.error(cause); process.exitCode = 1; });

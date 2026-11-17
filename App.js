@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { AppState, BackHandler, Keyboard, Pressable, Text, View } from "react-native";
+import { BackHandler, Keyboard, Pressable, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
@@ -162,19 +162,6 @@ function AppContent() {
   }, [user?.id, cloudRestoring, progress.onboarded, accountName, loadError]);
 
   useEffect(() => { AsyncStorage.removeItem(NAV_KEY).catch(() => {}).finally(() => setNavigationReady(true)); }, []);
-
-  useEffect(() => {
-    let backgrounded = AppState.currentState === 'background';
-    const listener = AppState.addEventListener('change', next => {
-      if (next === 'background') backgrounded = true;
-      if (backgrounded && next === 'active') {
-        Keyboard.dismiss(); rawSetTab('home'); rawSetOverlay(null);
-        setAiPractice(null); setAiImmersive(false); setWorldImmersive(false);
-        backgrounded = false;
-      }
-    });
-    return () => listener.remove();
-  }, []);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
