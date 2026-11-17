@@ -1,5 +1,6 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
+  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -41,19 +42,6 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
       ),
     [filter, query],
   );
-  useEffect(() => {
-    if (filter === "Все" && !query) {
-      const timer = setTimeout(
-        () =>
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, currentY.current - 150),
-            animated: true,
-          }),
-        350,
-      );
-      return () => clearTimeout(timer);
-    }
-  }, [progress.completed.length, filter, query]);
   const checkpointAfter = (lesson) => {
     const i = lessons.findIndex((item) => item.id === lesson.id);
     return (
@@ -62,19 +50,12 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
     );
   };
   return (
-    <ScrollView
-      ref={scrollRef}
-      contentContainerStyle={s.content}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-      onContentSizeChange={() => {
-        if (filter === "Все" && !query)
-          scrollRef.current?.scrollTo({
-            y: Math.max(0, currentY.current - 150),
-            animated: true,
-          });
-      }}
-    >
+    <FlatList
+      ref={scrollRef} data={filtered} keyExtractor={item => item.id}
+      initialNumToRender={6} maxToRenderPerBatch={6} windowSize={5}
+      contentContainerStyle={s.content} showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+      ListHeaderComponent={<View>
       {!!onClose && <Pressable onPress={onClose} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontSize: 17, fontWeight: '700' }}>← Обучение</Text></Pressable>}
       <Text style={s.title}>Твой маршрут</Text>
       <Text style={s.subtitle}>
@@ -177,7 +158,9 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
           </Pressable>
         ))}
       </ScrollView>
-      {filtered.map((lesson, listIndex) => {
+
+      </View>}
+      renderItem={({ item: lesson, index: listIndex }) => {
         const unlocked = isUnlocked(lesson);
         const complete = progress.completed.includes(lesson.id);
         const isCurrent = lesson.id === current.id;
@@ -296,14 +279,10 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
             )}
           </Fragment>
         );
-      })}
-      {!filtered.length && (
-        <View style={s.empty}>
-          <Text style={s.emptyEmoji}>🔍</Text>
-          <Text style={s.lessonTitle}>Курсы не найдены</Text>
-        </View>
-      )}
-    </ScrollView>
+
+      }}
+      ListEmptyComponent={<Text style={s.subtitle}>Курсы не найдены</Text>}
+    />
   );
 }
 const s = StyleSheet.create({

@@ -25,12 +25,13 @@ export async function speak(text, options = {}) {
   if (!text?.trim()) return false;
   const currentRequest = ++requestId;
   const tapped=now();
-  if(active){try { await Speech.stop(); } catch {}}
+  if(active){const stopping=now();try { await Speech.stop(); } catch {}recordTiming('speech_stop',now()-stopping);}
   if (currentRequest !== requestId) return false;
   active=true;
   const finish=(callback)=>(...args)=>{if(currentRequest===requestId)active=false;callback?.(...args);};
   try{
-    Speech.speak(text, {...options,onStart:()=>{if(currentRequest===requestId)recordTiming('speech_start',now()-tapped);options.onStart?.();},onDone:finish(options.onDone),onStopped:finish(options.onStopped),onError:finish(options.onError)});
+    const dispatched=now();recordTiming('speech_prepare',dispatched-tapped);
+    Speech.speak(text, {...options,onStart:()=>{if(currentRequest===requestId){recordTiming('speech_start',now()-tapped);recordTiming('speech_native_start',now()-dispatched);}options.onStart?.();},onDone:finish(options.onDone),onStopped:finish(options.onStopped),onError:finish(options.onError)});
   }catch(error){if(currentRequest===requestId)active=false;options.onError?.(error);return false;}
   return true;
 }

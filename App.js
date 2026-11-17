@@ -1,108 +1,26 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BackHandler, Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
-import { ProgressProvider, useProgress } from "./src/store/ProgressContext";
+import { ProgressProvider, useProgressSelector, useProgressActions } from "./src/store/ProgressContext";
 import { AuthProvider, useAuth } from "./src/store/AuthContext";
-import { CloudSyncProvider, useCloudSync } from "./src/store/CloudSyncContext";
+import { CloudSyncProvider, useCloudBootstrap } from "./src/store/CloudSyncContext";
+import CloudConflictGate from './src/components/CloudConflictGate';
 import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
-import RetentionScreen from "./src/screens/RetentionScreen";
-import LearningHomeScreen from './src/screens/LearningHomeScreen';
-import LearningJourneyScreen from './src/screens/LearningJourneyScreen';
-import SkillEvidenceScreen from './src/screens/SkillEvidenceScreen';
-import { mainTabs, navigationTarget } from './src/utils/appNavigation';
-import CourseScreen from "./src/screens/CourseScreen";
-import LevelCheckpointScreen from "./src/screens/LevelCheckpointScreen";
-import {
-  NotebookScreen,
-  ArticlesPrepositionsScreen,
-} from "./src/screens/StudyToolsScreens";
-import ProfileScreen from "./src/screens/ProfileScreen";
+
+import { mainTabs, navigationTarget, practiceAlias } from './src/utils/appNavigation';
+
 import AuthScreen from "./src/screens/AuthScreen";
-import PhrasebookScreen from "./src/screens/PhrasebookScreen";
-import LessonScreen from "./src/screens/LessonScreen";
-import DictationScreen from "./src/screens/DictationScreen";
-import DialogueScreen from "./src/screens/DialogueScreen";
-import MistakesScreen from "./src/screens/MistakesScreen";
-import PlacementScreen from "./src/screens/PlacementScreen";
-import GrammarScreen from "./src/screens/GrammarScreen";
-import StoriesScreen from "./src/screens/StoriesScreen";
-import WordGameScreen from "./src/screens/WordGameScreen";
-import {
-  BackupScreen,
-  CommonMistakesScreen,
-  PacksScreen,
-  SettingsScreen,
-  ShadowingScreen,
-} from "./src/screens/ExpansionScreens";
-import TensesScreen from "./src/screens/TensesScreen";
-import {
-  IrregularVerbsScreen,
-  LevelMapScreen,
-} from "./src/screens/MasteryScreens";
-import GrammarAcademyScreen from "./src/screens/GrammarAcademyScreen";
-import TenseChallengeScreen from "./src/screens/TenseChallengeScreen";
-import LearningHubScreen, {
-  LearningAnalyticsScreen,
-} from "./src/screens/LearningHubScreen";
-import {
-  ExamCenterScreen,
-  GrammarCenterScreen,
-} from "./src/screens/LearningCentersScreen";
-import SentenceBuilderScreen from "./src/screens/SentenceBuilderScreen";
-import C1ExamScreen from "./src/screens/C1ExamScreen";
-import SkillSprintScreen from "./src/screens/SkillSprintScreen";
-import {
-  LevelProgressScreen,
-  StreakCalendarScreen,
-} from "./src/screens/InterfaceExpansionScreens";
-import LingoWorldScreen from "./src/screens/LingoWorldScreen";
-import {
-  AdaptiveLessonScreen,
-  ReviewCalendarScreen,
-} from "./src/screens/AdaptiveScreens";
-import {
-  AchievementsScreen,
-  DailyChallengeScreen,
-  SkillsScreen,
-} from "./src/screens/EngagementScreens";
-import MissionsScreen from "./src/screens/MissionsScreen";
-import {
-  LexiconScreen,
-  ListeningLabScreen,
-  WritingStudioScreen,
-  LevelExamsScreen,
-  MinimalPairsScreen,
-} from "./src/screens/MegaPracticeScreens";
-import {
-  SpacedRepetitionScreen,
-  BranchingDialoguesScreen,
-  IeltsScreen,
-  SmartCoachScreen,
-} from "./src/screens/DeepLearningScreens";
-import {
-  WorkEnglishScreen,
-  ReadingLabScreen,
-  StoryGameScreen,
-  MarathonsScreen,
-} from "./src/screens/GrowthScreens";
-import {
-  DailyMixedExamScreen,
-} from "./src/screens/ProgressionScreens";
-import {
-  WrittenVocabularyScreen,
-  CareerCoursesScreen,
-  StorySeasonTwoScreen,
-  FullIeltsMockScreen,
-} from "./src/screens/PremiumScreens";
+
 import { colors } from "./src/theme";
 import { lessons } from "./src/data/course";
-import {markStartup} from './src/utils/performance';
+import {markStartup,beginScreenTransition} from './src/utils/performance';
 
+const CourseScreen = React.lazy(() => import("./src/screens/CourseScreen"));
 const AITutorScreen = React.lazy(() => import("./src/screens/AITutorScreen"));
 const ReviewScreen = React.lazy(() => import("./src/screens/ReviewScreen"));
 const DiagnosticsScreen = React.lazy(() => import("./src/screens/DiagnosticsScreen"));
@@ -119,6 +37,72 @@ const WeeklyExamScreen = lazyNamed(advancedScreens, "WeeklyExamScreen");
 const BookmarksScreen = lazyNamed(smartLearningScreens, "BookmarksScreen");
 const SmartSearchScreen = lazyNamed(smartLearningScreens, "SmartSearchScreen");
 
+const RetentionScreen = React.lazy(() => import("./src/screens/RetentionScreen"));
+const LearningHomeScreen = React.lazy(() => import("./src/screens/LearningHomeScreen"));
+const LearningJourneyScreen = React.lazy(() => import("./src/screens/LearningJourneyScreen"));
+const SkillEvidenceScreen = React.lazy(() => import("./src/screens/SkillEvidenceScreen"));
+const LevelCheckpointScreen = React.lazy(() => import("./src/screens/LevelCheckpointScreen"));
+const NotebookScreen = lazyNamed(() => import("./src/screens/StudyToolsScreens"), "NotebookScreen");
+const ArticlesPrepositionsScreen = lazyNamed(() => import("./src/screens/StudyToolsScreens"), "ArticlesPrepositionsScreen");
+const ProfileScreen = React.lazy(() => import("./src/screens/ProfileScreen"));
+const PhrasebookScreen = React.lazy(() => import("./src/screens/PhrasebookScreen"));
+const LessonScreen = React.lazy(() => import("./src/screens/LessonScreen"));
+const DictationScreen = React.lazy(() => import("./src/screens/DictationScreen"));
+const DialogueScreen = React.lazy(() => import("./src/screens/DialogueScreen"));
+const MistakesScreen = React.lazy(() => import("./src/screens/MistakesScreen"));
+const PlacementScreen = React.lazy(() => import("./src/screens/PlacementScreen"));
+const GrammarScreen = React.lazy(() => import("./src/screens/GrammarScreen"));
+const StoriesScreen = React.lazy(() => import("./src/screens/StoriesScreen"));
+const WordGameScreen = React.lazy(() => import("./src/screens/WordGameScreen"));
+const BackupScreen = lazyNamed(() => import("./src/screens/ExpansionScreens"), "BackupScreen");
+const CommonMistakesScreen = lazyNamed(() => import("./src/screens/ExpansionScreens"), "CommonMistakesScreen");
+const PacksScreen = lazyNamed(() => import("./src/screens/ExpansionScreens"), "PacksScreen");
+const SettingsScreen = lazyNamed(() => import("./src/screens/ExpansionScreens"), "SettingsScreen");
+const ShadowingScreen = lazyNamed(() => import("./src/screens/ExpansionScreens"), "ShadowingScreen");
+const TensesScreen = React.lazy(() => import("./src/screens/TensesScreen"));
+const IrregularVerbsScreen = lazyNamed(() => import("./src/screens/MasteryScreens"), "IrregularVerbsScreen");
+const LevelMapScreen = lazyNamed(() => import("./src/screens/MasteryScreens"), "LevelMapScreen");
+const GrammarAcademyScreen = React.lazy(() => import("./src/screens/GrammarAcademyScreen"));
+const TenseChallengeScreen = React.lazy(() => import("./src/screens/TenseChallengeScreen"));
+const LearningHubScreen = React.lazy(() => import("./src/screens/LearningHubScreen"));
+const LearningAnalyticsScreen = lazyNamed(() => import("./src/screens/LearningHubScreen"), "LearningAnalyticsScreen");
+const ExamCenterScreen = lazyNamed(() => import("./src/screens/LearningCentersScreen"), "ExamCenterScreen");
+const GrammarCenterScreen = lazyNamed(() => import("./src/screens/LearningCentersScreen"), "GrammarCenterScreen");
+const SentenceBuilderScreen = React.lazy(() => import("./src/screens/SentenceBuilderScreen"));
+const C1ExamScreen = React.lazy(() => import("./src/screens/C1ExamScreen"));
+const SkillSprintScreen = React.lazy(() => import("./src/screens/SkillSprintScreen"));
+const LevelProgressScreen = lazyNamed(() => import("./src/screens/InterfaceExpansionScreens"), "LevelProgressScreen");
+const StreakCalendarScreen = lazyNamed(() => import("./src/screens/InterfaceExpansionScreens"), "StreakCalendarScreen");
+const LingoWorldScreen = React.lazy(() => import("./src/screens/LingoWorldScreen"));
+const AdaptiveLessonScreen = lazyNamed(() => import("./src/screens/AdaptiveScreens"), "AdaptiveLessonScreen");
+const ReviewCalendarScreen = lazyNamed(() => import("./src/screens/AdaptiveScreens"), "ReviewCalendarScreen");
+const AchievementsScreen = lazyNamed(() => import("./src/screens/EngagementScreens"), "AchievementsScreen");
+const DailyChallengeScreen = lazyNamed(() => import("./src/screens/EngagementScreens"), "DailyChallengeScreen");
+const SkillsScreen = lazyNamed(() => import("./src/screens/EngagementScreens"), "SkillsScreen");
+const MissionsScreen = React.lazy(() => import("./src/screens/MissionsScreen"));
+const LexiconScreen = lazyNamed(() => import("./src/screens/MegaPracticeScreens"), "LexiconScreen");
+const ListeningLabScreen = lazyNamed(() => import("./src/screens/MegaPracticeScreens"), "ListeningLabScreen");
+const WritingStudioScreen = lazyNamed(() => import("./src/screens/MegaPracticeScreens"), "WritingStudioScreen");
+const LevelExamsScreen = lazyNamed(() => import("./src/screens/MegaPracticeScreens"), "LevelExamsScreen");
+const MinimalPairsScreen = lazyNamed(() => import("./src/screens/MegaPracticeScreens"), "MinimalPairsScreen");
+const SpacedRepetitionScreen = lazyNamed(() => import("./src/screens/DeepLearningScreens"), "SpacedRepetitionScreen");
+const BranchingDialoguesScreen = lazyNamed(() => import("./src/screens/DeepLearningScreens"), "BranchingDialoguesScreen");
+const IeltsScreen = lazyNamed(() => import("./src/screens/DeepLearningScreens"), "IeltsScreen");
+const SmartCoachScreen = lazyNamed(() => import("./src/screens/DeepLearningScreens"), "SmartCoachScreen");
+const WorkEnglishScreen = lazyNamed(() => import("./src/screens/GrowthScreens"), "WorkEnglishScreen");
+const ReadingLabScreen = lazyNamed(() => import("./src/screens/GrowthScreens"), "ReadingLabScreen");
+const StoryGameScreen = lazyNamed(() => import("./src/screens/GrowthScreens"), "StoryGameScreen");
+const MarathonsScreen = lazyNamed(() => import("./src/screens/GrowthScreens"), "MarathonsScreen");
+const DailyMixedExamScreen = lazyNamed(() => import("./src/screens/ProgressionScreens"), "DailyMixedExamScreen");
+const WrittenVocabularyScreen = lazyNamed(() => import("./src/screens/PremiumScreens"), "WrittenVocabularyScreen");
+const CareerCoursesScreen = lazyNamed(() => import("./src/screens/PremiumScreens"), "CareerCoursesScreen");
+const StorySeasonTwoScreen = lazyNamed(() => import("./src/screens/PremiumScreens"), "StorySeasonTwoScreen");
+const FullIeltsMockScreen = lazyNamed(() => import("./src/screens/PremiumScreens"), "FullIeltsMockScreen");
+
+const RecoveryScreen = React.lazy(() => import("./src/screens/RecoveryScreen"));
+const CourseTestScreen = React.lazy(() => import("./src/screens/CourseTestScreen"));
+const PracticeScreen = React.lazy(() => import("./src/screens/PracticeScreen"));
+
 const NAV_KEY = "@lingospark/navigation-v1";
 export default function App() {
   return (
@@ -128,7 +112,7 @@ export default function App() {
         <ProgressProvider>
           <CloudSyncProvider>
             <React.Suspense fallback={<LoadingScreen />}>
-              <AppContent />
+              <CloudConflictGate><AppContent /></CloudConflictGate>
             </React.Suspense>
           </CloudSyncProvider>
         </ProgressProvider>
@@ -138,15 +122,19 @@ export default function App() {
 }
 
 function AppContent() {
-  const { ready, progress, finishOnboarding } = useProgress();
+  const { ready, onboarded, dailyGoal, loadError } = useProgressSelector(state => ({ ready: state.ready, onboarded: state.progress.onboarded, dailyGoal: state.progress.dailyGoal, loadError: state.loadError }));
+  const { finishOnboarding } = useProgressActions();
+  const progress = { onboarded, dailyGoal };
   const {
     ready: authReady,
     user,
     guestMode,
   } = useAuth();
-  const { isRestoring: cloudRestoring } = useCloudSync();
-  const [tab, setTab] = useState("home");
-  const [overlay, setOverlay] = useState(null);
+  const cloudRestoring = useCloudBootstrap();
+  const [tab, rawSetTab] = useState("home");
+  const [overlay, rawSetOverlay] = useState(null);
+  const setTab = useCallback(value => { if (value !== tab) beginScreenTransition(value); rawSetTab(value); }, [tab]);
+  const setOverlay = useCallback(value => { beginScreenTransition(value?.type); rawSetOverlay(value); }, []);
   const [recentScreens, setRecentScreens] = useState([]);
   const [aiImmersive, setAiImmersive] = useState(false);
   const [worldImmersive, setWorldImmersive] = useState(false);
@@ -155,10 +143,10 @@ function AppContent() {
   useEffect(()=>{if(ready&&authReady&&navigationReady&&(!user||!cloudRestoring))markStartup();},[ready,authReady,navigationReady,user,cloudRestoring]);
   const accountName = user?.user_metadata?.display_name?.trim() || "";
   useEffect(() => {
-    if (user && !cloudRestoring && !progress.onboarded && accountName) {
+    if (!loadError && user && !cloudRestoring && !progress.onboarded && accountName) {
       finishOnboarding(accountName, progress.dailyGoal || 30);
     }
-  }, [user?.id, cloudRestoring, progress.onboarded, accountName]);
+  }, [user?.id, cloudRestoring, progress.onboarded, accountName, loadError]);
   const serializeOverlay = (value) =>
     value
       ? value.type === "lesson"
@@ -203,14 +191,14 @@ function AppContent() {
     if (!navigationReady) return;
     const serialized = serializeOverlay(overlay);
     const key = serialized
-      ? `${serialized.type}-${serialized.lessonId || serialized.level || ""}`
+      ? `${serialized.type}-${serialized.lessonId || serialized.topicId || serialized.level || ""}`
       : `tab-${tab}`;
     if (key === "tab-home") return;
     const labels = {
       course: "Курс",
       learn: 'Обучение',
       world: 'Английская жизнь',
-      journey: 'Маршрут «Знакомство»',
+      journey: 'Учебная тема',
       ai: "ИИ-преподаватель",
       review: "Слова",
       profile: "Профиль",
@@ -233,6 +221,7 @@ function AppContent() {
       lingoWorld: "Английская жизнь",
     };
     const title =
+      ['journey', 'courseTest'].includes(serialized?.type) ? lessons.find(item => item.id === serialized.topicId)?.title || 'Учебная тема' :
       serialized?.type === "lesson"
         ? lessons.find((item) => item.id === serialized.lessonId)?.title ||
           "Урок"
@@ -267,9 +256,11 @@ function AppContent() {
   };
   if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
   if (!user && !guestMode) return <AuthScreen />;
+  if (loadError && !cloudRestoring) return <SafeAreaView style={styles.safe}><RecoveryScreen error={loadError} /></SafeAreaView>;
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
+  if (practiceAlias(overlay?.type)) return <SafeAreaView style={styles.safe}><PracticeScreen key={overlay.type} {...practiceAlias(overlay.type)} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></SafeAreaView>;
   if (overlay?.type === "account")
     return (
       <SafeAreaView style={styles.safe}>
@@ -281,7 +272,7 @@ function AppContent() {
       <SafeAreaView style={styles.safe}>
         <LevelProgressScreen
           onClose={() => setOverlay(null)}
-          onLesson={(lesson) => setOverlay({ type: "lesson", lesson })}
+          onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
         />
       </SafeAreaView>
     );
@@ -296,7 +287,7 @@ function AppContent() {
       <SafeAreaView style={styles.safe}>
         <SmartSearchScreen
           onClose={() => setOverlay(null)}
-          onLesson={(lesson) => setOverlay({ type: "lesson", lesson })}
+          onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
           onNavigate={(type) => {
             if (type === "review") {
               setOverlay(null);
@@ -311,7 +302,7 @@ function AppContent() {
       <SafeAreaView style={styles.safe}>
         <BookmarksScreen
           onClose={() => setOverlay(null)}
-          onLesson={(lesson) => setOverlay({ type: "lesson", lesson })}
+          onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
           onNavigate={(type) => {
             if (type === "review") {
               setOverlay(null);
@@ -322,11 +313,12 @@ function AppContent() {
       </SafeAreaView>
     );
   if (overlay?.type === 'course')
-    return <SafeAreaView style={styles.safe}><CourseScreen initialLevel={overlay.level} onClose={() => setOverlay(null)} onLesson={lesson => setOverlay({ type: 'lesson', lesson })} onCheckpoint={level => setOverlay({ type: 'courseCheckpoint', level })} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><CourseScreen initialLevel={overlay.level} onClose={() => setOverlay(null)} onLesson={lesson => setOverlay({ type: 'journey', topicId: lesson.id })} onCheckpoint={level => setOverlay({ type: 'courseCheckpoint', level })} /></SafeAreaView>;
   if (overlay?.type === 'review')
     return <SafeAreaView style={styles.safe}><View style={styles.overlayBack}><Pressable onPress={() => setOverlay(null)} style={styles.backButton}><Text style={styles.backText}>← Обучение</Text></Pressable><Pressable onPress={() => setOverlay({ type: 'vocabulary' })} style={styles.backButton}><Text style={styles.backText}>Словарь →</Text></Pressable></View><ReviewScreen /></SafeAreaView>;
+  if (overlay?.type === 'courseTest') return <SafeAreaView style={styles.safe}><CourseTestScreen topicId={overlay.topicId} onClose={() => setOverlay({ type: 'journey', topicId: overlay.topicId })} /></SafeAreaView>;
   if (overlay?.type === 'journey')
-    return <SafeAreaView style={styles.safe}><LearningJourneyScreen topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onCourse={() => setOverlay({ type: 'lesson', lesson: lessons[0], returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></SafeAreaView>;
+    return <SafeAreaView style={styles.safe}><LearningJourneyScreen topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></SafeAreaView>;
   if (overlay?.type === "lingoWorld")
     return (
       <SafeAreaView style={styles.safe}>
@@ -338,7 +330,7 @@ function AppContent() {
       <SafeAreaView style={styles.safe}>
         <LessonScreen
           lesson={overlay.lesson}
-          onClose={() => setOverlay(overlay.returnTo ? { type: overlay.returnTo } : null)}
+          onClose={() => setOverlay(overlay.returnTo ? { type: overlay.returnTo, topicId: overlay.lesson.id } : null)}
         />
       </SafeAreaView>
     );
@@ -426,7 +418,7 @@ function AppContent() {
       <SafeAreaView style={styles.safe}>
         <PlanScreen
           onClose={() => setOverlay(null)}
-          onLesson={(lesson) => setOverlay({ type: "lesson", lesson })}
+          onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
           onNavigate={(type) => {
             if (type === "review") {
               setOverlay(null);
@@ -550,7 +542,7 @@ function AppContent() {
       <SafeAreaView style={styles.safe}>
         <LearningHubScreen
           onClose={() => setOverlay(null)}
-          onLesson={(lesson) => setOverlay({ type: "lesson", lesson })}
+          onLesson={(lesson) => setOverlay({ type: "journey", topicId: lesson.id })}
           onNavigate={navigate}
         />
       </SafeAreaView>
@@ -781,10 +773,10 @@ function AppContent() {
       <View style={styles.body}>
         {tab === "home" && (
           <HomeScreen
-            onRetention={() => setOverlay({ type: "retention" })}
+            onRetention={() => setOverlay({ type: "unifiedReview" })}
             onLesson={openLesson}
             onReview={() => navigate('review')}
-            onJourney={() => setOverlay({ type: 'journey' })}
+            onJourney={(topicId = 'greetings') => setOverlay({ type: 'journey', topicId })}
             onAccount={() => setOverlay({ type: 'account' })}
             onSyncDetails={() => setOverlay({ type: 'diagnostics' })}
             onPhrases={() => setOverlay({ type: "phrases" })}
@@ -826,7 +818,7 @@ function AppContent() {
             }}
           />
         )}
-        {tab === 'learn' && <LearningHomeScreen onNavigate={navigate} onJourney={() => setOverlay({ type: 'journey' })} onCourse={level => setOverlay({ type: 'course', level })} />}
+        {tab === 'learn' && <LearningHomeScreen onNavigate={navigate} onJourney={(topicId = 'greetings') => setOverlay({ type: 'journey', topicId })} onCourse={level => setOverlay({ type: 'course', level })} />}
         {tab === 'world' && <LingoWorldScreen onClose={() => setTab('home')} onImmersiveChange={setWorldImmersive} />}
         {tab === "ai" && (
           <React.Suspense fallback={<LoadingScreen />}>

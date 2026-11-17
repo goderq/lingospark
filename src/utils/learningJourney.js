@@ -1,10 +1,23 @@
 import { getJourney, learningJourneys } from '../data/learningJourney.js';
 import { evaluateExercise } from './answer.js';
+import { trainingPassed } from './trainingResult.js';
+
+export function courseTestPassed(progress, lesson, result) {
+  const journey = getJourney(lesson?.id);
+  if (!journey || result?.source !== 'course-test' || result.total !== lesson.exercises.length || !trainingPassed(result.correct, result.total)) return false;
+  if (!isJourneyUnlocked(progress, lesson.id)) return false;
+  return progress.completed?.includes(lesson.id) || journey.stages.every(stage => progress.journeys?.[lesson.id]?.stages?.[stage.id]?.completedAt);
+}
 
 export function stageAvailable(progress, topicId, stageId) {
   const journey = getJourney(topicId);
   const index = journey?.stages.findIndex(stage => stage.id === stageId) ?? -1;
-  return index >= 0 && journey.stages.slice(0, index).every(stage => progress.journeys?.[topicId]?.stages?.[stage.id]?.completedAt);
+  return isJourneyUnlocked(progress, topicId) && index >= 0 && journey.stages.slice(0, index).every(stage => progress.journeys?.[topicId]?.stages?.[stage.id]?.completedAt);
+}
+
+export function isJourneyUnlocked(progress, topicId) {
+  const index = learningJourneys.findIndex(journey => journey.id === topicId);
+  return index >= 0 && learningJourneys.slice(0, index).every(journey => progress.completed?.includes(journey.id));
 }
 
 export function gradeJourneyStage(topicId, stageId, responses) {
@@ -60,6 +73,10 @@ export function skillEvidence(progress) {
     }
   }
   const wordAttempts = Object.values(progress.reviewStats || {}).reduce((sum, entry) => sum + (entry.total || 0), 0);
+  for (const skill of Object.values(result)) {
+    const totals = Object.values(progress.practiceResults || {}).reduce((sum, session) => ({ total: sum.total + (session.skills?.[skill.id]?.total || 0), unaided: sum.unaided + (session.skills?.[skill.id]?.unaided || 0) }), { total: 0, unaided: 0 });
+    if (totals.total) skill.evidence.push({ title: 'Последние сессии общей практики', detail: `Самостоятельно верно ${totals.unaided} из ${totals.total} · хранится до 50 последних сессий` });
+  }
   if (wordAttempts) result.vocabulary.evidence.push({ title: 'Карточки слов', detail: `${wordAttempts} ответов · ${Object.keys(progress.reviewStats).length} слов в практике` });
   if (progress.completedTenses?.length) result.grammar.evidence.push({ title: 'Курс времён', detail: `${progress.completedTenses.length} блоков пройдено` });
   if (progress.completedGrammarTracks?.length) result.grammar.evidence.push({ title: 'Академия грамматики', detail: `${progress.completedGrammarTracks.length} курсов пройдено` });
@@ -70,8 +87,10 @@ export function skillEvidence(progress) {
   return Object.values(result);
 }
 
-export function courseTutorContext(practice, level, topic) {
-  const journey = learningJourneys.find(item => item.ai.topic === practice?.topic);
+export function courseTutorContext(practice, level, topic, progress = {}) {
+  const journey = practice?.topicId ? getJourney(practice.topicId) : learningJourneys.find(item => item.ai.topic === practice?.topic);
   if (!journey || level !== journey.ai.level || topic !== journey.ai.topic) return '';
-  return `\nТЕКУЩАЯ ПРАКТИКА ПО УРОКУ «${journey.title}» (главная цель этого разговора): ${journey.ai.instruction}\nНе объявляй урок или уровень пройденным на основании разговора.`;
+  const mistakes = (progress.mistakes || []).filter(item => practice.focusMistakeIds?.includes(item.id) && item.topic === journey.title).slice(0, 3);
+  const focus = mistakes.length ? `\nМатериал для мягкого повторения: ${mistakes.map(item => `${item.prompt}: ${item.answer}`).join('; ')}. Не навязывай эти ошибки реплике, если ученик их не допустил.` : '';
+  return `\nТЕКУЩАЯ ПРАКТИКА ПО УРОКУ «${journey.title}» (главная цель этого разговора): ${journey.ai.instruction}${focus}\nНе объявляй урок или уровень пройденным на основании разговора.`;
 }

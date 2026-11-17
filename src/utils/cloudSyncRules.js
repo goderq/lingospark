@@ -36,6 +36,8 @@ function learningProgressScore(progress = {}) {
     "dailyChallenges",
     "missionResults",
     "reviewStats",
+    "practiceResults",
+    "reviewQueue",
     "activity",
   ];
 
@@ -53,6 +55,8 @@ function learningProgressScore(progress = {}) {
     score += Object.values(topic?.stages || {}).reduce((sum, stage) => sum + positive(stage?.attempts) * 10, 0);
     score += arraySize(topic?.draft?.responses) * 10;
   }
+  score += Object.values(progress.practiceDrafts || {}).reduce((sum, draft) => sum + arraySize(draft?.responses) * 10, 0);
+  score += Object.values(progress.studyDrafts || {}).reduce((sum, draft) => sum + (draft?.selected || draft?.index > 0 || draft?.gateSelected || draft?.gateIndex > 0 ? 10 : 0), 0);
   score += [
     "totalXP",
     "dailyXP",

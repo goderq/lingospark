@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getJourney } from '../data/learningJourney';
-import { stageAvailable, gradeJourneyStage, readJourneyDraft } from '../utils/learningJourney';
+import { stageAvailable, gradeJourneyStage, readJourneyDraft, isJourneyUnlocked } from '../utils/learningJourney';
 import { evaluateExercise } from '../utils/answer';
 import { balancedOptions } from '../utils/shuffle';
 import { speak, stopSpeech } from '../utils/speech';
@@ -10,12 +10,13 @@ import { useProgress } from '../store/ProgressContext';
 import { colors } from '../theme';
 import useScreenTiming from '../components/useScreenTiming';
 
-export default function LearningJourneyScreen({ topicId = 'greetings', onClose, onCourse, onRetention, onAI, onWorld }) {
+export default function LearningJourneyScreen({ topicId = 'greetings', onClose, onCourse, onTest, onRetention, onAI, onWorld }) {
   useScreenTiming('journey_open');
   const { progress } = useProgress();
   const journey = getJourney(topicId);
   const [active, setActive] = useState(null);
   if (!journey) return <View style={s.content}><Text style={s.title}>Тема пока недоступна</Text><Button title="Назад" onPress={onClose} /></View>;
+  if (!isJourneyUnlocked(progress, topicId)) return <View style={s.content}><Text style={s.title}>Сначала пройди предыдущий урок курса</Text><Button title="Назад" onPress={onClose} /></View>;
   if (active) return <JourneyStage key={active} journey={journey} stage={journey.stages.find(item => item.id === active)} onClose={() => setActive(null)} />;
   const saved = progress.journeys?.[topicId] || {};
   const done = journey.stages.filter(stage => saved.stages?.[stage.id]?.completedAt).length;
@@ -35,15 +36,16 @@ export default function LearningJourneyScreen({ topicId = 'greetings', onClose, 
           <Text style={s.muted}>{!available ? 'Сначала заверши предыдущий этап' : draft ? 'Продолжить с сохранённого места →' : state?.attempts ? `Последняя попытка ${state.accuracy}% · повторить →` : `${stage.exercises.length} задания · начать →`}</Text>
         </Pressable>;
       })}
-      <Text style={s.stepTitle}>Перенеси в обычный урок</Text>
-      <Text style={s.muted}>Этапы маршрута и курс сохраняются отдельно. Для открытия следующего курса пройди сам урок.</Text>
-      <Button title={courseDone ? 'Повторить урок курса' : 'Пройти урок «Знакомство»'} onPress={onCourse} />
+      <Text style={s.stepTitle}>Проверь тему без подсказок</Text>
+      <Text style={s.muted}>После пяти учебных этапов пройди самопроверку. От 80% — тема пройдена и открыт следующий курс. Закрепление памяти проверяется отдельно после перерыва.</Text>
+      <Button disabled={done < journey.stages.length && !courseDone} title={courseDone ? 'Повторить самопроверку' : 'Самопроверка темы'} onPress={() => onTest(topicId)} />
+      <Button title={progress.lessonDraft?.lessonId === topicId ? 'Продолжить сохранённую практику' : 'Дополнительная практика с разбором'} onPress={() => onCourse(topicId)} secondary />
       <Button title="Проверки памяти и расписание" onPress={onRetention} secondary />
       <Text style={s.stepTitle}>Примени в разговоре</Text>
       <Text style={s.muted}>ИИ получит тему и цель этой встречи. Модель устанавливается по выбору в разделе ИИ. Учебные этапы выше работают без неё.</Text>
-      <Button title="Познакомиться с Sam в ИИ" onPress={() => onAI(journey.ai)} />
+      <Button title="Продолжить эту тему с ИИ" onPress={() => onAI({ ...journey.ai, topicId, goal: journey.goal, focusMistakeIds: (progress.mistakes || []).filter(item => item.topic === journey.title).slice(0, 3).map(item => item.id), phrases: journey.stages.find(stage => stage.id === 'dialogue').exercises.map(item => ({ english: item.answer, russian: item.prompt })) })} />
       <Button title="Открыть «Английскую жизнь»" onPress={onWorld} secondary />
-      <Text style={s.muted}>В первой главе мира познакомься с Mia и попроси её о помощи. Прохождение мира не засчитывается автоматически.</Text>
+      <Text style={s.muted}>Примени изученные выражения в подходящей сцене мира. Прохождение мира не засчитывается автоматически.</Text>
     </ScrollView>
   </View>;
 }
@@ -109,7 +111,7 @@ function JourneyStage({ journey, stage, onClose }) {
       </> : <>
         <Text style={s.label}>{index + 1} ИЗ {stage.exercises.length} · {journey.title}</Text>
         <Text style={s.muted}>{stage.intro}</Text>
-        {!!exercise.line && <View style={s.card}><Text style={s.example}>Sam: {exercise.line}</Text><Button title="Послушать Sam" onPress={() => speak(exercise.line, { language: 'en-US' })} secondary /></View>}
+        {!!exercise.line && <View style={s.card}><Text style={s.example}>{exercise.speaker || 'Собеседник'}: {exercise.line}</Text><Button title="Послушать реплику" onPress={() => speak(exercise.line, { language: 'en-US' })} secondary /></View>}
         <Text style={s.title}>{exercise.prompt}</Text>
         {stage.mode === 'listen' && <View style={s.card}>
           <Button title="Послушать" onPress={() => speak(exercise.speak, { language: 'en-US', rate: 0.9 })} />

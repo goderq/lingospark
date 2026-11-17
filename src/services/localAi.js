@@ -1,3 +1,6 @@
+import { withNativeResource, registerResource, releaseNativeResource } from './nativeResources';
+import { budgetMessages, recentTranscript } from '../utils/contextBudget';
+import { now, recordTiming } from '../utils/performance';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { initLlama, releaseAllLlama } from "@pocketpalai/llama.rn";
@@ -105,19 +108,23 @@ export function subscribeToDownload(listener) {
 }
 
 export const modelPath = (model) => `${MODEL_DIR}${model.filename}`;
+let aiSettingsCache = null;
 
 export async function getAiSettings() {
+  if (aiSettingsCache) return aiSettingsCache;
   try {
     const value = JSON.parse((await AsyncStorage.getItem(AI_SETTINGS_KEY)) || "{}");
-    return { economyMode: Boolean(value.economyMode), qualityMode: Boolean(value.qualityMode) };
+    aiSettingsCache = { economyMode: value.economyMode !== false, qualityMode: Boolean(value.qualityMode) };
+    return aiSettingsCache;
   } catch {
-    return { economyMode: false, qualityMode: false };
+    return { economyMode: true, qualityMode: false };
   }
 }
 
 export async function setAiSettings(changes) {
   const next = { ...(await getAiSettings()), ...changes };
   await AsyncStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(next));
+  aiSettingsCache = next;
   return next;
 }
 
@@ -540,18 +547,19 @@ export async function deleteModel(model) {
   if ((await getActiveModelId()) === model.id) await setActiveModelId(null);
 }
 
-export async function loadModel(model, onProgress) {
-  if (context && contextModelId === model.id) return context;
-  await unloadModel();
+async function loadModelUnsafe(model, onProgress) {
+  const settings = await getAiSettings();
+  const requestedContext = settings.economyMode ? Math.min(2048, model.context) : model.context;
+  if (context && contextModelId === model.id && engineDiagnostics.contextSize === requestedContext) return context;
+  await unloadModelUnsafe();
   const verification = await verifyModelFile(model);
   if (!verification.verified) {
     throw new Error("Сначала скачайте выбранную модель");
   }
-  const settings = await getAiSettings();
   context = await initLlama(
     {
       model: modelPath(model),
-      n_ctx: settings.economyMode ? Math.min(2048, model.context) : model.context,
+      n_ctx: requestedContext,
       n_batch: settings.economyMode ? 128 : 256,
       n_threads: 4,
       n_gpu_layers: 99,
@@ -565,20 +573,21 @@ export async function loadModel(model, onProgress) {
   engineDiagnostics = {
     ...engineDiagnostics,
     loadedModelId: model.id,
+    contextSize: requestedContext,
     gpu: context?.gpu ?? null,
     reasonNoGPU: context?.reasonNoGPU || "",
   };
   return context;
 }
 
-export async function unloadModel() {
+async function unloadModelUnsafe() {
   if (!context) return;
   try {
     await releaseAllLlama();
   } finally {
     context = null;
     contextModelId = null;
-    engineDiagnostics = { ...engineDiagnostics, loadedModelId: null, gpu: null, reasonNoGPU: "" };
+    engineDiagnostics = { ...engineDiagnostics, loadedModelId: null, contextSize: null, gpu: null, reasonNoGPU: "" };
   }
 }
 
@@ -588,10 +597,19 @@ export async function stopGeneration() {
 
 async function completeWithGuard(llama, options, onToken, timeoutMs = 90000) {
   const startedAt = Date.now();
+  let firstToken = false;
+  const settings = await getAiSettings();
+  const model = AI_MODELS.find(item => item.id === contextModelId);
+  const contextSize = engineDiagnostics.contextSize || (settings.economyMode ? Math.min(2048, model?.context || 2048) : model?.context || 2048);
+  const predicted = Math.min(options.n_predict || 280, Math.floor(contextSize * 0.5));
+  options = { ...options, n_predict: predicted, messages: budgetMessages(options.messages, (contextSize - predicted - 160) * 2.4) };
   let timer;
   try {
     const result = await Promise.race([
-      llama.completion(options, onToken),
+      llama.completion(options, event => {
+        if (!firstToken && event?.token) { firstToken = true; recordTiming('ai_first_token', Date.now() - startedAt); }
+        onToken?.(event);
+      }),
       new Promise((_, reject) => {
         timer = setTimeout(async () => {
           try { await llama.stopCompletion(); } catch {}
@@ -738,8 +756,8 @@ async function improveTutorReply({ llama, draft, messages, level, dialogueMode, 
   return String(result?.text || "").trim() ? result : { ...result, text: draft };
 }
 
-export async function completeTutorMessage({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken, courseContext = '' }) {
-  const llama = await loadModel(model);
+async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken, courseContext = '' }) {
+  const llama = await loadModelUnsafe(model);
   const settings = await getAiSettings();
   const tutorMemory = await loadTutorMemory();
   const tutorFeedback = await loadTutorFeedback();
@@ -943,15 +961,11 @@ async function requestConversationAnalysis({ llama, model, level, topic, transcr
   }, undefined, compact ? 120000 : 170000);
 }
 
-export async function analyzeTutorConversation({ model, level, topic, messages }) {
-  const llama = await loadModel(model);
+async function analyzeTutorConversationUnsafe({ model, level, topic, messages }) {
+  const llama = await loadModelUnsafe(model);
   const tutorMemory = await loadTutorMemory();
-  const transcript = messages
-    .filter((item) => (item.role === "user" || item.role === "assistant") && item.kind !== "command")
-    .slice(-12)
-    .map((item) => `${item.role === "user" ? "Ученик" : "Преподаватель"}: ${item.content}`)
-    .join("\n")
-    .slice(-6000);
+  const scope = recentTranscript(messages);
+  const transcript = scope.text;
   const grammarNotes = grammarNotesFor(transcript, topic, level, tutorMemory);
   let analysis;
   try {
@@ -968,10 +982,10 @@ export async function analyzeTutorConversation({ model, level, topic, messages }
   try {
     await rememberTutorAnalysis({ analysis, level, topic, messages });
   } catch {}
-  return analysis;
+  return { ...analysis, scope: { included: scope.included, total: scope.total } };
 }
 
-export async function completeVoiceCoachMessage({
+async function completeVoiceCoachMessageUnsafe({
   model,
   level,
   scenario,
@@ -981,7 +995,7 @@ export async function completeVoiceCoachMessage({
   messages,
   onToken,
 }) {
-  const llama = await loadModel(model);
+  const llama = await loadModelUnsafe(model);
   const tutorMemory = await loadTutorMemory();
   const lastUserText = [...messages].reverse().find((item) => item.role === "user")?.content || "";
   const memoryContext = memoryPrompt(tutorMemory);
@@ -1025,3 +1039,10 @@ ${grammarContext ? `Проверенная грамматическая памя
     75000,
   );
 }
+
+registerResource('llm', unloadModelUnsafe, stopGeneration);
+export const loadModel = (model, onProgress) => withNativeResource('llm', () => loadModelUnsafe(model, onProgress));
+export const unloadModel = () => releaseNativeResource('llm');
+export const completeTutorMessage = args => withNativeResource('llm', () => completeTutorMessageUnsafe(args));
+export const analyzeTutorConversation = args => withNativeResource('llm', () => analyzeTutorConversationUnsafe(args));
+export const completeVoiceCoachMessage = args => withNativeResource('llm', () => completeVoiceCoachMessageUnsafe(args));

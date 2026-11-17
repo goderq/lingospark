@@ -1,4 +1,6 @@
 export const normalizeAnswer = (value = '') => `${value}`
+  .normalize('NFKC')
+  .replace(/[‘’ʼ`]/g, "'")
   .toLocaleLowerCase('ru')
   .replace(/ё/g, 'е')
   .replace(/[.,!?;:«»"'()[\]{}]/g, '')
@@ -6,7 +8,16 @@ export const normalizeAnswer = (value = '') => `${value}`
   .trim()
   .replace(/\s+/g, ' ');
 
-const tokens = (value) => normalizeAnswer(value).split(' ').filter(Boolean);
+const englishForm = value => normalizeAnswer(String(value)
+  .normalize('NFKC').replace(/[‘’ʼ`]/g, "'")
+  .replace(/\bI'm\b/gi, 'I am').replace(/\b(you|we|they)'re\b/gi, '$1 are')
+  .replace(/\b(I|you|we|they)'ve\b/gi, '$1 have')
+  .replace(/\b(I|you|he|she|it|we|they)'ll\b/gi, '$1 will')
+  .replace(/\b(is|are|was|were|has|have|had|do|does|did|could|would|should|must|need)n't\b/gi, '$1 not')
+  .replace(/\bwon't\b/gi, 'will not').replace(/\bcan't\b|\bcannot\b/gi, 'can not')
+  .replace(/\blet's\b/gi, 'let us'));
+
+const tokens = (value) => (/[а-яё]/i.test(value) ? normalizeAnswer(value) : englishForm(value)).split(' ').filter(Boolean);
 const isRussian = (value) => /[а-яё]/i.test(value);
 const hasLatin = (value) => /[a-z]/i.test(value);
 const hasCyrillic = (value) => /[а-яё]/i.test(value);
@@ -27,10 +38,11 @@ export const answerUsesExpectedScript = (actual, expected) => {
   }
   return true;
 };
-const NEGATIONS = new Set(['не', 'ни', 'нет', 'никогда', 'нельзя', 'без']);
+const NEGATIONS = new Set(['не', 'ни', 'нет', 'никогда', 'нельзя', 'без', 'никто', 'ничего', 'нигде', 'not', 'never', 'no', 'without', 'nobody', 'nothing', 'nowhere', 'neither', 'nor']);
 const PREPOSITIONS = new Set([
   'в', 'во', 'на', 'к', 'ко', 'с', 'со', 'из', 'от', 'до', 'для', 'о', 'об',
   'обо', 'по', 'под', 'над', 'перед', 'при', 'через', 'между', 'у', 'за',
+  'без', 'после', 'возле', 'вместо', 'среди', 'вокруг',
 ]);
 
 const wordDifference = (source, target) => {
@@ -81,6 +93,8 @@ const flexibleRussianOrder = (actual, expected) => {
   if (!sameBag(actual, expected)) return false;
   if (!hasSameCriticalWords(actualWords, expectedWords)) return false;
   if (!keepsPrepositionLinks(actualWords, expectedWords)) return false;
+  const negativeLinks = words => words.flatMap((word, index) => ['не', 'ни'].includes(word) ? [`${word} ${words[index + 1] || ''}`] : []).sort().join('|');
+  if (negativeLinks(actualWords) !== negativeLinks(expectedWords)) return false;
   const orderedShare = lcsLength(actualWords, expectedWords) / Math.max(1, expectedWords.length);
   return orderedShare >= 0.6;
 };
@@ -90,6 +104,7 @@ export const answersMatch = (actual, expected) => {
   const normalizedExpected = normalizeAnswer(expected);
   if (!answerUsesExpectedScript(normalizedActual, normalizedExpected)) return false;
   if (normalizedActual === normalizedExpected) return true;
+  if (!isRussian(normalizedActual) && !isRussian(normalizedExpected) && englishForm(actual) === englishForm(expected)) return true;
   if (isRussian(normalizedActual) && isRussian(normalizedExpected)) {
     return flexibleRussianOrder(normalizedActual, normalizedExpected);
   }
@@ -194,7 +209,11 @@ export const gradeAnswer = (actual, variants = []) => {
 // Single evaluation entry point for every learning mode. Screens should not
 // implement their own equality, language or free-word-order rules.
 export const evaluateExercise = (exercise = {}, input = "") => {
-  const variants = [exercise.answer, ...(exercise.answers || [])].filter(Boolean);
+  const variants = [exercise.answer, ...(Array.isArray(exercise.answers) ? exercise.answers : [])].filter(Boolean);
+  if ((exercise.type === 'choice' || exercise.options && exercise.type !== 'build') && exercise.type !== 'translate') {
+    const correct = variants.some(answer => answersMatch(input, answer));
+    return { status: correct ? 'correct' : 'wrong', correct, accepted: variants, expected: variants[0] || '', input: normalizeAnswer(input) };
+  }
   const evaluation = gradeAnswer(input, variants);
   return {
     ...evaluation,

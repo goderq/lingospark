@@ -6,7 +6,7 @@ globalThis.__speechTimes=[];
 const source=(await readFile(new URL('../src/utils/speech.js',import.meta.url),'utf8')).replace('import * as Speech from "expo-speech";','const Speech=globalThis.__speechMock;').replace("import {now,recordTiming} from './performance';","const now=()=>performance.now();const recordTiming=(name,ms)=>globalThis.__speechTimes.push({name,ms});");
 const speech=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
 await speech.speak('First');assert.equal(stops,0,'Idle first tap must not await a native stop');
-utterances[0].options.onStart();assert.equal(globalThis.__speechTimes[0].name,'speech_start');
+utterances[0].options.onStart();assert.ok(globalThis.__speechTimes.some(item => item.name === 'speech_start'));assert.ok(globalThis.__speechTimes.some(item => item.name === 'speech_prepare'));assert.ok(globalThis.__speechTimes.some(item => item.name === 'speech_native_start'));
 await speech.speak('Second');assert.equal(stops,1,'Active speech must be interrupted');
 utterances[0].options.onDone();await speech.speak('Third');assert.equal(stops,2,'Stale completion must not clear the active utterance');
 utterances.at(-1).options.onDone();await speech.speak('Fourth');assert.equal(stops,2,'Idle playback must skip stop');

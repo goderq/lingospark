@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
+  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -75,8 +76,8 @@ const tools = [
   },
   {
     id: "fullIeltsMock",
-    title: "Полный IELTS Mock",
-    subtitle: "20 вопросов · результат Band 1–9",
+    title: "IELTS · контрольные задания",
+    subtitle: "Чтение и слух · результат без официального Band",
     icon: "ribbon",
     color: "#FF5C8A",
   },
@@ -313,294 +314,67 @@ const tools = [
   },
 ];
 
+const consolidatedIds = new Set(['adaptive', 'skillSprint', 'dailyChallenge', 'dailyMixedExam', 'reviewCalendar', 'spacedRepetition', 'spaced', 'writtenVocabulary', 'sentenceBuilder']);
+const addedTools = [
+  ['practice', 'Практика', 'Навык, тема, уровень и самопроверка', 'flash'],
+  ['unifiedReview', 'Единое повторение', 'Ошибки, слова, фразы и память курса', 'time'],
+  ['phrases', 'Разговорник', 'Готовые выражения по ситуациям', 'chatbubble'],
+  ['dictation', 'Диктант', 'Услышь и запиши английскую фразу', 'ear'],
+  ['dialogues', 'Диалоги', 'Ситуации и реплики собеседников', 'chatbubbles'],
+  ['pronunciation', 'Произношение', 'Запись и сравнение с образцом', 'mic'],
+  ['shadowing', 'Повторение за диктором', 'Послушай и повтори вслух', 'volume-high'],
+  ['tenses', 'Времена', 'Объяснения и практика A1–C1', 'time'],
+  ['grammarAcademy', 'Академия грамматики', 'Правила и конструкции', 'school'],
+  ['irregular', 'Неправильные глаголы', 'Формы и примеры', 'shuffle'],
+  ['backup', 'Резервная копия', 'Файл, код и копии до облачной замены', 'save'],
+  ['commonMistakes', 'Типичные ошибки', 'Разбери распространённые трудности', 'warning'],
+  ['packs', 'Тематические наборы', 'Выражения по темам', 'albums'],
+].map(([id, title, subtitle, icon]) => ({ id, title, subtitle, icon, color: '#7C5CFC' }));
+const toolMap = new Map(tools.filter(item => !consolidatedIds.has(item.id)).map(item => [item.id, item]));
+addedTools.forEach(item => toolMap.set(item.id, item));
+const catalogTools = [...toolMap.values()];
+const catalogGroups = {
+  'Для меня': ['practice', 'unifiedReview', 'knowledgeMap', 'notebook'],
+  'Грамматика': ['grammarCenter', 'tenses', 'grammarAcademy', 'irregular', 'articlesPrepositions'],
+  'Практика': ['practice', 'dictation', 'dialogues', 'listeningLab', 'writingStudio', 'readingLab', 'shadowing', 'pronunciation', 'lingoWorld'],
+  'Экзамены': ['examCenter', 'levelExams', 'ielts', 'fullIeltsMock', 'c1Exam'],
+};
+
 export default function LearningHubScreen({ onClose, onLesson, onNavigate }) {
   const { progress, isUnlocked } = useProgress();
-  const [query, setQuery] = useState("");
-  const [level, setLevel] = useState("Все");
-  const [section, setSection] = useState("Для меня");
-  const fade = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    if (progress.settings?.reduceMotion) {
-      fade.setValue(1);
-      return;
-    }
-    fade.setValue(0);
-    Animated.timing(fade, {
-      toValue: 1,
-      duration: 220,
-      useNativeDriver: true,
-    }).start();
-  }, [section, query, level, progress.settings?.reduceMotion]);
-  const normalized = query.trim().toLowerCase();
-  const groups = {
-    "Для меня": [
-      "adaptive",
-      "reviewCalendar",
-      "knowledgeMap",
-    ],
-    Грамматика: [
-      "grammarCenter",
-      "notebook",
-    ],
-    Практика: [
-      "lingoWorld",
-      "lexicon",
-      "listeningLab",
-      "writingStudio",
-      "readingLab",
-      "branchingDialogues",
-      "workEnglish",
-    ],
-    Экзамены: [
-      "examCenter",
-      "analytics",
-    ],
-  };
-  const filteredTools = tools.filter(
-    (item) =>
-      (normalized || groups[section]?.includes(item.id)) &&
-      (!normalized ||
-        `${item.title} ${item.subtitle}`.toLowerCase().includes(normalized)),
-  );
-  const filteredLessons = lessons.filter(
-    (lesson) =>
-      (level === "Все" || lesson.difficulty === level) &&
-      (!normalized ||
-        `${lesson.title} ${lesson.subtitle}`
-          .toLowerCase()
-          .includes(normalized)),
-  );
-  const continueLesson =
-    lessons.find(
-      (item) => item.id === progress.lessonDraft?.lessonId && isUnlocked(item),
-    ) ||
-    lessons.find(
-      (item) => !progress.completed.includes(item.id) && isUnlocked(item),
-    );
-  return (
-    <View style={styles.container}>
-      <Header title="Каталог обучения" onClose={onClose} />
-      <ScrollView
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.content}
-      >
-        <Text style={styles.title}>Один понятный маршрут</Text>
-        <View style={styles.search}>
-          <Ionicons name="search" size={20} color={colors.textMuted} />
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Найти любой курс или старый режим"
-            placeholderTextColor={colors.textMuted}
-            style={styles.searchInput}
-          />
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categories}
-        >
-          {["Для меня", "Курсы", "Грамматика", "Практика", "Экзамены"].map(
-            (item) => (
-              <Pressable
-                key={item}
-                onPress={() => {
-                  setSection(item);
-                  setLevel("Все");
-                }}
-                style={[
-                  styles.category,
-                  section === item && styles.categoryActive,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.categoryText,
-                    section === item && styles.categoryTextActive,
-                  ]}
-                >
-                  {item}
-                </Text>
-              </Pressable>
-            ),
-          )}
+  const [query, setQuery] = useState('');
+  const deferredQuery = React.useDeferredValue(query);
+  const [level, setLevel] = useState('Все');
+  const [section, setSection] = useState('Для меня');
+  const normalized = deferredQuery.toLocaleLowerCase('ru').trim();
+  const rows = React.useMemo(() => {
+    const courses = lessons.filter(item => (level === 'Все' || item.difficulty.replace('+', '') === level) && (!normalized || (item.title + ' ' + item.subtitle).toLocaleLowerCase('ru').includes(normalized))).map(item => ({ kind: 'course', ...item }));
+    const selectedTools = catalogTools.filter(item => (normalized || section === 'Все инструменты' || catalogGroups[section]?.includes(item.id)) && (!normalized || (item.title + ' ' + item.subtitle).toLocaleLowerCase('ru').includes(normalized))).map(item => ({ kind: 'tool', ...item }));
+    return normalized ? [...selectedTools, ...courses] : section === 'Курсы' ? courses : selectedTools;
+  }, [normalized, level, section]);
+  return <View style={styles.container}>
+    <Header title="Каталог обучения" onClose={onClose} />
+    <FlatList data={rows} keyExtractor={item => item.kind + '-' + item.id}
+      initialNumToRender={7} maxToRenderPerBatch={7} windowSize={5}
+      keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag"
+      contentContainerStyle={styles.content}
+      ListHeaderComponent={<View>
+        <View style={styles.search}><Ionicons name="search" size={20} color={colors.textMuted} /><TextInput value={query} onChangeText={setQuery} placeholder="Найти тему или инструмент" placeholderTextColor={colors.textMuted} style={styles.searchInput} /></View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categories}>
+          {['Для меня', 'Курсы', 'Грамматика', 'Практика', 'Экзамены', 'Все инструменты'].map(item => <Pressable key={item} onPress={() => setSection(item)} style={[styles.category, section === item && styles.categoryActive]}><Text style={[styles.categoryText, section === item && styles.categoryTextActive]}>{item}</Text></Pressable>)}
         </ScrollView>
-        {section === "Курсы" && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}
-          >
-            {["Все", "A1", "A2", "B1", "B2", "C1"].map((item) => (
-              <Pressable
-                key={item}
-                onPress={() => setLevel(item)}
-                style={[styles.filter, level === item && styles.filterActive]}
-              >
-                <Text
-                  style={[
-                    styles.filterText,
-                    level === item && { color: "white" },
-                  ]}
-                >
-                  {item}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-        <Animated.View
-          style={{
-            opacity: fade,
-            transform: [
-              {
-                translateY: fade.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [8, 0],
-                }),
-              },
-            ],
-          }}
-        >
-          {section === "Для меня" && continueLesson && !normalized && (
-            <Pressable
-              onPress={() => onLesson(continueLesson)}
-              style={[
-                styles.continueCard,
-                { borderColor: `${continueLesson.color}77` },
-              ]}
-            >
-              <View
-                style={[
-                  styles.toolIcon,
-                  { backgroundColor: `${continueLesson.color}22` },
-                ]}
-              >
-                <Ionicons name="play" size={23} color={continueLesson.color} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.continueLabel}>ПРОДОЛЖИТЬ</Text>
-                <Text style={styles.continueTitle}>{continueLesson.title}</Text>
-                <Text style={styles.toolText}>
-                  {continueLesson.difficulty} ·{" "}
-                  {continueLesson.exercises.length} заданий
-                </Text>
-              </View>
-              <Ionicons
-                name="arrow-forward"
-                size={21}
-                color={continueLesson.color}
-              />
-            </Pressable>
-          )}
-          {section !== "Курсы" && filteredTools.length > 0 && (
-            <>
-              <Text style={styles.section}>
-                {section === "Для меня" ? "ТРИ ЛУЧШИХ ДЕЙСТВИЯ" : "ОСНОВНЫЕ РАЗДЕЛЫ"}
-              </Text>
-              {filteredTools.map((item) => (
-                <Pressable
-                  key={item.id}
-                  onPress={() => onNavigate(item.id)}
-                  style={styles.tool}
-                >
-                  <View
-                    style={[
-                      styles.toolIcon,
-                      { backgroundColor: `${item.color}22` },
-                    ]}
-                  >
-                    <Ionicons name={item.icon} size={25} color={item.color} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.toolTitle}>{item.title}</Text>
-                    <Text style={styles.toolText}>{item.subtitle}</Text>
-                  </View>
-                  <Ionicons
-                    name="chevron-forward"
-                    size={20}
-                    color={colors.textMuted}
-                  />
-                </Pressable>
-              ))}
-            </>
-          )}
-          {section === "Курсы" && (
-            <Text style={styles.section}>КУРСЫ · {filteredLessons.length}</Text>
-          )}
-          {section === "Курсы" &&
-            filteredLessons.map((lesson) => {
-              const complete = progress.completed.includes(lesson.id);
-              const unlocked = isUnlocked(lesson);
-              return (
-                <Pressable
-                  key={lesson.id}
-                  disabled={!unlocked}
-                  onPress={() => onLesson(lesson)}
-                  style={[styles.lesson, !unlocked && styles.lessonLocked]}
-                >
-                  <View
-                    style={[
-                      styles.lessonIcon,
-                      {
-                        backgroundColor: unlocked
-                          ? `${lesson.color}22`
-                          : colors.cardLight,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={
-                        complete
-                          ? "checkmark-circle"
-                          : unlocked
-                            ? lesson.icon
-                            : "lock-closed"
-                      }
-                      size={25}
-                      color={
-                        complete
-                          ? colors.mint
-                          : unlocked
-                            ? lesson.color
-                            : colors.textMuted
-                      }
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[
-                        styles.level,
-                        { color: unlocked ? lesson.color : colors.textMuted },
-                      ]}
-                    >
-                      {lesson.difficulty}
-                    </Text>
-                    <Text style={styles.toolTitle}>{lesson.title}</Text>
-                    <Text style={styles.toolText}>
-                      {complete
-                        ? "Выполнено ✓"
-                        : unlocked
-                          ? `${lesson.exercises.length} заданий · ${lesson.subtitle}`
-                          : "Пройди предыдущий блок или босса уровня"}
-                    </Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          {!filteredTools.length && section !== "Курсы" && (
-            <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>🔍</Text>
-              <Text style={styles.toolTitle}>Ничего не найдено</Text>
-              <Text style={styles.toolText}>
-                Попробуй другое слово или уровень
-              </Text>
-            </View>
-          )}
-        </Animated.View>
-      </ScrollView>
-    </View>
-  );
+        {section === 'Курсы' && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 15 }}>{['Все', 'A1', 'A2', 'B1', 'B2', 'C1'].map(item => <Pressable key={item} onPress={() => setLevel(item)} style={[styles.category, level === item && styles.categoryActive]}><Text style={styles.categoryText}>{item}</Text></Pressable>)}</View>}
+      </View>}
+      renderItem={({ item }) => {
+        const available = item.kind !== 'course' || isUnlocked(item);
+        return <Pressable disabled={!available} onPress={() => item.kind === 'course' ? onLesson(item) : onNavigate(item.id)} style={{ flexDirection: 'row', alignItems: 'center', gap: 15, padding: 20, marginBottom: 12, borderRadius: 21, backgroundColor: colors.card, opacity: available ? 1 : 0.45 }}>
+          <Ionicons name={available ? item.icon || 'book' : 'lock-closed'} size={25} color={item.color || colors.purple} />
+          <View style={{ flex: 1, gap: 7 }}><Text style={{ color: 'white', fontSize: 18, fontWeight: '800' }}>{item.title}</Text><Text style={{ color: colors.textMuted, fontSize: 14, lineHeight: 22 }}>{available ? item.kind === 'course' ? item.difficulty + ' · ' + item.subtitle : item.subtitle : 'Сначала пройди предыдущий урок'}</Text></View>
+        </Pressable>;
+      }}
+      ListEmptyComponent={<Text style={{ color: colors.textMuted, padding: 20 }}>Ничего не найдено</Text>}
+    />
+  </View>;
 }
 
 export function LearningAnalyticsScreen({ onClose }) {
@@ -727,7 +501,7 @@ export function LearningAnalyticsScreen({ onClose }) {
             color={progress.c1Certificate ? colors.orange : colors.textMuted}
           />
           <View style={{ flex: 1 }}>
-            <Text style={styles.toolTitle}>Сертификат C1</Text>
+            <Text style={styles.toolTitle}>Учебная проверка C1</Text>
             <Text style={styles.toolText}>
               {progress.c1Certificate
                 ? "Получен! Отличная работа."

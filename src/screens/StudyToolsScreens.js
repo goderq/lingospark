@@ -1,3 +1,4 @@
+import { evaluateExercise } from '../utils/answer';
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -142,7 +143,7 @@ export function ArticlesPrepositionsScreen({ onClose }) {
         </View>
       </View>
     );
-  const right = selected === item.answer;
+  const right = evaluateExercise(item, (selected)).correct;
   const next = () => {
     const final = score + (right ? 1 : 0);
     if (index === deck.length - 1) {
@@ -179,8 +180,8 @@ export function ArticlesPrepositionsScreen({ onClose }) {
               onPress={() => setSelected(option)}
               style={[
                 s.option,
-                selected && option === item.answer && s.correct,
-                selected === option && option !== item.answer && s.wrong,
+                selected && evaluateExercise(item, (option)).correct && s.correct,
+                selected === option && !evaluateExercise(item, (option)).correct && s.wrong,
               ]}
             >
               <Text style={s.optionText}>{option}</Text>

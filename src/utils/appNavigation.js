@@ -9,3 +9,12 @@ export function navigationTarget(target) {
   if (target === 'course' || target === 'review') return { tab: 'learn', overlay: { type: target } };
   return { overlay: { type: target } };
 }
+
+export function practiceAlias(type) {
+  if (['practice', 'adaptive', 'skillSprint', 'dailyChallenge'].includes(type)) return { initialMode: 'learn' };
+  if (['unifiedReview', 'reviewCalendar', 'spaced', 'spacedRepetition', 'weakTenses', 'mistakes'].includes(type)) return { review: true };
+  if (['tenseChallenge', 'dailyMixedExam'].includes(type)) return { initialMode: 'exam', initialSkill: 'grammar' };
+  if (type === 'writtenVocabulary') return { initialSkill: 'vocabulary' };
+  if (type === 'sentenceBuilder') return { initialSkill: 'writing' };
+  return null;
+}

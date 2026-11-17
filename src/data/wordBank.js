@@ -1,5 +1,6 @@
 import compactWordBank from "./wordBank.json";
 import { wordLearningDetails } from "./wordLearningData";
+import { wordCandidates } from '../utils/sampling';
 
 export const wordLevels = ["A1", "A2", "B1", "B2", "C1"];
 
@@ -101,17 +102,6 @@ const extendedWordIndexById = new Map(
 
 export const getWordCandidates = (activeId, amount = 12, pool = wordBank) => {
   const indexById = pool === extendedWordBank ? extendedWordIndexById : wordIndexById;
-  const activeIndex = indexById.get(activeId) ?? -1;
-  const start = activeIndex < 0 ? 0 : activeIndex;
-  const result = [];
-  const used = new Set([activeId]);
-  const step = 997;
-  for (let offset = 1; result.length < amount && offset < pool.length; offset += 1) {
-    const word = pool[(start + offset * step) % pool.length];
-    if (!used.has(word.id)) {
-      used.add(word.id);
-      result.push(word);
-    }
-  }
-  return result;
+  const activeIndex = pool === wordBank || pool === extendedWordBank ? indexById.get(activeId) ?? -1 : pool.findIndex(word => word.id === activeId);
+  return wordCandidates(pool, activeId, activeIndex, amount);
 };

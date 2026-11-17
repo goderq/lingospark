@@ -1,5 +1,6 @@
 // Authored teaching material. These stages do not infer translations from a
 // general dictionary and never grant completion of the corresponding course.
+import { otherCourseJourneys } from './journeyFactory.js';
 export const greetingJourney = {
   id: 'greetings', title: 'Знакомство', level: 'A1',
   goal: 'Поздороваться, представиться и познакомить друга.',
@@ -55,5 +56,5 @@ export const greetingJourney = {
   ],
 };
 
-export const learningJourneys = [greetingJourney];
+export const learningJourneys = [greetingJourney, ...otherCourseJourneys];
 export const getJourney = id => learningJourneys.find(item => item.id === id);

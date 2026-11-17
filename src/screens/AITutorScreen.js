@@ -1,3 +1,4 @@
+import { evaluateExercise } from '../utils/answer';
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { courseTutorContext } from '../utils/learningJourney';
 import {
@@ -398,10 +399,12 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
 }
 
 function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice, onPracticeConsumed }) {
-  const { progress, toggleNotebook, addCustomWord } = useProgress();
+  const { progress, toggleNotebook, addCustomWord, addReviewPhrase } = useProgress();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [coursePractice, setCoursePractice] = useState(null);
+  const [lessonHelp, setLessonHelp] = useState(0);
+  useEffect(() => { setLessonHelp(0); }, [coursePractice?.topicId, coursePractice?.requestId]);
   const [dialogueMode, setDialogueMode] = useState("conversation");
   const [mission, setMission] = useState(null);
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
@@ -631,7 +634,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         level,
         topic,
         dialogueMode,
-        courseContext: courseTutorContext(coursePractice, level, topic),
+        courseContext: courseTutorContext(coursePractice, level, topic, progress),
         messages: nextMessages,
         analysis,
         onToken: (token) => {
@@ -791,7 +794,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         level={level}
         topic={topic}
         progress={progress}
-        onAddWord={addCustomWord}
+        onAddWord={(english, russian, example) => { addCustomWord(english, russian, example); addReviewPhrase({ english, russian, topic: `ИИ · ${topic}` }); }}
         onBack={() => setAnalysisOpen(false)}
         onRetry={runAnalysis}
       />
@@ -903,6 +906,13 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         </ScrollView>
       </View>
 
+      {!keyboardVisible && !!courseTutorContext(coursePractice, level, topic) && <View style={{ padding: 16, backgroundColor: colors.card, gap: 9 }}>
+        <Text style={{ color: colors.mint, fontWeight: '800' }}>Цель: {coursePractice.goal || topic}</Text>
+        <Text style={{ color: colors.textMuted, lineHeight: 21 }}>Помощь открывается по шагам; разговор не засчитывает прохождение курса.</Text>
+        <Pressable onPress={() => setLessonHelp(value => Math.min(3, value + 1))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontWeight: '700' }}>{lessonHelp === 0 ? 'Нужен намёк' : lessonHelp === 1 ? 'Покажи начало фразы' : 'Покажи пример'}</Text></Pressable>
+        {lessonHelp > 0 && <Text style={{ color: 'white', lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
+        {lessonHelp >= 3 && !!coursePractice.phrases?.[0] && <Pressable onPress={() => addReviewPhrase({ ...coursePractice.phrases[0], topic })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>Добавить эту фразу в повторение</Text></Pressable>}
+      </View>}
       <View style={styles.modeStrip}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeChips}>
           {DIALOGUE_MODES.map((item) => {
@@ -1111,6 +1121,7 @@ function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onA
           <View style={styles.analysisHero}>
             <Text style={styles.eyebrow}>ИТОГ РАЗГОВОРА</Text>
             <Text style={styles.analysisSummary}>{analysis.summary}</Text>
+            {!!analysis.scope && <Text style={styles.smallMuted}>Разобраны последние {analysis.scope.included} из {analysis.scope.total} реплик. Оценки — рекомендация локальной модели, а не результат экзамена.</Text>}
           </View>
 
           <Text style={styles.analysisSection}>ТВОИ ОЦЕНКИ</Text>
@@ -1216,7 +1227,7 @@ function MiniLesson({ exercises }) {
     );
   }
   const finished = exercises.every((_, index) => Object.prototype.hasOwnProperty.call(selected, index));
-  const score = exercises.filter((item, index) => selected[index] === item.answer).length;
+  const score = exercises.filter((item, index) => evaluateExercise(item, (selected[index])).correct).length;
   return (
     <View style={{ gap: 12 }}>
       {exercises.map((exercise, index) => {
@@ -1236,8 +1247,8 @@ function MiniLesson({ exercises }) {
             <Text style={styles.exercisePrompt}>{visiblePrompt}</Text>
             <View style={{ gap: 8 }}>
               {options.map((option) => {
-                const correct = hasChoice && option === exercise.answer;
-                const wrong = hasChoice && choice === option && option !== exercise.answer;
+                const correct = hasChoice && evaluateExercise(exercise, (option)).correct;
+                const wrong = hasChoice && choice === option && !evaluateExercise(exercise, (option)).correct;
                 return (
                   <Pressable
                     key={option}

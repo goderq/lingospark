@@ -30,4 +30,10 @@ assert.equal(
   "a changed tense must remain incorrect",
 );
 
-console.log("exercise engine: 5 shared evaluation scenarios passed");
+assert.equal(evaluateExercise({ answer: 'Мне не нужно идти' }, 'Мне нужно не идти').correct, false, 'negation attachment changes the meaning');
+assert.equal(evaluateExercise({ answer: 'Я не могу этого сделать' }, 'Не могу я этого сделать').correct, true, 'natural Russian order keeps negation attached');
+assert.equal(evaluateExercise({ answer: 'I am ready' }, 'I’m ready').correct, true);
+assert.equal(evaluateExercise({ answer: 'I cannot agree' }, "I can't agree").correct, true);
+assert.equal(evaluateExercise({ answer: "I can't agree" }, 'I can agree').status, 'wrong', 'removing English negation must not be merely close');
+assert.equal(evaluateExercise({ answer: 'She has finished' }, 'She finished').correct, false);
+console.log("exercise engine passed: scripts, accepted variants, punctuation, contractions, Russian word order, negation attachment and English tense changes");

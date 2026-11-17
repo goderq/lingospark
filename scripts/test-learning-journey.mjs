@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { learningJourneys, greetingJourney } from '../src/data/learningJourney.js';
-import { stageAvailable, gradeJourneyStage, finishJourneyStage, readJourneyDraft, skillEvidence, courseTutorContext } from '../src/utils/learningJourney.js';
+import { stageAvailable, gradeJourneyStage, finishJourneyStage, readJourneyDraft, skillEvidence, courseTutorContext, courseTestPassed } from '../src/utils/learningJourney.js';
 import { evaluateExercise } from '../src/utils/answer.js';
 import { mainTabs, navigationTarget } from '../src/utils/appNavigation.js';
 import { lessonContentKey, readLessonSession } from '../src/utils/lessonSession.js';
@@ -14,6 +14,10 @@ assert.equal(stageAvailable(progress, 'greetings', 'dialogue'), false);
 assert.equal(stageAvailable(progress, 'missing', 'understand'), false);
 assert.equal(gradeJourneyStage('greetings', 'understand', []), null);
 for (const journey of learningJourneys) {
+  const lesson = lessons.find(item => item.id === journey.id);
+  const passingTest = { source: 'course-test', total: lesson.exercises.length, correct: lesson.exercises.length };
+  assert.equal(courseTestPassed(progress, lesson, passingTest), false, 'a test cannot skip five required stages');
+  const completedBefore = [...progress.completed];
   for (const stage of journey.stages) {
     assert.equal(stageAvailable(progress, journey.id, stage.id), true);
     const responses = stage.exercises.map(e => ({ id: e.id, input: e.answer }));
@@ -36,14 +40,18 @@ for (const journey of learningJourneys) {
     assert.equal(next.journeys[journey.id].stages[stage.id].attempts, 2);
     assert.equal(next.journeys[journey.id].draft, null);
     assert.equal(finishJourneyStage(next, journey.id, stage.id, responses, `${stage.id}-success`, 300), next);
-    assert.deepEqual(next.completed, [], 'topic stages must not open courses');
+    assert.deepEqual(next.completed, completedBefore, 'topic stages must not open courses');
     assert.equal(next.totalXP, 0, 'repeated topic practice must not farm course XP');
     progress = next;
   }
+  assert.equal(courseTestPassed(progress, lesson, passingTest), true);
+  assert.equal(courseTestPassed(progress, lesson, { ...passingTest, correct: 0 }), false);
+  assert.equal(courseTestPassed(progress, lesson, { ...passingTest, source: 'guided' }), false, 'guided practice cannot unlock courses');
+  progress = { ...progress, completed: [...progress.completed, journey.id] };
 }
 const evidence = skillEvidence(progress);
 assert.equal(evidence.length, 5);
-assert.ok(evidence.every(skill => skill.evidence.length === 1));
+assert.ok(evidence.every(skill => skill.evidence.length >= learningJourneys.length));
 assert.ok(skillEvidence({}).every(skill => skill.evidence.length === 0), 'fresh user must not get a skill score');
 const legacyEvidence = skillEvidence({ stats: { dictationTotal: 4, dictationCorrect: 3, dialoguesCompleted: 2 }, writingCompleted: ['writing-1'] });
 assert.ok(legacyEvidence.find(item => item.id === 'listening').evidence[0].detail.includes('3 из 4'));
@@ -78,4 +86,4 @@ assert.ok(trainingPassed(4, 5));
 assert.equal(trainingPassed(3, 5), false);
 assert.equal(trainingPassed(0, 0), false);
 assert.equal(trainingPassed(9, 5), false);
-console.log('Learning 3.0: authored stages, gates, grading, drafts, evidence, tutor context, navigation and training thresholds passed.');
+console.log('Learning 3.1: all 43 topic stages, course test gates, grading, drafts, evidence, tutor context, navigation and training thresholds passed.');

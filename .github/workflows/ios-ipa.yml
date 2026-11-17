@@ -39,6 +39,8 @@ jobs:
         run: npm ci
       - name: Verify learning content
         run: |
+          npm run test:architecture
+          npm run test:practice
           npm run test:exercise-engine
           npm run test:cloud-sync
           npm run explanations:audit

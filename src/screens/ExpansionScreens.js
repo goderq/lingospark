@@ -1,4 +1,9 @@
-import React, { useState } from "react";
+import { evaluateExercise } from '../utils/answer';
+import React, { useMemo, useState } from "react";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../store/AuthContext';
+import { recoveryKey } from '../store/CloudSyncContext';
+import { backupEnvelope, parseBackup, snapshotSummary } from '../utils/snapshot';
 import {
   Alert,
   Pressable,
@@ -57,19 +62,13 @@ function Header({ title, onClose }) {
   );
 }
 
-export function BackupScreen({ onClose }) {
+export function BackupScreen({ onClose, initialMode = 'export' }) {
   const { progress, restoreProgress } = useProgress();
+  const { user } = useAuth();
   const [code, setCode] = useState("");
-  const [mode, setMode] = useState("export");
-  const backup = Base64.encode(
-    JSON.stringify({ ...progress, backupVersion: 1 }),
-  );
-  const backupData = {
-    format: "LingoSpark Backup",
-    backupVersion: 2,
-    createdAt: new Date().toISOString(),
-    progress,
-  };
+  const [mode, setMode] = useState(initialMode);
+  const backupData = useMemo(() => backupEnvelope(progress), [progress]);
+  const backup = useMemo(() => Base64.encode(JSON.stringify(backupData)), [backupData]);
   const copy = async () => {
     await Clipboard.setStringAsync(backup);
     Alert.alert(
@@ -79,13 +78,11 @@ export function BackupScreen({ onClose }) {
   };
   const restore = () => {
     try {
-      const parsed = JSON.parse(Base64.decode(code.trim()));
-      if (!parsed.name || !Array.isArray(parsed.completed)) throw new Error();
-      restoreProgress(parsed);
-      Alert.alert("Готово", "Прогресс успешно восстановлен.");
-      setCode("");
-    } catch {
-      Alert.alert("Неверный код", "Проверьте, что код скопирован полностью.");
+      const parsed = parseBackup(JSON.parse(Base64.decode(code.trim())));
+      const summary = snapshotSummary(parsed);
+      Alert.alert('Восстановить копию?', `Уроков: ${summary.lessons}, слов: ${summary.words}, XP: ${summary.xp}. Текущий прогресс будет заменён.`, [{ text: 'Отмена', style: 'cancel' }, { text: 'Восстановить', onPress: () => { restoreProgress(parsed); setCode(''); } }]);
+    } catch (error) {
+      Alert.alert("Неверный код", error.message || "Проверьте, что код скопирован полностью.");
     }
   };
   const exportFile = async () => {
@@ -103,6 +100,19 @@ export function BackupScreen({ onClose }) {
       Alert.alert("Не удалось сохранить", "Попробуйте скопировать резервный код ниже.");
     }
   };
+  const exportRecovery = async () => {
+    try {
+      const raw = user && await AsyncStorage.getItem(recoveryKey(user.id));
+      if (!raw) { Alert.alert('Копий нет', 'Здесь появятся обе версии после разрешения облачного конфликта.'); return; }
+      const saved = JSON.parse(raw);
+      const share = async key => {
+        const uri = `${FileSystem.cacheDirectory}LingoSpark-recovery-${key}.json`;
+        await FileSystem.writeAsStringAsync(uri, JSON.stringify(saved[key], null, 2));
+        await Sharing.shareAsync(uri, { mimeType: 'application/json' });
+      };
+      Alert.alert('Копии до замены', 'Выбери версию для экспорта. Текущий прогресс не меняется.', [{ text: 'Отмена', style: 'cancel' }, { text: 'С устройства', onPress: () => share('local').catch(() => Alert.alert('Ошибка экспорта')) }, { text: 'Из облака', onPress: () => share('cloud').catch(() => Alert.alert('Ошибка экспорта')) }]);
+    } catch { Alert.alert('Не удалось прочитать сохранённые копии'); }
+  };
   const importFile = async () => {
     try {
       const picked = await DocumentPicker.getDocumentAsync({
@@ -112,8 +122,7 @@ export function BackupScreen({ onClose }) {
       if (picked.canceled) return;
       const raw = await FileSystem.readAsStringAsync(picked.assets[0].uri);
       const parsed = JSON.parse(raw);
-      const restored = parsed.format === "LingoSpark Backup" ? parsed.progress : parsed;
-      if (!restored?.name || !Array.isArray(restored.completed)) throw new Error("invalid");
+      const restored = parseBackup(parsed);
       Alert.alert(
         "Восстановить прогресс?",
         `Копия создана ${parsed.createdAt ? new Date(parsed.createdAt).toLocaleDateString("ru-RU") : "ранее"}. Текущие данные будут заменены.`,
@@ -172,6 +181,8 @@ export function BackupScreen({ onClose }) {
             <PrimaryButton title="Сохранить файл .json" icon="download" onPress={exportFile} />
             <View style={{ height: 9 }} />
             <PrimaryButton title="Скопировать код" icon="copy" onPress={copy} />
+            <View style={{ height: 9 }} />
+            <PrimaryButton title="Копии до облачной замены" onPress={exportRecovery} color={colors.cardLight} />
             <Text style={s.backupHint}>Файл удобнее переносить между версиями IPA. Код оставлен как запасной способ.</Text>
           </>
         ) : (
@@ -463,7 +474,7 @@ export function CommonMistakesScreen({ onClose }) {
   const choose = (option) => {
     if (selected) return;
     setSelected(option);
-    const right = option === item.answer;
+    const right = evaluateExercise(item, (option)).correct;
     if (right) setScore(score + 1);
     recordExercise(
       { id: item.id, prompt: `Исправь: ${item.wrong}`, answer: item.correct },
@@ -515,9 +526,9 @@ export function CommonMistakesScreen({ onClose }) {
               style={[
                 s.option,
                 selected &&
-                  option === item.answer && { borderColor: colors.mint },
+                  evaluateExercise(item, (option)).correct && { borderColor: colors.mint },
                 selected === option &&
-                  option !== item.answer && { borderColor: colors.orange },
+                  !evaluateExercise(item, (option)).correct && { borderColor: colors.orange },
               ]}
             >
               <Text style={s.optionText}>{option}</Text>
@@ -547,7 +558,7 @@ export function CommonMistakesScreen({ onClose }) {
           <PrimaryButton
             title={index === commonMistakes.length - 1 ? "Результат" : "Дальше"}
             onPress={next}
-            color={selected === item.answer ? colors.mint : colors.orange}
+            color={evaluateExercise(item, (selected)).correct ? colors.mint : colors.orange}
           />
         )}
       </ScrollView>

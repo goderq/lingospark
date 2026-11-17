@@ -6,7 +6,7 @@ import { colors } from '../theme';
 
 export default function SkillEvidenceScreen({ onClose }) {
   const { progress } = useProgress();
-  const skills = useMemo(() => skillEvidence(progress), [progress.journeys, progress.reviewStats, progress.completedTenses, progress.completedGrammarTracks, progress.completed, progress.stats, progress.writingCompleted]);
+  const skills = useMemo(() => skillEvidence(progress), [progress.journeys, progress.reviewStats, progress.completedTenses, progress.completedGrammarTracks, progress.completed, progress.stats, progress.writingCompleted, progress.practiceResults]);
   return <ScrollView contentContainerStyle={s.content}>
     <Pressable onPress={onClose} style={s.back}><Text style={s.link}>← Назад</Text></Pressable>
     <Text style={s.title}>Карта навыков</Text>

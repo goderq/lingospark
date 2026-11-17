@@ -5,18 +5,30 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { lessons } from "../data/course";
 import {addContentReport} from '../utils/contentQuality';
 import { enrollRetention, finishRetention } from '../utils/retention';
-import { finishJourneyStage, stageAvailable } from '../utils/learningJourney';
+import { finishJourneyStage, stageAvailable, courseTestPassed } from '../utils/learningJourney';
+import { createSelectorStore, shallowEqual } from '../utils/selectorStore';
+import { createPersistenceQueue } from '../utils/persistenceQueue';
+import { applyRewardPolicy } from '../utils/rewardPolicy';
+import { finishPracticeSession, validatePracticeSession, enqueuePhrase } from '../utils/unifiedReview';
+import { advanceWordReview } from '../utils/wordSchedule';
+import { readWordSession } from '../utils/wordSession';
+import { recoverStoredProgress, parseBackup } from '../utils/snapshot';
+import { now as performanceNow, recordTiming } from '../utils/performance';
 import { finishPathChapter, finishRental, restartLifePath, restartRental } from '../data/worldPaths';
 
 const STORAGE_KEY = "@lingospark/progress-v1";
 const UPDATED_KEY = "@lingospark/progress-updated-v1";
+const PREVIOUS_KEY = '@lingospark/progress-previous-v2';
+const PREVIOUS_TIME = '@lingospark/progress-previous-time-v2';
 const initial = {
   onboarded: false,
   name: "Друг",
@@ -28,6 +40,11 @@ const initial = {
   completed: [],
   retention: {},
   journeys: {},
+  practiceDrafts: {},
+  practiceResults: {},
+  reviewQueue: {},
+  wordSessionDraft: null,
+  studyDrafts: {},
   completedTenses: [],
   completedBosses: [],
   completedGrammarTracks: [],
@@ -139,63 +156,78 @@ const contiguousCompleted = (completed = []) => {
 };
 
 export function ProgressProvider({ children }) {
-  const [progress, setProgress] = useState(initial);
+  const [progress, rawSetProgress] = useState(initial);
+  const actionMetadata = useRef(null);
+  const setProgress = useCallback(update => {
+    const action = actionMetadata.current;
+    rawSetProgress(old => applyRewardPolicy(old, typeof update === 'function' ? update(old) : update, action));
+  }, []);
   const [ready, setReady] = useState(false);
   const [localUpdatedAt, setLocalUpdatedAt] = useState(null);
+  const [storageError, setStorageError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [readAttempt, setReadAttempt] = useState(0);
+  const loadErrorRef = useRef('');
+  loadErrorRef.current = loadError;
+  const previousStored = useRef(null);
   const skipFirstPersist = useRef(true);
-  const persistTimer = useRef(null);
   const latestProgress = useRef(initial);
+  const restoredTimestamp = useRef(null);
+  const storageQueue = useRef(null);
+  if (!storageQueue.current) storageQueue.current = createPersistenceQueue({
+    write: async (snapshot, modifiedAt) => {
+      if (loadErrorRef.current) throw new Error('Сначала восстанови локальный прогресс');
+      const started = performanceNow();
+      const raw = JSON.stringify(snapshot);
+      recordTiming('progress_serialize', performanceNow() - started);
+      const entries = [[STORAGE_KEY, raw], [UPDATED_KEY, modifiedAt]];
+      if (previousStored.current) entries.unshift([PREVIOUS_KEY, previousStored.current.raw], [PREVIOUS_TIME, previousStored.current.modifiedAt || modifiedAt]);
+      await AsyncStorage.multiSet(entries);
+      previousStored.current = { raw, modifiedAt };
+      setStorageError('');
+    },
+    onError: error => setStorageError(error.message || 'Не удалось сохранить на устройстве'),
+  });
+  const selectorStore = useRef(null);
+  if (!selectorStore.current) selectorStore.current = createSelectorStore({ progress: initial, ready: false, localUpdatedAt: null });
 
   useEffect(() => {
-    AsyncStorage.multiGet([STORAGE_KEY, UPDATED_KEY])
+    setReady(false); skipFirstPersist.current = true;
+    AsyncStorage.multiGet([STORAGE_KEY, UPDATED_KEY, PREVIOUS_KEY, PREVIOUS_TIME])
       .then((entries) => {
         const raw = entries[0][1];
-        setLocalUpdatedAt(entries[1][1]);
-        if (!raw) return;
-        const saved = { ...initial, ...JSON.parse(raw) };
+        previousStored.current = raw ? { raw, modifiedAt: entries[1][1] } : null;
+        const recovered = recoverStoredProgress(raw, entries[2][1]);
+        const modifiedAt = recovered?.recovered ? entries[3][1] : entries[1][1];
+        setLocalUpdatedAt(modifiedAt); setLoadError('');
+        if (!recovered) return;
+        if (recovered.recovered) setStorageError('Восстановлена предыдущая локальная копия. Проверь последние результаты.');
+        previousStored.current = { raw: recovered.raw, modifiedAt };
+        const saved = { ...initial, ...recovered.progress };
         saved.completed = contiguousCompleted(saved.completed);
         saved.retention = enrollRetention(saved.completed, saved.retention);
         saved.unlockedAll = false;
         if (saved.dailyDate !== dateKey()) saved.dailyXP = 0;
         setProgress(saved);
       })
-      .catch(() => {})
+      .catch(error => { setLoadError(error.message || 'Локальная копия не прочитана'); skipFirstPersist.current = false; })
       .finally(() => setReady(true));
-  }, []);
+  }, [readAttempt]);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || loadErrorRef.current) return;
     latestProgress.current = progress;
-    if (skipFirstPersist.current) {
-      skipFirstPersist.current = false;
-    } else {
-      setLocalUpdatedAt(new Date().toISOString());
-    }
-    if (persistTimer.current) clearTimeout(persistTimer.current);
-    persistTimer.current = setTimeout(() => {
-      const now = new Date().toISOString();
-      AsyncStorage.multiSet([
-        [STORAGE_KEY, JSON.stringify(latestProgress.current)],
-        [UPDATED_KEY, now],
-      ]).catch(() => {});
-      persistTimer.current = null;
-    }, 350);
-    return () => {
-      if (persistTimer.current) clearTimeout(persistTimer.current);
-    };
+    if (skipFirstPersist.current) { skipFirstPersist.current = false; return; }
+    const modifiedAt = restoredTimestamp.current || new Date().toISOString();
+    restoredTimestamp.current = null;
+    setLocalUpdatedAt(modifiedAt);
+    storageQueue.current.enqueue(progress, modifiedAt);
   }, [progress, ready]);
 
   useEffect(() => {
     if (!ready) return undefined;
     const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") return;
-      if (persistTimer.current) clearTimeout(persistTimer.current);
-      const now = new Date().toISOString();
-      AsyncStorage.multiSet([
-        [STORAGE_KEY, JSON.stringify(latestProgress.current)],
-        [UPDATED_KEY, now],
-      ]).catch(() => {});
-      persistTimer.current = null;
+      storageQueue.current.flush().catch(() => {});
     });
     return () => subscription.remove();
   }, [ready]);
@@ -212,6 +244,34 @@ export function ProgressProvider({ children }) {
   const recordRetention = (lessonId, dueAt, answers) => {
     setProgress(old => finishRetention(old, lessons, lessonId, dueAt, answers));
   };
+  const savePracticeDraft = (key, session) => {
+    if (!validatePracticeSession(session)) return;
+    setProgress(old => {
+      if (old.practiceResults?.[session.id] || JSON.stringify(old.practiceDrafts?.[key]) === JSON.stringify(session)) return old;
+      return { ...old, practiceDrafts: { ...old.practiceDrafts, [key]: session } };
+    });
+  };
+  const completePractice = (key, session) => setProgress(old => {
+    let next = finishPracticeSession(old, key, session);
+    if (next === old) return old;
+    const groups = new Map();
+    session.deck.forEach((item, i) => {
+      if (!item.retentionLessonId) return;
+      const group = groups.get(item.retentionLessonId) || { token: item.retentionDueAt, answers: [] };
+      group.answers.push(session.responses[i]); groups.set(item.retentionLessonId, group);
+    });
+    for (const [id, group] of groups) next = finishRetention(next, lessons, id, group.token, group.answers);
+    return next;
+  });
+  const addReviewPhrase = phrase => setProgress(old => enqueuePhrase(old, phrase));
+  const clearPracticeDraft = key => setProgress(old => ({ ...old, practiceDrafts: { ...old.practiceDrafts, [key]: null } }));
+  const saveWordSession = draft => {
+    if (!readWordSession(draft).deck) return;
+    setProgress(old => JSON.stringify(old.wordSessionDraft) === JSON.stringify(draft) ? old : { ...old, wordSessionDraft: draft });
+  };
+  const clearWordSession = () => setProgress(old => old.wordSessionDraft ? { ...old, wordSessionDraft: null } : old);
+  const saveStudyDraft = (key, draft) => setProgress(old => JSON.stringify(old.studyDrafts?.[key]) === JSON.stringify(draft) ? old : { ...old, studyDrafts: { ...old.studyDrafts, [key]: draft } });
+  const clearStudyDraft = key => setProgress(old => old.studyDrafts?.[key] ? { ...old, studyDrafts: { ...old.studyDrafts, [key]: null } } : old);
 
   const saveJourneyDraft = useCallback((topicId, draft) => {
     setProgress(old => {
@@ -227,6 +287,7 @@ export function ProgressProvider({ children }) {
 
   const completeLesson = (lesson, result = null) => {
     setProgress((old) => {
+      if (!courseTestPassed(old, lesson, result)) return old;
       const today = dateKey();
       if (old.completed.includes(lesson.id)) {
         const actions =
@@ -317,7 +378,7 @@ export function ProgressProvider({ children }) {
     });
   };
 
-  const recordReview = (card, isCorrect, direction) => {
+  const recordReview = (card, isCorrect, direction, attemptId = null) => {
     setProgress((old) => {
       const today = dateKey();
       const previous = old.reviewStats?.[card.id] || {
@@ -325,11 +386,9 @@ export function ProgressProvider({ children }) {
         correct: 0,
         total: 0,
       };
-      const intervals = [1, 3, 7, 14, 30];
-      const interval = isCorrect
-        ? intervals.find((value) => value > (previous.interval || 0)) || 30
-        : 0;
-      const dueDate = dateKey(new Date(Date.now() + interval * 86400000));
+      if (attemptId && previous.lastAttemptId === attemptId) return old;
+      const scheduled = advanceWordReview(previous, isCorrect, Date.now(), false);
+      const { interval, dueDate } = scheduled;
       const mistakeId = `review-${card.id}-${direction}`;
       const withoutCurrent = (old.mistakes || []).filter(
         (item) => item.id !== mistakeId,
@@ -369,13 +428,9 @@ export function ProgressProvider({ children }) {
         ...old,
         reviewStats: {
           ...old.reviewStats,
-          [card.id]: {
-            interval,
-            dueDate,
-            correct: previous.correct + (isCorrect ? 1 : 0),
-            total: previous.total + 1,
-          },
+          [card.id]: { ...scheduled, lastAttemptId: attemptId },
         },
+        reviewQueue: isCorrect ? old.reviewQueue : Object.fromEntries(Object.entries(old.reviewQueue || {}).filter(([, entry]) => entry.exercise?.wordId !== card.id)),
         mistakes,
         wordPreferences: {
           ...wordPreferences,
@@ -446,6 +501,9 @@ export function ProgressProvider({ children }) {
       return {
         ...old,
         wordPreferences: { ...preferences, customTranslations },
+        reviewQueue: Object.fromEntries(Object.entries(old.reviewQueue || {}).filter(([, entry]) => entry.exercise?.wordId !== wordId)),
+        reviewStats: old.reviewStats?.[wordId] ? { ...old.reviewStats, [wordId]: { ...old.reviewStats[wordId], successfulDays: 0, interval: 0, dueDate: dateKey() } } : old.reviewStats,
+        mistakes: (old.mistakes || []).filter(item => item.id !== `review-${wordId}-en-ru` && item.id !== `review-${wordId}-ru-en`),
       };
     });
 
@@ -1238,22 +1296,31 @@ export function ProgressProvider({ children }) {
       ...old,
       settings: { ...initial.settings, ...old.settings, ...changes },
     }));
-  const restoreProgress = (restored) =>
+  const restoreProgress = (restored, modifiedAt = null) => {
+    if (!restored || typeof restored !== 'object' || Array.isArray(restored)) throw new Error('Некорректный прогресс');
+    const validated = parseBackup({ ...initial, ...restored });
+    setLoadError('');
+    restoredTimestamp.current = modifiedAt;
     setProgress({
       ...initial,
-      ...restored,
+      ...validated,
+      completed: contiguousCompleted(restored.completed || []),
+      unlockedAll: false,
       retention: enrollRetention(restored.completed || [], restored.retention),
       onboarded: true,
       settings: { ...initial.settings, ...(restored.settings || {}) },
     });
+  };
 
-  const reset = () =>
+  const reset = () => {
+    setLoadError('');
     setProgress((old) => ({
       ...initial,
       onboarded: true,
       name: old.name,
       dailyGoal: old.dailyGoal,
     }));
+  };
   const unlockAll = () => setProgress((old) => ({ ...old, unlockedAll: true }));
   const isUnlocked = (lesson) => {
     const index = lessons.findIndex((item) => item.id === lesson.id);
@@ -1268,9 +1335,20 @@ export function ProgressProvider({ children }) {
       progress,
       ready,
       localUpdatedAt,
+      storageError,
+      loadError,
+      retryLocalLoad: () => setReadAttempt(value => value + 1),
       finishOnboarding,
       completeLesson,
       recordRetention,
+      savePracticeDraft,
+      completePractice,
+      addReviewPhrase,
+      clearPracticeDraft,
+      saveWordSession,
+      clearWordSession,
+      saveStudyDraft,
+      clearStudyDraft,
       saveJourneyDraft,
       completeJourneyStage,
       completeTense,
@@ -1331,13 +1409,42 @@ export function ProgressProvider({ children }) {
       unlockAll,
       isUnlocked,
     }),
-    [progress, ready, localUpdatedAt],
+    [progress, ready, localUpdatedAt, storageError, loadError],
   );
+  const handlers = useRef(value);
+  handlers.current = value;
+  const stableActions = useRef(null);
+  if (!stableActions.current) stableActions.current = Object.fromEntries(Object.entries(value).filter(([, entry]) => typeof entry === 'function').map(([key]) => [key, (...args) => {
+    const previousAction = actionMetadata.current;
+    actionMetadata.current = { name: key, args };
+    try { return handlers.current[key](...args); } finally { actionMetadata.current = previousAction; }
+  }]));
+  const context = useRef({ store: selectorStore.current, actions: stableActions.current });
+  useLayoutEffect(() => { selectorStore.current.publish({ progress, ready, localUpdatedAt, storageError, loadError }); }, [progress, ready, localUpdatedAt, storageError, loadError]);
+  useEffect(() => () => { storageQueue.current.dispose().catch(() => {}); }, []);
   return (
-    <ProgressContext.Provider value={value}>
+    <ProgressContext.Provider value={context.current}>
       {children}
     </ProgressContext.Provider>
   );
 }
 
-export const useProgress = () => useContext(ProgressContext);
+export function useProgressSelector(selector, equal = shallowEqual) {
+  const { store } = useContext(ProgressContext);
+  const cache = useRef({});
+  const getSnapshot = () => {
+    const source = store.getSnapshot();
+    if (cache.current.source === source && cache.current.selector === selector) return cache.current.value;
+    const selected = selector(source);
+    const value = equal(cache.current.value, selected) ? cache.current.value : selected;
+    cache.current = { source, selector, value };
+    return value;
+  };
+  return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
+}
+export const useProgressActions = () => useContext(ProgressContext).actions;
+export function useProgress() {
+  const state = useProgressSelector(snapshot => snapshot);
+  const actions = useProgressActions();
+  return { ...state, ...actions };
+}

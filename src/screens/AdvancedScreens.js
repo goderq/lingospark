@@ -1,3 +1,6 @@
+import PracticeScreen from './PracticeScreen';
+import { sampleExamQuestions } from '../utils/examDeck';
+import { evaluateExercise } from '../utils/answer';
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import useScreenTiming from '../components/useScreenTiming';
 import ContentReportButton from '../components/ContentReportButton';
@@ -408,103 +411,9 @@ export function VocabularyScreen({ onClose }) {
 
 export function WeeklyExamScreen({ onClose }) {
   const { recordExam } = useProgress();
-  const questions = useMemo(
-    () =>
-      [...placementQuestions.slice(2, 8), ...grammarQuestions.slice(0, 6)]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, 10),
-    [],
-  );
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [score, setScore] = useState(0);
-  const [done, setDone] = useState(false);
-  const [optionSeed] = useState(() => Math.floor(Math.random() * 2147483647));
-  const question = questions[index];
-  const choose = (option) => {
-    if (selected) return;
-    setSelected(option);
-    if (option === question.answer) setScore(score + 1);
-  };
-  const next = () => {
-    if (index === questions.length - 1) {
-      recordExam(score);
-      setDone(true);
-    } else {
-      setIndex(index + 1);
-      setSelected("");
-    }
-  };
-  if (done)
-    return (
-      <View style={s.container}>
-        <Header title="Недельный экзамен" onClose={onClose} />
-        <View style={s.center}>
-          <Text style={s.trophy}>{score >= 8 ? "🏆" : "📝"}</Text>
-          <Text style={s.resultTitle}>{score}/10</Text>
-          <Text style={s.subtitle}>
-            {score >= 8
-              ? "Отличный результат! Сертификат получен."
-              : "Ошибки покажут, что повторить на следующей неделе."}
-          </Text>
-          <View style={{ width: "100%" }}>
-            <PrimaryButton title="Завершить" onPress={onClose} />
-          </View>
-        </View>
-      </View>
-    );
-  return (
-    <View style={s.container}>
-      <Header title="Недельный экзамен" onClose={onClose} />
-      <ScrollView contentContainerStyle={s.content}>
-        <ProgressBar
-          value={(index + 1) / questions.length}
-          color={colors.orange}
-        />
-        <Text style={s.examMeta}>
-          ВОПРОС {index + 1} ИЗ {questions.length}
-        </Text>
-        <Text style={s.examQuestion}>{question.prompt}</Text>
-        {balancedOptions(
-          question.options,
-          question.answer,
-          index,
-          optionSeed,
-        ).map((option) => (
-          <Pressable
-            key={option}
-            onPress={() => choose(option)}
-            style={[
-              s.examOption,
-              selected &&
-                option === question.answer && { borderColor: colors.mint },
-              selected === option &&
-                option !== question.answer && { borderColor: colors.orange },
-            ]}
-          >
-            <Text style={s.optionText}>{option}</Text>
-          </Pressable>
-        ))}
-        {selected && (
-          <ExplanationCard
-            item={{ ...question, type: "choice" }}
-            selected={selected}
-            correct={selected === question.answer}
-            context={{ topic: "Недельный экзамен" }}
-            reinforcement
-            accentColor={colors.orange}
-          />
-        )}
-        {selected && (
-          <PrimaryButton
-            title={index === questions.length - 1 ? "Результат" : "Дальше"}
-            onPress={next}
-            color={selected === question.answer ? colors.mint : colors.orange}
-          />
-        )}
-      </ScrollView>
-    </View>
-  );
+  const [seed] = useState(Date.now);
+  const deck = useMemo(() => sampleExamQuestions([...placementQuestions.slice(2, 8), ...grammarQuestions.slice(0, 6)], 10, seed), [seed]);
+  return <PracticeScreen title="Контрольная практика" sessionKey="exam-weekly" presetDeck={deck} onComplete={recordExam} onClose={onClose} />;
 }
 
 const rewards = [

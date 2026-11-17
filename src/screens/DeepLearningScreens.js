@@ -1,3 +1,4 @@
+import { evaluateExercise } from '../utils/answer';
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -389,7 +390,7 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
       </View>
     );
   const next = () => {
-    const nextScore = score + (selected === question.answer ? 1 : 0);
+    const nextScore = score + (evaluateExercise(question, (selected)).correct ? 1 : 0);
     if (questionIndex === 2 && itemIndex === items.length - 1) {
       setScore(nextScore);
       onFinish(nextScore);
@@ -444,8 +445,8 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
               onPress={() => setSelected(option)}
               style={[
                 s.option,
-                selected && option === question.answer && s.correct,
-                selected === option && option !== question.answer && s.wrong,
+                selected && evaluateExercise(question, (option)).correct && s.correct,
+                selected === option && !evaluateExercise(question, (option)).correct && s.wrong,
               ]}
             >
               <Text style={s.optionText}>{option}</Text>
@@ -453,13 +454,13 @@ function QuizModule({ title, items, listening, onFinish, onClose }) {
           ),
         )}
         {selected && (
-          <ExplanationCard item={{ ...question, type: 'choice' }} selected={selected} correct={selected === question.answer} context={{ topic: listening ? 'IELTS Listening' : 'IELTS Reading', explanation: 'Правильный ответ подтверждается конкретной формулировкой в тексте или записи, а не общим впечатлением.' }} accentColor={colors.orange} />
+          <ExplanationCard item={{ ...question, type: 'choice' }} selected={selected} correct={evaluateExercise(question, (selected)).correct} context={{ topic: listening ? 'IELTS Listening' : 'IELTS Reading', explanation: 'Правильный ответ подтверждается конкретной формулировкой в тексте или записи, а не общим впечатлением.' }} accentColor={colors.orange} />
         )}
         {selected && (
           <PrimaryButton
             title={current === total - 1 ? "Результат" : "Дальше"}
             onPress={next}
-            color={selected === question.answer ? colors.mint : colors.orange}
+            color={evaluateExercise(question, (selected)).correct ? colors.mint : colors.orange}
           />
         )}
       </ScrollView>
@@ -806,11 +807,11 @@ export function SmartCoachScreen({ onClose }) {
     );
   const right = useMistakes
     ? answersMatch(answer, item.answer)
-    : selected === item.answer;
+    : evaluateExercise(item, (selected)).correct;
   const check = () => {
     const ok = useMistakes
       ? answersMatch(answer, item.answer)
-      : selected === item.answer;
+      : evaluateExercise(item, (selected)).correct;
     setChecked(true);
     if (ok) {
       setScore(score + 1);
@@ -853,10 +854,10 @@ export function SmartCoachScreen({ onClose }) {
               onPress={() => setSelected(option)}
               style={[
                 s.option,
-                checked && option === item.answer && s.correct,
+                checked && evaluateExercise(item, (option)).correct && s.correct,
                 checked &&
                   selected === option &&
-                  option !== item.answer &&
+                  !evaluateExercise(item, (option)).correct &&
                   s.wrong,
               ]}
             >

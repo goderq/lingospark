@@ -1,5 +1,8 @@
-import React, { useMemo, useState } from "react";
+import { readWordSession } from '../utils/wordSession';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import WordMeanings from '../components/WordMeanings';
+import { wordEstablished } from '../utils/wordSchedule';
+import { sampleWithoutReplacement } from '../utils/sampling';
 import {
   Keyboard,
   KeyboardAvoidingView,
@@ -54,49 +57,46 @@ const modes = [
   ["definition", "Значение", "help-circle", "Найди английское слово"],
 ];
 
-const takeRandom = (pool, amount) => {
-  const picked = [];
-  const used = new Set();
-  while (picked.length < Math.min(amount, pool.length)) {
-    const index = Math.floor(Math.random() * pool.length);
-    if (!used.has(index)) {
-      used.add(index);
-      picked.push(pool[index]);
-    }
-  }
-  return picked;
-};
+const takeRandom = sampleWithoutReplacement;
 
 export default function ReviewScreen() {
   useScreenTiming('words_open');
   const {
     progress,
     recordReview,
+    saveWordSession,
+    clearWordSession,
     toggleWordPreference,
     hideWord,
     updateWordTranslation,
   } = useProgress();
-  const [level, setLevel] = useState("A1");
-  const [catalogMode, setCatalogMode] = useState("core");
-  const [theme, setTheme] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("new");
-  const [mode, setMode] = useState("typing");
-  const [amount, setAmount] = useState(10);
-  const [directionMode, setDirectionMode] = useState("mixed");
-  const [deck, setDeck] = useState(null);
-  const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState("learn");
-  const [answer, setAnswer] = useState("");
-  const [checked, setChecked] = useState(false);
-  const [correct, setCorrect] = useState(false);
-  const [grade, setGrade] = useState("");
-  const [score, setScore] = useState(0);
-  const [finished, setFinished] = useState(false);
-  const [letterTiles, setLetterTiles] = useState([]);
-  const [usedLetters, setUsedLetters] = useState([]);
-  const [editingTranslation, setEditingTranslation] = useState(false);
-  const [translationDraft, setTranslationDraft] = useState("");
+  const draft = useRef(readWordSession(progress.wordSessionDraft)).current;
+  const [sessionId, setSessionId] = useState(draft.sessionId || `words-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const [optionSeed, setOptionSeed] = useState(() => draft.optionSeed ?? Math.floor(Math.random() * 2147483647));
+  const [level, setLevel] = useState(draft.level ?? "A1");
+  const [catalogMode, setCatalogMode] = useState(draft.catalogMode ?? "core");
+  const [theme, setTheme] = useState(draft.theme ?? "all");
+  const [statusFilter, setStatusFilter] = useState(draft.statusFilter ?? "new");
+  const [mode, setMode] = useState(draft.mode ?? "typing");
+  const [amount, setAmount] = useState(draft.amount ?? 10);
+  const [directionMode, setDirectionMode] = useState(draft.directionMode ?? "mixed");
+  const [deck, setDeck] = useState(draft.deck ?? null);
+  const [index, setIndex] = useState(draft.index ?? 0);
+  const [phase, setPhase] = useState(draft.phase ?? "learn");
+  const [answer, setAnswer] = useState(draft.answer ?? "");
+  const [checked, setChecked] = useState(draft.checked ?? false);
+  const [correct, setCorrect] = useState(draft.correct ?? false);
+  const [grade, setGrade] = useState(draft.grade ?? "");
+  const [score, setScore] = useState(draft.score ?? 0);
+  const [finished, setFinished] = useState(draft.finished ?? false);
+  const [letterTiles, setLetterTiles] = useState(draft.letterTiles ?? []);
+  const [usedLetters, setUsedLetters] = useState(draft.usedLetters ?? []);
+  const [editingTranslation, setEditingTranslation] = useState(draft.editingTranslation ?? false);
+  const [translationDraft, setTranslationDraft] = useState(draft.translationDraft ?? "");
 
+
+  const serializedWordSession = JSON.stringify({ version: 1, sessionId, optionSeed, level, catalogMode, theme, statusFilter, mode, amount, directionMode, deck, index, phase, answer, checked, correct, grade, score, letterTiles, usedLetters, editingTranslation, translationDraft });
+  useEffect(() => { if (deck && !finished) saveWordSession(JSON.parse(serializedWordSession)); if (finished) clearWordSession(); }, [serializedWordSession, finished, saveWordSession, clearWordSession]);
   const today = new Date().toISOString().slice(0, 10);
   const stats = progress.reviewStats || {};
   const preferences = useMemo(
@@ -143,7 +143,7 @@ export default function ReviewScreen() {
     () =>
       Object.values(stats).reduce(
         (result, item) => {
-          if ((item.interval || 0) >= 14) result.learned += 1;
+          if (wordEstablished(item)) result.learned += 1;
           else result.learning += 1;
           if (item.dueDate <= today) result.due += 1;
           return result;
@@ -172,9 +172,9 @@ export default function ReviewScreen() {
         const wordStat = stats[word.id];
         if (statusFilter === "new") return !wordStat;
         if (statusFilter === "learning")
-          return wordStat && (wordStat.interval || 0) < 14;
+          return wordStat && !wordEstablished(wordStat);
         if (statusFilter === "due") return wordStat?.dueDate <= today;
-        if (statusFilter === "learned") return (wordStat?.interval || 0) >= 14;
+        if (statusFilter === "learned") return wordEstablished(wordStat);
         if (statusFilter === "hard") return hardIds.has(word.id);
         if (statusFilter === "favorites") return favoriteIds.has(word.id);
         return true;
@@ -190,8 +190,8 @@ export default function ReviewScreen() {
     const expected=reverse?ru:card.english;
     const accepted=reverse?[ru,...(custom?[]:(card.translations || []))]:[card.english];
     const candidates=getWordCandidates(card.id,24,activeWordBank).map((word)=>reverse?word.russian:word.english);
-    return balancedOptions([expected,...distinctDistractors(candidates,accepted)],expected,index,deck.length*97);
-  },[deck,index,preferences.customTranslations,activeWordBank]);
+    return balancedOptions([expected,...distinctDistractors(candidates,accepted)],expected,index,optionSeed);
+  },[deck,index,preferences.customTranslations,activeWordBank,optionSeed]);
   const wordOfDay = activeWordBank[dateSeed % activeWordBank.length];
 
   const startSession = (forcedPool = null) => {
@@ -210,6 +210,8 @@ export default function ReviewScreen() {
             : "ru-en"
           : directionMode,
     }));
+    setOptionSeed(Math.floor(Math.random() * 2147483647));
+    setSessionId(`words-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     setDeck(session);
     setIndex(0);
     setPhase("learn");
@@ -224,6 +226,33 @@ export default function ReviewScreen() {
     setEditingTranslation(false);
   };
 
+  const resumeWords = () => {
+    const saved = readWordSession(progress.wordSessionDraft);
+    if (!saved.deck) return;
+    setSessionId(saved.sessionId);
+    setOptionSeed(saved.optionSeed);
+    setLevel(saved.level);
+    setCatalogMode(saved.catalogMode);
+    setTheme(saved.theme);
+    setStatusFilter(saved.statusFilter);
+    setMode(saved.mode);
+    setAmount(saved.amount);
+    setDirectionMode(saved.directionMode);
+    setDeck(saved.deck);
+    setIndex(saved.index);
+    setPhase(saved.phase);
+    setAnswer(saved.answer);
+    setChecked(saved.checked);
+    setCorrect(saved.correct);
+    setGrade(saved.grade);
+    setScore(saved.score);
+    setLetterTiles(saved.letterTiles);
+    setUsedLetters(saved.usedLetters);
+    setEditingTranslation(saved.editingTranslation);
+    setTranslationDraft(saved.translationDraft);
+    setFinished(false);
+  };
+
   if (!deck)
     return (
       <ScrollView
@@ -232,12 +261,13 @@ export default function ReviewScreen() {
       >
         <View style={styles.hero}>
           <Text style={styles.heroEmoji}>📚</Text>
-          <Text style={styles.setupTitle}>Слова без мусора</Text>
+          <Text style={styles.setupTitle}>Слова в контексте</Text>
           <Text style={styles.setupSubtitle}>
             {activeWordBankSize.toLocaleString("ru-RU")} слов работают без интернета
           </Text>
         </View>
 
+        {!!progress.wordSessionDraft && <PrimaryButton title="Продолжить сохранённую сессию" onPress={resumeWords} />}
         <View style={styles.catalogSwitch}>
           {[
             ["core", "Основные", `${wordBankSize.toLocaleString("ru-RU")} полезных`],
@@ -499,8 +529,8 @@ export default function ReviewScreen() {
   const currentStat = stats[card.id];
   const statusText = !currentStat
     ? "Новое слово"
-    : (currentStat.interval || 0) >= 14
-      ? "Выучено"
+    : wordEstablished(currentStat)
+      ? "Закреплено в повторении"
       : currentStat.dueDate <= today
         ? "Пора повторить"
         : `Повтор через ${currentStat.interval || 1} дн.`;
@@ -517,7 +547,7 @@ export default function ReviewScreen() {
     setChecked(true);
     setAnswer(submittedAnswer);
     if (result) setScore((value) => value + 1);
-    recordReview(activeCard, result, card.direction);
+    recordReview(activeCard, result, card.direction, `${sessionId}-${index}`);
     Haptics.notificationAsync(
       result
         ? Haptics.NotificationFeedbackType.Success

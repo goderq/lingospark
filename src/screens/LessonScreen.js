@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { speak } from "../utils/speech";
 import * as Haptics from "expo-haptics";
 import { colors } from "../theme";
-import { PrimaryButton, ProgressBar, XPBadge } from "../components/UI";
+import { PrimaryButton, ProgressBar } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import {
@@ -25,12 +25,13 @@ import {
 } from "../utils/answer";
 import ExplanationCard from "../components/ExplanationCard";
 import { courseConversationTopics } from "../data/courseSupplement";
+import { getCourseDialogue } from '../data/courseDialogues';
 import { readLessonSession, lessonContentKey } from '../utils/lessonSession';
 
 export default function LessonScreen({ lesson, onClose }) {
   const {
     progress,
-    completeLesson,
+    clearLessonDraft,
     recordExercise,
     saveLessonDraft,
     toggleFavorite,
@@ -127,38 +128,7 @@ export default function LessonScreen({ lesson, onClose }) {
     [current, accepted],
   );
   const reinforcement = exercise.type === "choice";
-  const usefulPhrase =
-    [...lesson.exercises]
-      .reverse()
-      .find((item) => /[a-z]/i.test(item.speak || "") && !/[а-яё]/i.test(item.speak || ""))
-      ?.speak || "I learned a useful English phrase";
-  const conversationTopic = courseConversationTopics[lesson.id] || "English communication";
-  const dialogueSteps = lesson.id === 'greetings' ? [
-    { speaker: 'Sam', line: "Hi! I'm Sam. What's your name?", answer: 'My name is Anna.', options: ['My name is Anna.', 'My name am Anna.', 'This name I Anna.'] },
-    { speaker: 'Sam', line: 'Nice to meet you, Anna!', answer: 'Nice to meet you too.', options: ['Nice to meet you too.', 'Nice meet too you.', 'My nice name you.'] },
-  ] : [
-    {
-      speaker: "Partner",
-      line: `What did you practise in the ${conversationTopic} lesson?`,
-      answer: `I practised ${conversationTopic} today.`,
-      options: [
-        `I practised ${conversationTopic} today.`,
-        `I skipped the ${conversationTopic} lesson.`,
-        `I forgot what ${conversationTopic} means.`,
-      ],
-    },
-    {
-      speaker: "Partner",
-      line: `Which phrase would be useful for ${conversationTopic}?`,
-      answer: usefulPhrase,
-      options: [
-        usefulPhrase,
-        `I am practise ${conversationTopic}.`,
-        `English ${conversationTopic} are easy.`,
-      ],
-    },
-  ];
-
+  const dialogueSteps = useMemo(() => getCourseDialogue(lesson.id), [lesson.id]);
   const check = () => {
     if (checked) return;
     const evaluation = evaluateExercise(exercise, current);
@@ -243,7 +213,7 @@ export default function LessonScreen({ lesson, onClose }) {
     setRemediationCorrect(false);
   };
   const advanceConversation = () => {
-    if (conversationChoice !== dialogueSteps[conversationStep].answer) {
+    if (!evaluateExercise(dialogueSteps[conversationStep], (conversationChoice)).correct) {
       setConversationWrong(true);
       setConversationChoice('');
       return;
@@ -257,13 +227,8 @@ export default function LessonScreen({ lesson, onClose }) {
       );
       setResultAccuracy(accuracy);
       setResultCorrect(correctCount + nextScore);
-      setResultXP(progress.completed.includes(lesson.id) ? 0 : lesson.xp);
-      completeLesson(lesson, {
-        accuracy,
-        correct: correctCount + nextScore,
-        total: lesson.exercises.length + 2,
-        stars: accuracy >= 90 ? 3 : accuracy >= 70 ? 2 : 1,
-      });
+      setResultXP(0);
+      clearLessonDraft(lesson.id);
       setFinished(true);
     } else {
       setConversationScore(nextScore);
@@ -303,7 +268,7 @@ export default function LessonScreen({ lesson, onClose }) {
         ]}
       >
         <Text style={styles.party}>🎉</Text>
-        <Text style={styles.resultTitle}>Урок пройден!</Text>
+        <Text style={styles.resultTitle}>Практика завершена!</Text>
         <Text style={styles.stars}>
           {"⭐".repeat(resultAccuracy >= 90 ? 3 : resultAccuracy >= 70 ? 2 : 1)}
         </Text>
@@ -329,15 +294,8 @@ export default function LessonScreen({ lesson, onClose }) {
           </View>
         </View>
         <Text style={styles.recommendation}>
-          {resultAccuracy >= 90
-            ? "Отлично! Можно переходить к следующему уроку."
-            : resultAccuracy >= 70
-              ? "Хороший результат. Ошибки вернутся в повторении."
-              : "Совет: повтори ошибки перед следующим уроком."}
+          Вернись к этапам темы. Следующий курс открывает самопроверка с результатом от 80%; практика с разбором её не заменяет.
         </Text>
-        <View style={{ marginVertical: 20 }}>
-          <XPBadge xp={lesson.xp} />
-        </View>
         <PrimaryButton title="Продолжить обучение" onPress={onClose} />
       </Animated.View>
     );
@@ -425,7 +383,7 @@ export default function LessonScreen({ lesson, onClose }) {
   if (conversation) {
     const step = dialogueSteps[conversationStep];
     const answered = Boolean(conversationChoice);
-    const right = conversationChoice === step.answer;
+    const right = evaluateExercise(step, (conversationChoice)).correct;
     return (
       <View style={styles.container}>
         <View style={styles.top}>
@@ -471,9 +429,9 @@ export default function LessonScreen({ lesson, onClose }) {
               style={[
                 styles.option,
                 answered &&
-                  option === step.answer && { borderColor: colors.mint },
+                  evaluateExercise(step, (option)).correct && { borderColor: colors.mint },
                 conversationChoice === option &&
-                  option !== step.answer && { borderColor: colors.orange },
+                  !evaluateExercise(step, (option)).correct && { borderColor: colors.orange },
               ]}
             >
               <Text

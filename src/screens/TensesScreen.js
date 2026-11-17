@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import { evaluateExercise } from '../utils/answer';
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { readStudyDraft, studySourceKey } from '../utils/studyDraft';
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { speak } from "../utils/speech";
@@ -19,18 +21,27 @@ const groupColor = (name) =>
       : colors.purple;
 
 export default function TensesScreen({ onClose, onChallenge, onWeak }) {
-  const { recordGrammar, completeTense, toggleFavorite, progress } = useProgress();
-  const [module, setModule] = useState(null);
-  const [learning, setLearning] = useState(false);
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [score, setScore] = useState(0);
+  const { recordGrammar, completeTense, toggleFavorite, progress, saveStudyDraft, clearStudyDraft } = useProgress();
+  const draft = useRef(readStudyDraft(progress.studyDrafts?.tenses, tenseModules)).current;
+  const [module, setModule] = useState(() => tenseModules.find(item => item.id === draft.sourceId) || null);
+  const [learning, setLearning] = useState(draft.learning || false);
+  const [index, setIndex] = useState(draft.index || 0);
+  const [selected, setSelected] = useState(draft.selected || '');
+  const [score, setScore] = useState(draft.score || 0);
   const [done, setDone] = useState(false);
-  const [gate, setGate] = useState(false);
-  const [gateIndex, setGateIndex] = useState(0);
-  const [gateSelected, setGateSelected] = useState("");
-  const [gateScore, setGateScore] = useState(0);
-  const [optionSeed] = useState(() => Math.floor(Math.random() * 2147483647));
+  const [gate, setGate] = useState(draft.gate || false);
+  const [gateIndex, setGateIndex] = useState(draft.gateIndex || 0);
+  const [gateSelected, setGateSelected] = useState(draft.gateSelected || '');
+  const [gateScore, setGateScore] = useState(draft.gateScore || 0);
+  const [optionSeed, setOptionSeed] = useState(() => draft.seed ?? Math.floor(Math.random() * 2147483647));
+  const contentKey = useMemo(() => module ? studySourceKey(module) : '', [module]);
+  const serializedDraft = JSON.stringify({ version: 1, sourceId: module?.id, contentKey, learning, index, selected, score, gate, gateIndex, gateSelected, gateScore, seed: optionSeed });
+  useEffect(() => { if (module && !done) saveStudyDraft('tenses', JSON.parse(serializedDraft)); if (done) clearStudyDraft('tenses'); }, [serializedDraft, done, saveStudyDraft, clearStudyDraft]);
+  const openModule = item => {
+    const saved = readStudyDraft(progress.studyDrafts?.tenses, tenseModules);
+    const state = saved.sourceId === item.id ? saved : {};
+    setLearning(state.learning || false); setIndex(state.index || 0); setSelected(state.selected || ''); setScore(state.score || 0); setGate(state.gate || false); setGateIndex(state.gateIndex || 0); setGateSelected(state.gateSelected || ''); setGateScore(state.gateScore || 0); setOptionSeed(state.seed ?? Math.floor(Math.random() * 2147483647)); setModule(item); setDone(false);
+  };
   const back = () => {
     if (module) {
       setModule(null);
@@ -97,7 +108,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
                   return (
                     <Pressable
                       key={item.id}
-                      onPress={() => setModule(item)}
+                      onPress={() => openModule(item)}
                       style={[styles.module, complete && styles.moduleComplete]}
                     >
                       <View
@@ -308,11 +319,11 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
     );
   if (gate && !learning) {
     const gateQuestion = module.exercises[gateIndex];
-    const gateCorrect = gateSelected === gateQuestion.answer;
+    const gateCorrect = evaluateExercise(gateQuestion, (gateSelected)).correct;
     const chooseGate = (option) => {
       if (gateSelected) return;
       setGateSelected(option);
-      const right = option === gateQuestion.answer;
+      const right = evaluateExercise(gateQuestion, (option)).correct;
       if (right) setGateScore((value) => value + 1);
       recordGrammar(
         { id: `gate-${module.id}-${gateIndex}`, prompt: gateQuestion.prompt, answer: gateQuestion.answer },
@@ -346,7 +357,7 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
           </View>
           <Text style={styles.question}>{gateQuestion.prompt}</Text>
           {balancedOptions(gateQuestion.options, gateQuestion.answer, gateIndex, optionSeed).map((option) => (
-            <Pressable key={option} onPress={() => chooseGate(option)} style={[styles.option, gateSelected && option === gateQuestion.answer && { borderColor: colors.mint }, gateSelected === option && option !== gateQuestion.answer && { borderColor: colors.orange }]}>
+            <Pressable key={option} onPress={() => chooseGate(option)} style={[styles.option, gateSelected && evaluateExercise(gateQuestion, (option)).correct && { borderColor: colors.mint }, gateSelected === option && !evaluateExercise(gateQuestion, (option)).correct && { borderColor: colors.orange }]}>
               <Text style={styles.optionText}>{option}</Text>
             </Pressable>
           ))}
@@ -357,11 +368,11 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
     );
   }
   const question = module.exercises[index];
-  const correct = selected === question.answer;
+  const correct = evaluateExercise(question, (selected)).correct;
   const choose = (option) => {
     if (selected) return;
     setSelected(option);
-    const right = option === question.answer;
+    const right = evaluateExercise(question, (option)).correct;
     if (right) setScore(score + 1);
     recordGrammar(
       {
@@ -407,9 +418,9 @@ export default function TensesScreen({ onClose, onChallenge, onWeak }) {
             style={[
               styles.option,
               selected &&
-                option === question.answer && { borderColor: colors.mint },
+                evaluateExercise(question, (option)).correct && { borderColor: colors.mint },
               selected === option &&
-                option !== question.answer && { borderColor: colors.orange },
+                !evaluateExercise(question, (option)).correct && { borderColor: colors.orange },
             ]}
           >
             <Text style={styles.optionText}>{option}</Text>

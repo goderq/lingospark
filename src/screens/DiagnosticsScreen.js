@@ -12,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as Clipboard from 'expo-clipboard';
 import {performanceSummary} from '../utils/performance';
+import { nativeResourceState } from '../services/nativeResources';
 import { useAuth } from "../store/AuthContext";
 import { useCloudSync } from "../store/CloudSyncContext";
 import { useProgress } from "../store/ProgressContext";
@@ -25,7 +26,7 @@ const yesNo = (value) => (value ? "Готово" : "Не установлено"
 
 export default function DiagnosticsScreen({ onClose }) {
   const { user } = useAuth();
-  const { progress, localUpdatedAt } = useProgress();
+  const { progress, localUpdatedAt, storageError } = useProgress();
   const {
     status,
     lastSyncedAt,
@@ -37,10 +38,12 @@ export default function DiagnosticsScreen({ onClose }) {
   const [device, setDevice] = useState(null);
   const [busy, setBusy] = useState(false);
   const [timings,setTimings]=useState(()=>performanceSummary());
+  const [resources, setResources] = useState(nativeResourceState);
 
   const refresh = useCallback(async () => {
     setBusy(true);
     setTimings(performanceSummary());
+    setResources(nativeResourceState());
     try {
       const [ai, speech] = await Promise.all([
         import("../services/localAi"),
@@ -109,6 +112,7 @@ export default function DiagnosticsScreen({ onClose }) {
           <Row icon="git-commit" label="Ревизия копии" value={revision ? `№ ${revision}` : "Нет копии"} good={revision > 0} />
           <Row icon="time" label="Последняя синхронизация" value={lastSyncedAt ? new Date(lastSyncedAt).toLocaleString("ru-RU") : "Ещё не было"} />
           {!!lastError && <Text style={styles.error}>{lastError}</Text>}
+          {!!storageError && <Text style={styles.error}>{storageError}</Text>}
           <View style={styles.actions}>
             <Action title="Сохранить сейчас" icon="cloud-upload" onPress={syncNow} disabled={!user || status === "syncing"} />
             <Action title="Из облака" icon="cloud-download" onPress={forceRestore} disabled={!user || status === "syncing"} />
@@ -124,8 +128,9 @@ export default function DiagnosticsScreen({ onClose }) {
         </Section>
 
         <Section title="БЫСТРОДЕЙСТВИЕ · ТЕКУЩИЙ ЗАПУСК">
+          <Row icon="hardware-chip" label="Очередь локальных движков" value={`Ожидают: ${resources.pending} · задача: ${resources.active || 'нет'}`} />
           {!timings.length&&<Text style={styles.value}>Замеры появятся после открытия экранов и прослушивания фраз.</Text>}
-          {timings.map((entry)=><Row key={entry.name} icon="speedometer" label={({startup_js:'Запуск JavaScript',words_open:'Экран слов',dictionary_open:'Открытие словаря',dictionary_filter:'Поиск в словаре',speech_start:'Начало озвучки'})[entry.name] || entry.name} value={`${entry.last} мс · максимум ${entry.max} мс · замеров ${entry.count}`}/>)}
+          {timings.map((entry)=><Row key={entry.name} icon="speedometer" label={({startup_js:'Запуск JavaScript',words_open:'Экран слов',dictionary_open:'Открытие словаря',dictionary_filter:'Поиск в словаре',speech_start:'Озвучка: вся задержка',speech_prepare:'Озвучка: подготовка',speech_stop:'Озвучка: остановка',speech_native_start:'Озвучка: нативный запуск',practice_open:'Экран практики',journey_open:'Учебная тема',learning_home_open:'Экран обучения',native_queue_wait:'Ожидание движка',ai_first_token:'Первый токен ИИ',progress_serialize:'Подготовка сохранения'})[entry.name] || entry.name} value={`${entry.last} мс · 95% до ${entry.p95} мс · замеров ${entry.count}`}/>)}
           <Text style={styles.value}>Последние 60 замеров. Открытие экрана — от начала отрисовки до следующего кадра. Запуск JS не включает загрузку iOS. Озвучка — от нажатия до события начала речи.</Text>
         </Section>
 

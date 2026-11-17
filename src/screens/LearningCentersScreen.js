@@ -18,7 +18,7 @@ const grammarItems = [
 const examItems = [
   ["levelExams", "Экзамены A1–C1", "Проверка каждого уровня и сертификаты", "ribbon", colors.purple],
   ["ielts", "IELTS Trainer", "Reading, Listening, Writing и Speaking", "school", colors.pink],
-  ["fullIeltsMock", "Полный IELTS Mock", "Итоговый пробный экзамен с Band 1–9", "document-text", colors.orange],
+  ["fullIeltsMock", "IELTS · контрольные задания", "Чтение и слух без официального Band", "document-text", colors.orange],
   ["c1Exam", "Финальный C1", "30 сложных вопросов и итог курса", "diamond", "#D15BE3"],
 ];
 

@@ -1,3 +1,6 @@
+import PracticeScreen from './PracticeScreen';
+import { sampleExamQuestions } from '../utils/examDeck';
+import { evaluateExercise } from '../utils/answer';
 import React, { useMemo, useState } from "react";
 import {
   Pressable,
@@ -240,7 +243,7 @@ export function CareerCoursesScreen({ onClose }) {
     );
   const item = track.exercises[index];
   const next = () => {
-    const final = score + (selected === item.answer ? 1 : 0);
+    const final = score + (evaluateExercise(item, (selected)).correct ? 1 : 0);
     if (index === 5) {
       setScore(final);
       if (final >= 5) completeCareer(track.id);
@@ -268,8 +271,8 @@ export function CareerCoursesScreen({ onClose }) {
               onPress={() => setSelected(option)}
               style={[
                 s.option,
-                selected && option === item.answer && s.correct,
-                selected === option && option !== item.answer && s.wrong,
+                selected && evaluateExercise(item, (option)).correct && s.correct,
+                selected === option && !evaluateExercise(item, (option)).correct && s.wrong,
               ]}
             >
               <Text style={s.optionText}>{option}</Text>
@@ -277,13 +280,13 @@ export function CareerCoursesScreen({ onClose }) {
           ),
         )}
         {selected && (
-          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: track.title }} reinforcement accentColor={colors.purple} />
+          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={evaluateExercise(item, (selected)).correct} context={{ topic: track.title }} reinforcement accentColor={colors.purple} />
         )}
         {selected && (
           <PrimaryButton
             title={index === 5 ? "Результат" : "Дальше"}
             onPress={next}
-            color={selected === item.answer ? colors.mint : colors.orange}
+            color={evaluateExercise(item, (selected)).correct ? colors.mint : colors.orange}
           />
         )}
       </ScrollView>
@@ -398,107 +401,9 @@ const mockQuestions = [
   ),
 ];
 export function FullIeltsMockScreen({ onClose }) {
-  const { progress, recordFullIelts } = useProgress();
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState("");
-  const [score, setScore] = useState(0);
-  const [done, setDone] = useState(false);
-  const [seed] = useState(() => Date.now());
-  const deck = useMemo(
-    () => shuffleOptions(mockQuestions, seed).slice(0, 20),
-    [],
-  );
-  const item = deck[index];
-  if (done) {
-    const band = Math.round((1 + (score / 20) * 8) * 2) / 2;
-    return (
-      <View style={s.container}>
-        <Header title="IELTS Mock" onClose={onClose} />
-        <View style={s.center}>
-          <Text style={s.bigEmoji}>🏅</Text>
-          <Text style={s.band}>Band {band.toFixed(1)}</Text>
-          <Text style={s.subtitle}>
-            {score}/20 правильных · лучший Band{" "}
-            {Math.max(progress.fullIeltsBest || 0, band).toFixed(1)}
-          </Text>
-          <View style={{ width: "100%" }}>
-            <PrimaryButton
-              title="Сохранить и завершить"
-              onPress={() => {
-                recordFullIelts(band);
-                onClose();
-              }}
-            />
-          </View>
-        </View>
-      </View>
-    );
-  }
-  const next = () => {
-    const final = score + (selected === item.answer ? 1 : 0);
-    if (index === 19) {
-      setScore(final);
-      setDone(true);
-    } else {
-      setScore(final);
-      setIndex(index + 1);
-      setSelected("");
-    }
-  };
-  return (
-    <View style={s.container}>
-      <Header title="Полный IELTS Mock" onClose={onClose} />
-      <ScrollView contentContainerStyle={s.content}>
-        <ProgressBar value={(index + 1) / 20} color={colors.pink} />
-        <Text style={s.eyebrow}>
-          {item.section} · {index + 1}/20
-        </Text>
-        {item.audio ? (
-          <View style={s.audio}>
-            <Pressable
-              onPress={() =>
-                speak(item.audio, { language: "en-US", rate: 0.72 })
-              }
-            >
-              <Ionicons name="play-circle" size={55} color={colors.orange} />
-            </Pressable>
-            <Text style={s.cardText}>Прослушай запись и ответь</Text>
-          </View>
-        ) : (
-          <View style={s.story}>
-            <Text style={s.storyText}>{item.context}</Text>
-          </View>
-        )}
-        <Text style={s.question}>{item.prompt}</Text>
-        {balancedOptions(item.options, item.answer, index, seed).map(
-          (option) => (
-            <Pressable
-              key={option}
-              disabled={!!selected}
-              onPress={() => setSelected(option)}
-              style={[
-                s.option,
-                selected && option === item.answer && s.correct,
-                selected === option && option !== item.answer && s.wrong,
-              ]}
-            >
-              <Text style={s.optionText}>{option}</Text>
-            </Pressable>
-          ),
-        )}
-        {selected && (
-          <ExplanationCard item={{ ...item, type: 'choice' }} selected={selected} correct={selected === item.answer} context={{ topic: `IELTS ${item.section}` }} reinforcement accentColor={colors.orange} />
-        )}
-        {selected && (
-          <PrimaryButton
-            title={index === 19 ? "Рассчитать Band" : "Дальше"}
-            onPress={next}
-            color={selected === item.answer ? colors.mint : colors.orange}
-          />
-        )}
-      </ScrollView>
-    </View>
-  );
+  const [seed] = useState(Date.now);
+  const deck = useMemo(() => sampleExamQuestions(mockQuestions, 20, seed), [seed]);
+  return <PracticeScreen title="IELTS · учебная проверка чтения и слуха" sessionKey="exam-ielts-mock" presetDeck={deck} onClose={onClose} />;
 }
 
 const s = StyleSheet.create({

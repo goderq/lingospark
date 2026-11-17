@@ -1,3 +1,6 @@
+import PracticeScreen from './PracticeScreen';
+import { sampleExamQuestions } from '../utils/examDeck';
+import { evaluateExercise } from '../utils/answer';
 import React, { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,19 +16,14 @@ import { expandExplanation } from '../utils/explanations';
 const random = (items) => [...items].sort(() => Math.random() - .5);
 
 export default function C1ExamScreen({ onClose }) {
-  const { progress, recordC1Exam, recordGrammar } = useProgress(); const [started, setStarted] = useState(false); const [index, setIndex] = useState(0); const [selected, setSelected] = useState(''); const [score, setScore] = useState(0); const [done, setDone] = useState(false); const [seed] = useState(() => Math.floor(Math.random() * 2147483647));
+  const { recordC1Exam } = useProgress();
+  const [seed] = useState(Date.now);
   const deck = useMemo(() => {
-    const tensePool = tenseModules.filter((module) => ['B2', 'C1'].includes(module.level)).flatMap((module) => module.exercises.map((question, i) => ({ ...question, id: `c1-tense-${module.id}-${i}`, topic: module.name })));
-    const academyPool = grammarTracks.filter((track) => ['conditionals', 'modals', 'passive', 'gerund-infinitive'].includes(track.id)).flatMap((track) => track.exercises.map((question, i) => ({ ...question, id: `c1-academy-${track.id}-${i}`, topic: track.title })));
-    const extra = grammarQuestions.filter((question) => ['B2', 'C1'].includes(question.level)).map((question) => ({ ...question, topic: question.topic }));
-    return random([...tensePool, ...academyPool, ...extra]).slice(0, 30);
-  }, []);
-  if (!started) return <View style={styles.container}><Header onClose={onClose} /><ScrollView contentContainerStyle={styles.intro}><Text style={styles.trophy}>{progress.c1Certificate ? '🏆' : '🎓'}</Text><Text style={styles.title}>Финальный экзамен C1</Text><Text style={styles.subtitle}>30 сложных вопросов по временам, условным конструкциям, модальным глаголам и пассивному залогу.</Text><View style={styles.rules}><Rule icon="list" text="30 вопросов без повторной попытки" /><Rule icon="ribbon" text="Для сертификата нужно 24 из 30" /><Rule icon="analytics" text={`Твой лучший результат: ${progress.c1ExamBest || 0}/30`} /><Rule icon="shield-checkmark" text="Результат сохраняется в профиле" /></View><PrimaryButton title="Начать финальный экзамен" onPress={() => setStarted(true)} color={colors.purple} /></ScrollView></View>;
-  if (done) { const passed = score >= 24; return <View style={styles.container}><Header onClose={onClose} /><View style={styles.result}><Text style={styles.trophy}>{passed ? '🏆' : '📚'}</Text><Text style={styles.resultTitle}>{score}/30</Text><Text style={styles.resultMessage}>{passed ? 'Уровень C1 подтверждён!' : `До сертификата не хватило ${24 - score}`}</Text>{passed && <View style={styles.certificate}><Text style={styles.certificateSmall}>LINGOSPARK CERTIFICATE</Text><Text style={styles.certificateLevel}>C1</Text><Text style={styles.certificateText}>Advanced English Achievement</Text></View>}<View style={{ width: '100%', marginTop: 25 }}><PrimaryButton title="Завершить" onPress={onClose} color={passed ? colors.orange : colors.purple} /></View></View></View>; }
-  const question = deck[index]; const correct = selected === question.answer;
-  const choose = (option) => { if (selected) return; setSelected(option); const right = option === question.answer; if (right) setScore((value) => value + 1); recordGrammar({ id: question.id, prompt: question.prompt, answer: question.answer }, right); };
-  const next = () => { if (index === deck.length - 1) { recordC1Exam(score); setDone(true); } else { setIndex((value) => value + 1); setSelected(''); } };
-  return <View style={styles.container}><Header onClose={onClose} /><ScrollView contentContainerStyle={styles.content}><ProgressBar value={(index + 1) / deck.length} color={colors.purple} /><View style={styles.meta}><Text style={styles.topic}>{question.topic || 'C1 Grammar'}</Text><Text style={styles.counter}>{index + 1}/30</Text></View><Text style={styles.question}>{question.prompt}</Text>{balancedOptions(question.options, question.answer, index, seed).map((option) => <Pressable key={option} onPress={() => choose(option)} style={[styles.option, selected && option === question.answer && { borderColor: colors.mint }, selected === option && option !== question.answer && { borderColor: colors.orange }]}><Text style={styles.optionText}>{option}</Text></Pressable>)}{selected && <View style={styles.feedback}><Text style={[styles.feedbackTitle, { color: correct ? colors.mint : colors.orange }]}>{correct ? 'Верно!' : `Правильно: ${question.answer}`}</Text><Text style={styles.feedbackText}>{expandExplanation(question, { selected, topic: question.topic || 'C1 Grammar' })}</Text></View>}{selected && <PrimaryButton title={index === 29 ? 'Получить результат' : 'Следующий вопрос'} onPress={next} color={correct ? colors.mint : colors.orange} />}</ScrollView></View>;
+    const tensePool = tenseModules.filter(module => ['B2', 'C1'].includes(module.level)).flatMap(module => module.exercises.map(question => ({ ...question, topic: module.name })));
+    const academyPool = grammarTracks.filter(track => ['conditionals', 'modals', 'passive', 'gerund-infinitive'].includes(track.id)).flatMap(track => track.exercises.map(question => ({ ...question, topic: track.title })));
+    return sampleExamQuestions([...tensePool, ...academyPool, ...grammarQuestions.filter(question => ['B2', 'C1'].includes(question.level))], 30, seed);
+  }, [seed]);
+  return <PracticeScreen title="Учебная проверка C1" sessionKey="exam-c1" presetDeck={deck} onComplete={recordC1Exam} onClose={onClose} />;
 }
 
 function Rule({ icon, text }) { return <View style={styles.rule}><Ionicons name={icon} size={22} color={colors.purple} /><Text style={styles.ruleText}>{text}</Text></View>; }

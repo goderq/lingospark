@@ -20,6 +20,7 @@ import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import ExplanationCard from "../components/ExplanationCard";
+import { evaluateExercise } from '../utils/answer';
 
 const clean = (value) =>
   value
@@ -41,7 +42,7 @@ export default function DictationScreen({ onClose }) {
     speak(item.text, { language: "en-US", rate });
   const check = () => {
     Keyboard.dismiss();
-    const result = clean(answer) === clean(item.text);
+    const result = evaluateExercise({ answer: item.text }, answer).correct;
     setCorrect(result);
     setChecked(true);
     recordDictation(item, result);

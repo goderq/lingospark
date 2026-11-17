@@ -1,9 +1,12 @@
 {
   "name": "lingospark-expo",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "main": "index.js",
   "scripts": {
+    "test:architecture": "node scripts/test-architecture.mjs",
+    "test:practice": "node scripts/test-practice.mjs",
+    "benchmark:architecture": "node scripts/benchmark-architecture.mjs",
     "test:learning-journey": "node scripts/test-learning-journey.mjs",
     "test:retention": "node scripts/test-retention.mjs",
     "test:content-quality": "node scripts/test-content-quality.mjs",

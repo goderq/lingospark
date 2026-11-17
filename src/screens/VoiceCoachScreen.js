@@ -1,3 +1,4 @@
+import { evaluateExercise } from '../utils/answer';
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -594,7 +595,7 @@ function VoiceResult({ scenario, analysis, analyzing, progress, onAddWord, onRet
           <View key={`${exercise.prompt}-${index}`} style={s.taskCard}>
             <Text style={s.taskNumber}>ЗАДАНИЕ {index + 1}</Text><Text style={s.taskPrompt}>{exercise.prompt}</Text>
             {balancedOptions(exercise.options, exercise.answer, index, scenario.id).map((option) => {
-              const choice = selected[index]; const correct = choice && option === exercise.answer; const wrong = choice === option && option !== exercise.answer;
+              const choice = selected[index]; const correct = choice && evaluateExercise(exercise, (option)).correct; const wrong = choice === option && !evaluateExercise(exercise, (option)).correct;
               return <Pressable key={option} disabled={Boolean(choice)} onPress={() => setSelected((old) => ({ ...old, [index]: option }))} style={[s.taskOption, correct && s.taskCorrect, wrong && s.taskWrong]}><Text style={s.taskOptionText}>{option}</Text></Pressable>;
             })}
             {selected[index] ? <Text style={s.taskExplain}>{exercise.explanation}</Text> : null}

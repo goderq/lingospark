@@ -1,3 +1,4 @@
+import { evaluateExercise } from '../utils/answer';
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Keyboard,
@@ -418,7 +419,7 @@ function PhoneTab({ world }) {
   );
   const eventResult =
     savedEvent ||
-    (eventAnswer ? { correct: eventAnswer === dailyEvent.answer } : null);
+    (eventAnswer ? { correct: evaluateExercise(dailyEvent, (eventAnswer)).correct } : null);
   return (
     <ScrollView contentContainerStyle={s.tabContent}>
       <Text style={s.tabTitle}>Телефон</Text>
@@ -436,13 +437,13 @@ function PhoneTab({ world }) {
             disabled={Boolean(eventResult)}
             onPress={() => {
               setEventAnswer(option);
-              completeWorldEvent(dailyEvent, option === dailyEvent.answer);
+              completeWorldEvent(dailyEvent, evaluateExercise(dailyEvent, (option)).correct);
             }}
             style={[
               s.eventOption,
-              eventResult && option === dailyEvent.answer && s.correctOption,
+              eventResult && evaluateExercise(dailyEvent, (option)).correct && s.correctOption,
               eventAnswer === option &&
-                option !== dailyEvent.answer &&
+                !evaluateExercise(dailyEvent, (option)).correct &&
                 s.wrongOption,
             ]}
           >
@@ -752,7 +753,7 @@ function WorldMission({ location: originalLocation, onBack }) {
     const actual = value ?? answer;
     const isCorrect =
       scene.type === "choice"
-        ? actual === scene.answer
+        ? evaluateExercise(scene, (actual)).correct
         : gradeAnswer(actual, scene.answers).status === "correct";
     if (scene.type === "choice") setSelected(actual);
     setCorrect(isCorrect);
@@ -1012,10 +1013,10 @@ function WorldMission({ location: originalLocation, onBack }) {
               onPress={() => submit(option)}
               style={[
                 s.option,
-                checked && option === scene.answer && s.correctOption,
+                checked && evaluateExercise(scene, (option)).correct && s.correctOption,
                 checked &&
                   selected === option &&
-                  option !== scene.answer &&
+                  !evaluateExercise(scene, (option)).correct &&
                   s.wrongOption,
               ]}
             >

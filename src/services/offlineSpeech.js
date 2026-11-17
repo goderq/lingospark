@@ -1,3 +1,4 @@
+import { withNativeResource, registerResource, releaseNativeResource } from './nativeResources';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import LiveAudioStream from "@fugood/react-native-audio-pcm-stream";
@@ -138,9 +139,9 @@ export async function deleteSpeechModel(model) {
   if ((await getActiveSpeechModelId()) === model.id) await setActiveSpeechModelId(null);
 }
 
-export async function loadSpeechModel(model, onProgress) {
+async function loadSpeechModelUnsafe(model, onProgress) {
   if (context && contextModelId === model.id) return context;
-  await unloadSpeechModel();
+  await unloadSpeechModelUnsafe();
   const check = await verifySpeechModel(model);
   if (!check.verified) throw new Error("Сначала скачайте речевую модель");
   onProgress?.(0.1);
@@ -149,12 +150,14 @@ export async function loadSpeechModel(model, onProgress) {
   onProgress?.(1);
   return context;
 }
-export async function unloadSpeechModel() { if (!context) return; try { await releaseAllWhisper(); } finally { context = null; contextModelId = null; } }
+async function unloadSpeechModelUnsafe() { if (!context) return; try { await releaseAllWhisper(); } finally { context = null; contextModelId = null; } }
 
-export async function transcribeSpeechData(model, pcm16Data, onProgress) {
-  const whisper = await loadSpeechModel(model, (value) => onProgress?.(Math.round(value * 15)));
-  const { promise } = whisper.transcribeData(pcm16Data, { language: "en", translate: false, maxThreads: 4, nProcessors: 1, tokenTimestamps: true, maxLen: 1, wordThold: 0.01, beamSize: model.id === "speech-light" ? 3 : 5, temperature: 0, temperatureInc: 0, onProgress: (value) => onProgress?.(15 + Math.round(value * 0.85)) });
-  const result = await promise;
+async function transcribeSpeechDataUnsafe(model, pcm16Data, onProgress) {
+  const whisper = await loadSpeechModelUnsafe(model, (value) => onProgress?.(Math.round(value * 15)));
+  const { promise, stop } = whisper.transcribeData(pcm16Data, { language: "en", translate: false, maxThreads: 4, nProcessors: 1, tokenTimestamps: true, maxLen: 1, wordThold: 0.01, beamSize: model.id === "speech-light" ? 3 : 5, temperature: 0, temperatureInc: 0, onProgress: (value) => onProgress?.(15 + Math.round(value * 0.85)) });
+  activeTranscriptionStop = stop;
+  let result;
+  try { result = await promise; } finally { activeTranscriptionStop = null; }
   const nonSpeech = /[\[(](?:motor running|background noise|noise|music|silence|blank audio|inaudible)[\])]/gi;
   return { ...result, result: String(result?.result || "").replace(nonSpeech, " ").replace(/\s+/g, " ").trim() };
 }
@@ -249,3 +252,9 @@ export function alignSpeechWords(expectedText, heardText) {
   const score = Math.max(0, Math.round((correct / Math.max(1, expected.length)) * 100 - extras.length * 4));
   return { aligned, extras, score, expectedCount: expected.length, correctCount: correct };
 }
+
+let activeTranscriptionStop = null;
+registerResource('stt', unloadSpeechModelUnsafe, () => activeTranscriptionStop?.());
+export const loadSpeechModel = (model, onProgress) => withNativeResource('stt', () => loadSpeechModelUnsafe(model, onProgress));
+export const unloadSpeechModel = () => releaseNativeResource('stt');
+export const transcribeSpeechData = (model, pcm16Data, onProgress) => withNativeResource('stt', () => transcribeSpeechDataUnsafe(model, pcm16Data, onProgress));
