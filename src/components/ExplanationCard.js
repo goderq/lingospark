@@ -2,9 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Alert,Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme";
-import { useProgress } from "../store/ProgressContext";
+import { useProgressActions } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import {reportReasons} from '../utils/contentQuality';
+import { errorFeedback } from '../utils/errorFeedback';
+import { evaluateExercise } from '../utils/answer';
 import {
   explainSelectedOption,
   getExplanationExamples,
@@ -27,7 +29,7 @@ export default function ExplanationCard({
   accentColor,
   showStatus = true,
 }) {
-  const { recordExercise,reportContentIssue } = useProgress();
+  const { recordExercise,reportContentIssue } = useProgressActions();
   const [reportOpen,setReportOpen]=useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mistakeOpen, setMistakeOpen] = useState(false);
@@ -47,10 +49,11 @@ export default function ExplanationCard({
   const why = sections.find((section) => section.id === "why")?.text;
   const details = sections.filter((section) => detailIds.has(section.id));
   const color = accentColor || (correct ? colors.mint : colors.orange);
+  const feedback = useMemo(() => errorFeedback(item, selected), [item, selected]);
   const alternatives = useMemo(() => getAlternativeExplanations(item), [item]);
   const assemblyExplanation = useMemo(() => getAssemblyExplanation(item), [item]);
   const relevantReinforcement = useMemo(
-    () => getRelevantReinforcement(item, Boolean(reinforcement), { ...context, practiceVariant }),
+    () => getRelevantReinforcement(item, true, { ...context, practiceVariant }),
     [item, reinforcement, context, practiceVariant],
   );
   const practiceOptions = useMemo(
@@ -88,6 +91,8 @@ export default function ExplanationCard({
           <Text style={styles.short}>{why}</Text>
         </View>
       </View>}
+
+      {!correct && !!selected && <Section icon="git-compare-outline" title={feedback.title} text={feedback.text} color={colors.orange} />}
 
       <View style={styles.actions}>
         <Action
@@ -209,7 +214,7 @@ export default function ExplanationCard({
           <Text style={styles.practicePrompt}>{relevantReinforcement.prompt}</Text>
           {practiceOptions.map((option) => {
             const answered = Boolean(practiceSelected);
-            const right = option === relevantReinforcement.answer;
+            const right = evaluateExercise(relevantReinforcement, option).correct;
             const chosen = option === practiceSelected;
             return (
               <Pressable

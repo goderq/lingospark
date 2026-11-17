@@ -49,6 +49,36 @@ const common = {
   work: ["существительное / глагол", "I work in a small company.", "Я работаю в небольшой компании."],
   like: ["глагол / предлог", "I like this place.", "Мне нравится это место."],
   know: ["глагол", "Do you know the answer?", "Ты знаешь ответ?"],
+  list: ["существительное / глагол", "I made a list of things to buy.", "Я составил список покупок."],
+  place: ["существительное / глагол", "This is a quiet place to study.", "Это тихое место для учёбы."],
+  family: ["существительное", "My family lives near the sea.", "Моя семья живёт недалеко от моря."],
+  friend: ["существительное", "This is my friend Anna.", "Это моя подруга Анна."],
+  appointment: ["существительное", "I would like to make an appointment.", "Я хотел бы записаться на приём."],
+  journey: ["существительное", "The journey took two hours.", "Поездка заняла два часа."],
+  travel: ["глагол / существительное", "We travel by train.", "Мы путешествуем на поезде."],
+  ticket: ["существительное", "Where can I buy a ticket?", "Где можно купить билет?"],
+  station: ["существительное", "The station is across the road.", "Вокзал находится через дорогу."],
+  hotel: ["существительное", "Our hotel is near the airport.", "Наш отель находится рядом с аэропортом."],
+  room: ["существительное", "I booked a room for two nights.", "Я забронировал номер на две ночи."],
+  bill: ["существительное", "Could we have the bill, please?", "Можно нам счёт, пожалуйста?"],
+  menu: ["существительное", "Could I see the menu?", "Можно посмотреть меню?"],
+  order: ["существительное / глагол", "Are you ready to order?", "Вы готовы сделать заказ?"],
+  water: ["существительное / глагол", "Could I have some water?", "Можно мне воды?"],
+  coffee: ["существительное", "I'd like a coffee, please.", "Я хотел бы кофе, пожалуйста."],
+  price: ["существительное", "Does the price include breakfast?", "Завтрак включён в стоимость?"],
+  receipt: ["существительное", "Could I have a receipt?", "Можно мне чек?"],
+  refund: ["существительное / глагол", "I would like a refund.", "Я хотел бы получить возврат денег."],
+  size: ["существительное", "Do you have this in a smaller size?", "У вас есть это меньшего размера?"],
+  meeting: ["существительное", "The meeting starts at ten.", "Встреча начинается в десять."],
+  job: ["существительное", "I'm looking for a new job.", "Я ищу новую работу."],
+  experience: ["существительное / глагол", "I have three years of experience.", "У меня три года опыта."],
+  deadline: ["существительное", "Can we discuss the deadline?", "Можем обсудить срок сдачи?"],
+  advice: ["существительное", "Thank you for your advice.", "Спасибо за совет."],
+  information: ["существительное", "I need some information about the course.", "Мне нужна информация о курсе."],
+  opportunity: ["существительное", "This is a good opportunity to practise.", "Это хорошая возможность попрактиковаться."],
+  improve: ["глагол", "I want to improve my English.", "Я хочу улучшить свой английский."],
+  confident: ["прилагательное", "I feel more confident now.", "Теперь я чувствую себя увереннее."],
+  comfortable: ["прилагательное", "These shoes are comfortable.", "Эта обувь удобная."],
 };
 
 const functionWords = {
@@ -66,10 +96,9 @@ export function wordLearningDetails(english, translation = "") {
   if (functionWords.preposition.has(english)) return { partOfSpeech: "предлог" };
   if (functionWords.conjunction.has(english)) return { partOfSpeech: "союз" };
   const firstMeaning = translation.split(/[;,]/)[0].trim();
-  if (/ть(?:ся)?$/i.test(firstMeaning) || /(?:ing|ize|ise|fy)$/.test(english)) return { partOfSpeech: "глагол" };
-  if (/(?:ый|ий|ой|ая|яя|ое|ее|ые|ие)$/i.test(firstMeaning)) return { partOfSpeech: "прилагательное" };
-  if (/ly$/.test(english)) return { partOfSpeech: "наречие" };
-  return { partOfSpeech: "существительное / другое" };
+  if (/ть(?:ся)?$/i.test(firstMeaning)) return { partOfSpeech: "глагол", partOfSpeechInferred: true };
+  if (/(?:ый|ий|ой|ая|яя|ое|ее|ые|ие)$/i.test(firstMeaning)) return { partOfSpeech: "прилагательное", partOfSpeechInferred: true };
+  return { partOfSpeech: "Часть речи зависит от значения", partOfSpeechInferred: true };
 }
 
 export const curatedExampleCount = Object.keys(common).length;

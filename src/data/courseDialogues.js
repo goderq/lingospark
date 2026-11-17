@@ -60,3 +60,12 @@ export function getCourseDialogue(id) {
     options: [pairs[pairIndex][0], ...pairs.filter((_, i) => i !== pairIndex).slice(0, 2).map(pair => pair[0])],
   }));
 }
+
+export function getCoursePracticePhrases(id) {
+  if (id === 'greetings') return [{ english: 'My name is Anna.', russian: 'Меня зовут Анна.' }, { english: 'Nice to meet you too.', russian: 'Мне тоже приятно познакомиться.' }];
+  if (!courseSupplement[id]) return [];
+  return getCourseDialogue(id).map(step => {
+    const pair = courseSupplement[id].find(([english]) => english === step.answer);
+    return pair ? { english: pair[0], russian: pair[1] } : null;
+  }).filter(Boolean);
+}

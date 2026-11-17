@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { lessons } from '../data/course';
 import { learningJourneys } from '../data/learningJourney';
 import { isJourneyUnlocked } from '../utils/learningJourney';
+import { nextLearningStep } from '../utils/learningContinuation';
 import { useProgress } from '../store/ProgressContext';
 import useScreenTiming from '../components/useScreenTiming';
 import { colors } from '../theme';
@@ -17,6 +18,7 @@ export default function LearningHomeScreen({ onNavigate, onJourney, onCourse }) 
   const routes = useMemo(() => learningJourneys.filter(journey => (filter === 'Все' || journey.level === filter) && journey.title.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru').trim())), [filter, query]);
   const next = lessons.find(lesson => !completed.has(lesson.id));
   const sections = [
+    ['quickSession', 'timer-outline', 'Занятие на 10 минут', 'Тема, повторение и разговор в одном маршруте'],
     ['course', 'map-outline', 'Курсы', 'Последовательный путь A1–C1'],
     ['practice', 'flash-outline', 'Практика', 'Один экран, разные навыки и самопроверка'],
     ['review', 'library-outline', 'Слова', 'Сессии по уровню и словарь'],
@@ -44,10 +46,11 @@ export default function LearningHomeScreen({ onNavigate, onJourney, onCourse }) 
       const available = isJourneyUnlocked(progress, item.id);
       const state = progress.journeys?.[item.id];
       const count = item.stages.filter(stage => state?.stages?.[stage.id]?.completedAt).length;
-      return <Pressable disabled={!available} onPress={() => onJourney(item.id)} style={[s.card, !available && { opacity: 0.5 }]}>
+      const prerequisite = !available ? nextLearningStep(progress, item.id) : null;
+      return <Pressable accessibilityRole="button" onPress={() => onJourney(available ? item.id : prerequisite.topicId)} style={[s.card, !available && { borderColor: colors.textMuted }]}>
         <Text style={s.label}>{item.level} · {count}/5 этапов {completed.has(item.id) ? '· урок пройден' : ''}</Text>
         <Text style={s.heading}>{item.title}</Text><Text style={s.muted}>{item.goal}</Text>
-        <Text style={s.accent}>{!available ? 'Сначала пройди предыдущий урок' : state?.draft ? 'Продолжить с сохранённого места →' : 'Открыть тему →'}</Text>
+        <Text style={s.accent}>{!available ? `Нужно завершить «${prerequisite.title}» · ${prerequisite.stageTitle}. Перейти →` : state?.draft ? 'Продолжить с сохранённого места →' : 'Открыть тему →'}</Text>
       </Pressable>;
     }}
     ListEmptyComponent={<Text style={s.muted}>Темы не найдены. Попробуй другой уровень или запрос.</Text>}

@@ -8,12 +8,13 @@ import SyncStatus from '../components/SyncStatus';
 import { ProgressBar } from '../components/UI';
 import { colors } from '../theme';
 
-export default function HomeScreen({ onLesson, onJourney, onRetention, onReview, onDictation, onMistakes, onAdaptive, onLearningHub, onLingoWorld, onSearch, onBookmarks, onAccount, onSyncDetails, recentScreens = [], onRecent }) {
+export default function HomeScreen({ onLesson, onJourney, onRetention, onReview, onDictation, onMistakes, onAdaptive, onLearningHub, onLingoWorld, onSearch, onBookmarks, onAccount, onSyncDetails, onQuickSession, recentScreens = [], onRecent }) {
   const progress = useProgressSelector(({ progress: p }) => ({
     name: p.name, streak: p.streak, completed: p.completed, retention: p.retention,
     journeys: p.journeys, lessonDraft: p.lessonDraft, mistakes: p.mistakes,
     dailyActions: p.dailyActions, dailyXP: p.dailyXP, dailyGoal: p.dailyGoal,
     reviewStats: p.reviewStats, reviewQueue: p.reviewQueue,
+    quickSession: p.quickSession,
   }));
   const { isUnlocked } = useProgressActions();
   const draft = lessons.find(item => item.id === progress.lessonDraft?.lessonId && isUnlocked(item));
@@ -26,6 +27,7 @@ export default function HomeScreen({ onLesson, onJourney, onRetention, onReview,
       <Pressable accessibilityLabel="Закладки" onPress={onBookmarks} style={s.icon}><Ionicons name="bookmark-outline" size={23} color={colors.orange} /></Pressable>
     </View>
     <SyncStatus onAccount={onAccount} onDetails={onSyncDetails} />
+    <Pressable accessibilityRole="button" onPress={onQuickSession} style={[s.card, { borderWidth: 1, borderColor: colors.purple }]}><Text style={s.heading}>{progress.quickSession && progress.quickSession.step < 3 ? 'Продолжить короткое занятие' : 'Есть 10 минут?'}</Text><Text style={s.muted}>Этап темы → повторение → письменный разговор. Начать одной кнопкой →</Text></Pressable>
     <DailyLearningPlan progress={progress} next={next} onLesson={onLesson} onJourney={onJourney} onRetention={onRetention} onMistakes={onMistakes} onReview={onReview} onDictation={onDictation} onLearningHub={onLearningHub} />
     <View style={s.card}><Text style={s.heading}>Цель дня · {progress.dailyXP}/{progress.dailyGoal} XP</Text><ProgressBar value={progress.dailyXP / Math.max(1, progress.dailyGoal)} /><Text style={s.muted}>Серия занятий: {progress.streak} дн. XP показывает активность, а не уровень владения языком.</Text></View>
     <Text style={s.heading}>Выбери занятие</Text>

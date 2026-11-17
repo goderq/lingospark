@@ -10,10 +10,11 @@ import { useProgress } from '../store/ProgressContext';
 import { PrimaryButton } from '../components/UI';
 import { colors } from '../theme';
 import useScreenTiming from '../components/useScreenTiming';
+import ExplanationCard from '../components/ExplanationCard';
 
 const skillNames = { mixed: 'Все навыки', grammar: 'Грамматика', vocabulary: 'Выражения', listening: 'Слух', writing: 'Письмо' };
 
-export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, sessionKey, title, onComplete }) {
+export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, sessionKey, title, onComplete }) {
   useScreenTiming('practice_open');
   const { progress, savePracticeDraft, completePractice, clearPracticeDraft } = useProgress();
   const draftKey = sessionKey || (review ? 'unified-review' : initialMode === 'exam' ? 'common-exam' : 'common-practice');
@@ -27,6 +28,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [finished, setFinished] = useState(false);
+  const [resultDetail, setResultDetail] = useState(null);
   const scroll = useRef(null);
   const completedRef = useRef(null);
   const current = session?.deck[session.index];
@@ -43,12 +45,12 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
       let deck;
       if (review) {
         const { extendedWordBank } = await import('../data/wordBank');
-        deck = buildUnifiedReview(progress, [...extendedWordBank, ...(progress.customWords || [])], lessons);
+        deck = buildUnifiedReview(progress, [...extendedWordBank, ...(progress.customWords || [])], lessons, Date.now(), reviewLimit);
       } else deck = presetDeck || buildPracticeDeck({ level, skill, topicId, size });
       deck = deck.map(item => ({ ...item, type: item.type || (item.options ? 'choice' : 'translate') }));
       if (!deck.length) { setError(review ? 'На сегодня очередь пуста. Новые задания появятся после занятий и нужного перерыва.' : 'Для этого сочетания пока нет заданий. Выбери другую тему или навык.'); return; }
       setFinished(false);
-      setSession({ version: 1, id: `practice-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: presetDeck ? 'exam' : review ? 'review' : mode, deck, index: 0, input: '', built: [], checked: false, responses: [], assisted: false, help: false, seed: Math.floor(Math.random() * 1000000) });
+      setSession({ version: 1, id: `practice-${Date.now()}-${Math.random().toString(36).slice(2)}`, mode: presetDeck ? presetMode : review ? 'review' : mode, deck, index: 0, input: '', built: [], checked: false, responses: [], assisted: false, help: false, seed: Math.floor(Math.random() * 1000000) });
     } catch (cause) { setError(cause.message || 'Не удалось подготовить задания'); }
     finally { setBusy(false); }
   };
@@ -79,7 +81,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
       {!session ? <>
         <Text style={s.title}>{title || (review ? 'Повтори в нужный момент' : 'Одна практика — разные навыки')}</Text>
         <Text style={s.text}>{review ? 'Здесь встречаются ошибки, слова, сохранённые фразы и проверки памяти курса. Вопросы выбираются по сроку. Ответы откроются после всей сессии.' : 'В обучении можно открыть помощь. В самопроверке ответов и подсказок нет до конца. Результат с помощью сохраняется отдельно.'}</Text>
-        {!!presetDeck && <Text style={s.text}>{presetDeck.length} вопросов. Подсказки, правильные ответы и разбор скрыты до конца. Результат учебной проверки не подтверждает CEFR или официальный IELTS Band.</Text>}
+        {!!presetDeck && <Text style={s.text}>{presetDeck.length} вопросов. {presetMode === 'learn' ? 'Письменная практика с подсказками и разбором; устная речь не оценивается.' : 'Подсказки, правильные ответы и разбор скрыты до конца. Результат учебной проверки не подтверждает CEFR или официальный IELTS Band.'}</Text>}
         {!review && !presetDeck && <>
           <Chips values={['learn', 'exam']} selected={mode} onSelect={setMode} labels={{ learn: 'Обучение', exam: 'Самопроверка' }} />
           <Chips values={['A1', 'A2', 'B1', 'B2', 'C1']} selected={level} onSelect={value => { setLevel(value); setTopicId('all'); }} />
@@ -100,6 +102,8 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
           <Text style={s.heading}>{item.prompt}</Text><Text style={s.text}>Твой ответ: {answer.input}</Text>
           <Text style={correct ? s.success : s.warning}>Ответ: {item.answer}{answer.assisted ? ' · с помощью' : ''}</Text>
           {!!item.explanation && <Text style={s.text}>{item.explanation}</Text>}
+          <Pressable onPress={() => setResultDetail(value => value === i ? null : i)} style={s.back}><Text style={s.link}>{resultDetail === i ? 'Свернуть разбор' : 'Разобрать ответ'}</Text></Pressable>
+          {resultDetail === i && <ExplanationCard item={item} selected={answer.input} correct={correct} showStatus={false} />}
         </View>)}
         <PrimaryButton title={presetDeck ? 'Завершить' : 'К настройкам практики'} onPress={presetDeck ? onClose : () => { setSession(null); setFinished(false); }} />
       </> : <>
@@ -115,7 +119,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
         </> : <TextInput editable={!session.checked} value={session.input} onChangeText={input => setSession({ ...session, input })} placeholder={/[а-яё]/i.test(current.answer) ? 'Ответ на русском…' : 'Ответ на английском…'} placeholderTextColor={colors.textMuted} autoCorrect={false} autoCapitalize="none" returnKeyType="done" onSubmitEditing={Keyboard.dismiss} style={s.input} />}
         {!session.checked && session.mode === 'learn' && <PrimaryButton title={session.help ? 'Помощь открыта' : 'Открыть помощь'} color={colors.cardLight} onPress={() => setSession({ ...session, help: true, assisted: true })} />}
         {session.help && <Text style={s.warning}>Пример: {current.answer}. Этот ответ будет отмечен как выполненный с помощью.</Text>}
-        {feedback && <View style={s.card}><Text style={correct ? s.success : s.warning}>{correct ? 'Верно!' : `Ответ: ${current.answer}`}</Text><Text style={s.text}>{current.explanation || 'Сравни смысл и форму ответа с исходным заданием.'}</Text></View>}
+        {feedback && <ExplanationCard key={current.id} item={current} selected={typed} correct={correct} />}
         {!session.checked && <Pressable onPress={Keyboard.dismiss} style={s.back}><Text style={s.link}>Скрыть клавиатуру</Text></Pressable>}
         <PrimaryButton disabled={!session.checked && !typed.trim()} title={session.checked ? session.index + 1 === session.deck.length ? 'Завершить и посмотреть разбор' : 'Следующий вопрос' : 'Ответить'} onPress={session.checked ? next : check} />
         <Pressable onPress={() => Alert.alert('Начать заново?', 'Текущий черновик будет удалён. Результат незавершённой попытки не засчитывается.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Начать заново', style: 'destructive', onPress: () => { clearPracticeDraft(draftKey); setSession(null); } }])} style={s.back}><Text style={s.link}>Сменить настройки</Text></Pressable>

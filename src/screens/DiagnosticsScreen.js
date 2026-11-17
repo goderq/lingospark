@@ -7,11 +7,12 @@ import {
   StyleSheet,
   Text,
   View,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as Clipboard from 'expo-clipboard';
-import {performanceSummary} from '../utils/performance';
+import {performanceSummary, resetPerformanceSamples} from '../utils/performance';
 import { nativeResourceState } from '../services/nativeResources';
 import { useAuth } from "../store/AuthContext";
 import { useCloudSync } from "../store/CloudSyncContext";
@@ -73,7 +74,7 @@ export default function DiagnosticsScreen({ onClose }) {
 
   const forceRestore = () => Alert.alert(
     "Восстановить из облака?",
-    "Локальный прогресс будет заменён последней облачной копией этого аккаунта.",
+    "Приложение проверит облачную копию и покажет сравнение, если она отличается. Замена требует выбора версии.",
     [
       { text: "Отмена", style: "cancel" },
       { text: "Восстановить", onPress: restoreFromCloud },
@@ -130,6 +131,10 @@ export default function DiagnosticsScreen({ onClose }) {
         <Section title="БЫСТРОДЕЙСТВИЕ · ТЕКУЩИЙ ЗАПУСК">
           <Row icon="hardware-chip" label="Очередь локальных движков" value={`Ожидают: ${resources.pending} · задача: ${resources.active || 'нет'}`} />
           {!timings.length&&<Text style={styles.value}>Замеры появятся после открытия экранов и прослушивания фраз.</Text>}
+          <View style={styles.actions}>
+            <Action title="Скопировать замеры" icon="copy" onPress={async () => { await Clipboard.setStringAsync(JSON.stringify({ version: Constants.expoConfig?.version, platform: Platform.OS, recordedAt: new Date().toISOString(), timings: performanceSummary(), resources: nativeResourceState(), note: 'Замеры текущего запуска; не измеряют память или FPS.' }, null, 2)); Alert.alert('Скопировано', 'Отчёт содержит длительности и состояние очереди моделей.'); }} />
+            <Action title="Новый замер" icon="refresh" onPress={() => { resetPerformanceSamples(); setTimings([]); }} />
+          </View>
           {timings.map((entry)=><Row key={entry.name} icon="speedometer" label={({startup_js:'Запуск JavaScript',words_open:'Экран слов',dictionary_open:'Открытие словаря',dictionary_filter:'Поиск в словаре',speech_start:'Озвучка: вся задержка',speech_prepare:'Озвучка: подготовка',speech_stop:'Озвучка: остановка',speech_native_start:'Озвучка: нативный запуск',practice_open:'Экран практики',journey_open:'Учебная тема',learning_home_open:'Экран обучения',native_queue_wait:'Ожидание движка',ai_first_token:'Первый токен ИИ',progress_serialize:'Подготовка сохранения'})[entry.name] || entry.name} value={`${entry.last} мс · 95% до ${entry.p95} мс · замеров ${entry.count}`}/>)}
           <Text style={styles.value}>Последние 60 замеров. Открытие экрана — от начала отрисовки до следующего кадра. Запуск JS не включает загрузку iOS. Озвучка — от нажатия до события начала речи.</Text>
         </Section>

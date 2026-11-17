@@ -41,6 +41,7 @@ jobs:
         run: |
           npm run test:architecture
           npm run test:practice
+          npm run test:learning-quality
           npm run test:exercise-engine
           npm run test:cloud-sync
           npm run explanations:audit

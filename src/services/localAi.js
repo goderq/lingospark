@@ -1,6 +1,7 @@
 import { withNativeResource, registerResource, releaseNativeResource } from './nativeResources';
 import { budgetMessages, recentTranscript } from '../utils/contextBudget';
 import { now, recordTiming } from '../utils/performance';
+import { dialogueGuidance } from '../utils/conversationCoach';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { initLlama, releaseAllLlama } from "@pocketpalai/llama.rn";
@@ -774,7 +775,7 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
   const draft = await completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext }, ...history],
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext + dialogueGuidance(messages) }, ...history],
       n_predict: model.id === "light" ? 190 : 280,
       temperature: 0.76,
       top_k: 40,

@@ -1,6 +1,7 @@
 import { evaluateExercise } from '../utils/answer';
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { courseTutorContext } from '../utils/learningJourney';
+import { courseDialogueEvidence, learnerTurns } from '../utils/conversationCoach';
 import {
   ActivityIndicator,
   Alert,
@@ -404,10 +405,15 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
   const [topic, setTopic] = useState(TOPICS[0]);
   const [coursePractice, setCoursePractice] = useState(null);
   const [lessonHelp, setLessonHelp] = useState(0);
+  const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
+  useEffect(() => { setGoalSummaryOpen(false); }, [coursePractice?.topicId, coursePractice?.requestId]);
   useEffect(() => { setLessonHelp(0); }, [coursePractice?.topicId, coursePractice?.requestId]);
   const [dialogueMode, setDialogueMode] = useState("conversation");
   const [mission, setMission] = useState(null);
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
+  const evidenceKey = learnerTurns(messages).map(item => item.content).join('\u0000');
+  const dialogueEvidence = useMemo(() => coursePractice?.topicId ? courseDialogueEvidence(coursePractice.topicId, messages) : [], [coursePractice?.topicId, evidenceKey]);
+  const dialogueTurns = useMemo(() => learnerTurns(messages).length, [messages]);
   const [sessionId, setSessionId] = useState(`ai-${Date.now()}`);
   const [sessions, setSessions] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -906,13 +912,21 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         </ScrollView>
       </View>
 
-      {!keyboardVisible && !!courseTutorContext(coursePractice, level, topic) && <View style={{ padding: 16, backgroundColor: colors.card, gap: 9 }}>
+      {!keyboardVisible && !!courseTutorContext(coursePractice, level, topic) && <ScrollView style={{ maxHeight: 240, flexGrow: 0 }} contentContainerStyle={{ padding: 16, backgroundColor: colors.card, gap: 9 }}>
         <Text style={{ color: colors.mint, fontWeight: '800' }}>Цель: {coursePractice.goal || topic}</Text>
         <Text style={{ color: colors.textMuted, lineHeight: 21 }}>Помощь открывается по шагам; разговор не засчитывает прохождение курса.</Text>
+        {dialogueTurns >= 2 && <Pressable onPress={() => setGoalSummaryOpen(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{goalSummaryOpen ? 'Свернуть итог по цели' : 'Посмотреть итог по цели'}</Text></Pressable>}
+        {dialogueTurns >= 2 && goalSummaryOpen && <>
+          <Text style={{ color: 'white', fontWeight: '700' }}>Что получилось применить</Text>
+          {dialogueEvidence.map(item => <Text key={item.prompt} style={{ color: item.matched ? colors.mint : colors.textMuted, lineHeight: 22 }}>{item.matched ? '✓ Есть совпадение с образцом' : '○ Пока нет совпадения с образцом'}: {item.prompt}</Text>)}
+          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Проверяются только подготовленные формулировки в твоих репликах. Другой правильный ответ может не совпасть; это не оценка качества всего диалога.</Text>
+          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !!coursePractice.goalReached }} onPress={() => setCoursePractice(value => ({ ...value, goalReached: !value.goalReached }))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{coursePractice.goalReached ? '✓ По моей оценке, цель разговора достигнута' : 'Отметить: я смог добиться цели разговора'}</Text></Pressable>
+          {!!coursePractice.phrases?.length && <Text style={{ color: 'white', lineHeight: 23 }}>Полезные выражения: {coursePractice.phrases.map(item => item.english).join(' · ')}</Text>}
+        </>}
         <Pressable onPress={() => setLessonHelp(value => Math.min(3, value + 1))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontWeight: '700' }}>{lessonHelp === 0 ? 'Нужен намёк' : lessonHelp === 1 ? 'Покажи начало фразы' : 'Покажи пример'}</Text></Pressable>
         {lessonHelp > 0 && <Text style={{ color: 'white', lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
         {lessonHelp >= 3 && !!coursePractice.phrases?.[0] && <Pressable onPress={() => addReviewPhrase({ ...coursePractice.phrases[0], topic })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>Добавить эту фразу в повторение</Text></Pressable>}
-      </View>}
+      </ScrollView>}
       <View style={styles.modeStrip}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeChips}>
           {DIALOGUE_MODES.map((item) => {

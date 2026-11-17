@@ -13,6 +13,7 @@ import { lessons } from "../data/course";
 import { useProgress } from "../store/ProgressContext";
 import { colors } from "../theme";
 import { ProgressBar, XPBadge } from "../components/UI";
+import { nextLearningStep } from '../utils/learningContinuation';
 const baseLevel = (value) => value.replace("+", "");
 const levels = ["Все", "A1", "A2", "B1", "B2", "C1"];
 export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialLevel = 'Все' }) {
@@ -189,8 +190,7 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
               onLayout={(event) => {
                 if (isCurrent) currentY.current = event.nativeEvent.layout.y;
               }}
-              disabled={!unlocked}
-              onPress={() => onLesson(lesson)}
+              onPress={() => onLesson(unlocked ? lesson : lessons.find(item => item.id === nextLearningStep(progress, lesson.id).topicId))}
               style={({ pressed }) => [
                 s.lesson,
                 isCurrent && s.currentLesson,
@@ -231,7 +231,7 @@ export default function CourseScreen({ onLesson, onCheckpoint, onClose, initialL
                       ? `${progress.retention?.[lesson.id]?.verifiedAt ? 'Закреплено' : 'Пройдено'} · ${"⭐".repeat(progress.lessonResults[lesson.id].stars || 1)} · ${progress.lessonResults[lesson.id].bestAccuracy || progress.lessonResults[lesson.id].accuracy}%`
                       : progress.retention?.[lesson.id]?.verifiedAt ? 'Закреплено' : 'Пройдено'
                     : !unlocked
-                      ? "Сначала пройди предыдущий урок"
+                      ? `Перейти к «${current.title}» · ${nextLearningStep(progress, lesson.id).stageTitle}`
                       : lesson.subtitle}
                 </Text>
               </View>

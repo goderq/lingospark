@@ -1,6 +1,7 @@
 import { readWordSession } from '../utils/wordSession';
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import WordMeanings from '../components/WordMeanings';
+import { wordLearningDetails } from '../data/wordLearningData';
 import { wordEstablished } from '../utils/wordSchedule';
 import { sampleWithoutReplacement } from '../utils/sampling';
 import {
@@ -506,14 +507,15 @@ export default function ReviewScreen() {
 
   const card = deck[index];
   const customTranslation = preferences.customTranslations[card.id];
-  const activeCard = customTranslation
-    ? {
-        ...card,
+  const activeCard = {
+    ...card,
+    ...wordLearningDetails(card.english, customTranslation || card.russian),
+    ...(customTranslation ? {
         russian: customTranslation,
         fullTranslation: customTranslation,
         translations: [customTranslation],
-      }
-    : card;
+      } : {}),
+  };
   const englishToRussian = card.direction === "en-ru";
   const prompt = englishToRussian ? activeCard.english : activeCard.russian;
   const expected = englishToRussian ? activeCard.russian : activeCard.english;
@@ -668,7 +670,7 @@ export default function ReviewScreen() {
                 <Text style={styles.transcription}>{activeCard.transcription}</Text>
               )}
               {!!activeCard.partOfSpeech && (
-                <Text style={styles.partOfSpeech}>{activeCard.partOfSpeech}</Text>
+                <Text style={styles.partOfSpeech}>{activeCard.partOfSpeechInferred && !activeCard.partOfSpeech.startsWith('Часть речи') ? `По переводу: ${activeCard.partOfSpeech.toLowerCase()}` : activeCard.partOfSpeech}</Text>
               )}
               <View style={styles.divider} />
               <Text style={styles.russianWord}>{activeCard.russian}</Text>

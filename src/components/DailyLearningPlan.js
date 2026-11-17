@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { lessons } from '../data/course';
 import { retentionSummary } from '../utils/retention';
 import { colors } from '../theme';
+import { nextLearningStep } from '../utils/learningContinuation';
 
 export default function DailyLearningPlan({ progress, next, onLesson, onRetention, onMistakes, onReview, onDictation, onLearningHub, onJourney }) {
   const memory = retentionSummary(progress, lessons);
@@ -12,9 +13,10 @@ export default function DailyLearningPlan({ progress, next, onLesson, onRetentio
   const today = new Date().toISOString().slice(0, 10);
   const fullTopic = !allDone && onJourney && progress.lessonDraft?.lessonId !== next.id;
   const actions = progress.dailyActions?.date === today ? progress.dailyActions : {};
+  const continuation = nextLearningStep(progress, next.id);
   const steps = [
     { title: allDone ? 'Выбрать новую практику' : next.title,
-      reason: allDone ? 'Все уроки курса пройдены — попробуй другой навык в каталоге.' : fullTopic ? 'Пройди тему целиком: объяснение, слова, слух, фразы и разговор.' : progress.lessonDraft?.lessonId === next.id ? 'У тебя есть незаконченный урок. Продолжи с сохранённого места.' : 'Следующий урок по порядку: предыдущие темы уже пройдены.',
+      reason: allDone ? 'Все уроки курса пройдены — попробуй другой навык в каталоге.' : fullTopic ? `${continuation.resumed ? 'Продолжи сохранённый этап' : 'Следующий этап'}: ${continuation.stageTitle}.` : progress.lessonDraft?.lessonId === next.id ? 'У тебя есть незаконченный урок. Продолжи с сохранённого места.' : 'Следующий урок по порядку: предыдущие темы уже пройдены.',
       done: actions.lessons > 0, action: allDone ? onLearningHub : fullTopic ? () => onJourney(next.id) : () => onLesson(next) },
     memory.eligible.length || Object.keys(progress.reviewStats || {}).length || Object.keys(progress.reviewQueue || {}).length ? { title: 'Единое повторение',
       reason: memory.due.length ? `Пора проверить память: ${memory.due.length} уроков. В очередь также попадут слова и ошибки по сроку.` : 'Слова, фразы и ошибки выбираются по сроку. Если очередь пуста, приложение предложит отдохнуть.',

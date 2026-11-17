@@ -1,6 +1,7 @@
 import { findReinforcement } from "../data/reinforcement.js";
 import { assemblyBlocks } from '../data/assemblyNotes.js';
-import { closestAnswerAnalysis, normalizeAnswer } from './answer.js';
+import { closestAnswerAnalysis, normalizeAnswer, evaluateExercise } from './answer.js';
+import { errorFeedback } from './errorFeedback.js';
 
 const clean = (value) => String(value || "").trim();
 const lower = (value) => clean(value).toLocaleLowerCase("ru");
@@ -24,9 +25,9 @@ const signalExplanation = (item) => {
   const prompt = lower(item?.prompt);
   const answer = lower(item?.answer);
   const joined = `${prompt} ${answer}`;
-  if (/yesterday|ago|last (week|year|night|month)|in 20\d\d/.test(prompt))
+  if (/yesterday|\bago\b|last (week|year|night|month)/.test(prompt))
     return "Слова yesterday, ago и last называют завершённый момент в прошлом, поэтому обычно требуют Past Simple.";
-  if (/since|for .*year|for .*month|already|yet|just|ever|never/.test(joined))
+  if (/\b(?:have|has)\b/.test(joined) && /\bsince\b|\bfor\s+(?:\d+|several|many|two|three|four|five|six|ten|a|an)\s+(?:days?|weeks?|months?|years?|hours?|minutes?)\b|\b(?:already|yet|ever|never)\b/.test(joined))
     return "Since, for, already, yet, just, ever и never часто связывают прошлое с настоящим; проверь форму have/has + V3.";
   if (/while|at that moment|when .* was/.test(prompt))
     return "Контекст описывает процесс в конкретный момент прошлого; для фона обычно используется was/were + V-ing.";
@@ -38,7 +39,7 @@ const signalExplanation = (item) => {
     return "В условном предложении формы в части с условием и в результате работают парой; нельзя выбирать их независимо друг от друга.";
   if (/a\/an|article|артикл|\ba\b|\ban\b|\bthe\b/.test(joined) && shortAnswer(answer))
     return "Артикль зависит от того, упоминается предмет впервые, известен ли он собеседникам и начинается ли следующее слово с гласного звука.";
-  if (/modal|should|must|could|would|might|can /.test(joined))
+  if (/\b(?:modal|should|must|could|would|might|can)\b/.test(joined))
     return "После модального глагола используется базовая форма смыслового глагола без to; сам модальный глагол передаёт возможность, обязанность или вежливость.";
   if (/passive|was .*ed|were .*ed|been .*ed/.test(joined))
     return "В пассивной конструкции важен результат действия: be ставится в нужное время, а смысловой глагол — в третью форму.";
@@ -66,27 +67,13 @@ const ruleFor = (item, context) => {
 };
 
 export const explainSelectedOption = (item, context = {}) => {
-  const selected = clean(context.selected);
-  const answer = clean(item?.answer || context.answer);
-  if (!selected || lower(selected) === lower(answer))
-    return "Ответ совпадает и по смыслу, и по форме. Всё предложение после подстановки остаётся грамматически цельным.";
-  if (item.type === 'build') return explainAssemblyAttempt(item, selected);
-  if (item?.optionExplanations?.[selected]) return clean(item.optionExplanations[selected]);
-  if ((isRussian(selected) && hasLatin(answer)) || (hasLatin(selected) && isRussian(answer)))
-    return `«${selected}» написано не на том языке, который требуется в этом задании. Здесь нужен ответ «${answer}» без добавления перевода на другом языке.`;
-  if (item?.type === "translate")
-    return `Сравни «${selected}» с «${answer}». Проверь, не потеряны ли отрицание, время, предлог, участник действия или оттенок вежливости. Даже знакомые слова не компенсируют изменение смысла.`;
-  if (item?.type === "build")
-    return `В варианте «${selected}» слова выбраны, но их связи нарушены. Опорный порядок для этого задания: «${answer}». Найди подлежащее и поставь рядом правильную глагольную группу.`;
-  if (clean(item?.prompt).includes("___"))
-    return `После подстановки «${selected}» конструкция не согласуется с окружением пропуска. «${answer}» подходит к словам по обе стороны и образует правильную форму.`;
-  return `«${selected}» может выглядеть правдоподобно, но меняет значение или звучит неестественно в этой ситуации. Точный вариант здесь — «${answer}».`;
+  return errorFeedback(item, context.selected).text;
 };
 
 export function getAlternativeExplanations(item = {}) {
   // In build tasks options are word tiles, not competing complete answers.
   if (item.type === 'build' || item.type === 'translate') return [];
-  return (item.options || []).filter((option) => option !== item.answer).map((option) => ({
+  return (item.options || []).filter((option) => !evaluateExercise(item, option).correct).map((option) => ({
     title: `Почему не «${option}»`,
     text: explainSelectedOption(item, { selected: option }),
   }));
@@ -165,9 +152,7 @@ const memoryTip = (item, context) => {
 export function getExplanationSections(item = {}, context = {}) {
   const answer = clean(item.answer || context.answer);
   const base = clean(item.explanation || item.hint || context.explanation);
-  const why = base
-    ? `${base.replace(/\.$/, "")}. В этом вопросе подсказка напрямую приводит к варианту «${answer}».`
-    : `Правильный ответ — «${answer}»: он сохраняет требуемый смысл и подходит к грамматической конструкции целиком.`;
+  const why = base || `Допустимый образец: «${answer}». Сопоставь его с исходным заданием; без подготовленного пояснения нельзя достоверно назвать причину отличий.`;
   return [
     { id: "result", title: "Результат", text: answer || "Ответ определяется полным контекстом задания." },
     { id: "why", title: "Почему это правильно", text: why },
@@ -186,7 +171,7 @@ export function getExplanationExamples(item = {}, context = {}) {
   const correctExample = filledExample({ ...item, answer });
   const examples = [];
   if (correctExample) examples.push({ label: "Правильный пример", text: correctExample });
-  if (prompt.includes("___") && selected && lower(selected) !== lower(answer)) {
+  if (prompt.includes("___") && selected && !evaluateExercise(item, selected).correct) {
     examples.push({
       label: "Сравни",
       text: `${prompt.replace(/___/g, selected)} ✕\n${prompt.replace(/___/g, answer)} ✓`,
@@ -203,7 +188,7 @@ export function getExplanationExamples(item = {}, context = {}) {
 // screens supplied the next deck item here, which could switch from “Hello” to
 // “What is your name?” while still being presented as reinforcement.
 export function getRelevantReinforcement(item = {}, enabled = true, context = {}) {
-  if (!enabled || item.type !== "choice") return null;
+  if (!enabled) return null;
   const linked = findReinforcement(item, context);
   if (linked && linked.prompt !== item.prompt) {
     return { ...linked, id: `${item.id || item.prompt}-linked`, sourceId: item.id || null, isNew: true };

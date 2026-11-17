@@ -8,6 +8,8 @@ import { balancedOptions } from '../utils/shuffle';
 import { speak, stopSpeech } from '../utils/speech';
 import { useProgress } from '../store/ProgressContext';
 import { colors } from '../theme';
+import ExplanationCard from '../components/ExplanationCard';
+import { getCoursePracticePhrases } from '../data/courseDialogues';
 import useScreenTiming from '../components/useScreenTiming';
 
 export default function LearningJourneyScreen({ topicId = 'greetings', onClose, onCourse, onTest, onRetention, onAI, onWorld }) {
@@ -43,14 +45,14 @@ export default function LearningJourneyScreen({ topicId = 'greetings', onClose, 
       <Button title="Проверки памяти и расписание" onPress={onRetention} secondary />
       <Text style={s.stepTitle}>Примени в разговоре</Text>
       <Text style={s.muted}>ИИ получит тему и цель этой встречи. Модель устанавливается по выбору в разделе ИИ. Учебные этапы выше работают без неё.</Text>
-      <Button title="Продолжить эту тему с ИИ" onPress={() => onAI({ ...journey.ai, topicId, goal: journey.goal, focusMistakeIds: (progress.mistakes || []).filter(item => item.topic === journey.title).slice(0, 3).map(item => item.id), phrases: journey.stages.find(stage => stage.id === 'dialogue').exercises.map(item => ({ english: item.answer, russian: item.prompt })) })} />
+      <Button title="Продолжить эту тему с ИИ" onPress={() => onAI({ ...journey.ai, topicId, goal: journey.goal, focusMistakeIds: (progress.mistakes || []).filter(item => item.topic === journey.title).slice(0, 3).map(item => item.id), phrases: getCoursePracticePhrases(topicId) })} />
       <Button title="Открыть «Английскую жизнь»" onPress={onWorld} secondary />
       <Text style={s.muted}>Примени изученные выражения в подходящей сцене мира. Прохождение мира не засчитывается автоматически.</Text>
     </ScrollView>
   </View>;
 }
 
-function JourneyStage({ journey, stage, onClose }) {
+export function JourneyStage({ journey, stage, onClose, onDone, onComplete }) {
   const { progress, saveJourneyDraft, completeJourneyStage } = useProgress();
   const draft = progress.journeys?.[journey.id]?.draft;
   const initial = readJourneyDraft(journey.id, stage.id, draft);
@@ -87,6 +89,7 @@ function JourneyStage({ journey, stage, onClose }) {
       const grade = gradeJourneyStage(journey.id, stage.id, responses);
       completeJourneyStage(journey.id, stage.id, responses, attemptId);
       setResult(grade);
+      onComplete?.(grade);
     } else {
       setIndex(index + 1); setInput(''); setBuilt([]); setChecked(false);
     }
@@ -97,7 +100,7 @@ function JourneyStage({ journey, stage, onClose }) {
       {result ? <>
         <Text style={s.title}>{result.passed ? 'Этап пройден ✓' : 'Давай ещё потренируемся'}</Text>
         <Text style={s.muted}>Верно {result.correct} из {result.total} · {result.accuracy}%. Для следующего этапа нужно от 80%. Это результат заданий, а не оценка уровня языка.</Text>
-        <Button title="Вернуться к маршруту" onPress={onClose} />
+        <Button title={onDone ? 'Продолжить короткое занятие' : 'Вернуться к маршруту'} onPress={onDone ? () => onDone(result) : onClose} />
       </> : teaching ? <>
         <Text style={s.muted}>{stage.intro}</Text>
         {stage.cards.some(card => card.detail) && <Button title={details ? 'Объясни проще' : 'Подробнее и с нюансами'} onPress={() => setDetails(!details)} secondary />}
@@ -122,10 +125,7 @@ function JourneyStage({ journey, stage, onClose }) {
           <View style={s.tiles}>{options.map((word, tile) => <Pressable key={tile} disabled={checked || built.includes(tile)} onPress={() => setBuilt([...built, tile])} style={[s.tile, built.includes(tile) && { opacity: 0.25 }]}><Text style={s.body}>{word}</Text></Pressable>)}</View>
         </> : <TextInput value={input} onChangeText={setInput} editable={!checked} placeholder="Напиши по-английски…" placeholderTextColor={colors.textMuted} style={s.input} autoCorrect={false} autoCapitalize="none" returnKeyType="done" onSubmitEditing={Keyboard.dismiss} />}
         {!checked && <Button title="Скрыть клавиатуру" onPress={Keyboard.dismiss} secondary />}
-        {checked && <View style={s.card}>
-          <Text style={[s.stepTitle, { color: evaluation.correct ? colors.mint : colors.orange }]}>{evaluation.correct ? 'Верно!' : `Правильная фраза: ${exercise.answer}`}</Text>
-          <Text style={s.body}>{exercise.explanation}</Text>
-        </View>}
+        {checked && <ExplanationCard key={exercise.id} item={exercise} selected={current} correct={evaluation.correct} />}
         <Button title={checked ? index + 1 === stage.exercises.length ? 'Результат этапа' : 'Дальше' : 'Проверить'} disabled={!current.trim()} onPress={checked ? next : check} />
       </>}
     </ScrollView>

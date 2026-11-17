@@ -101,6 +101,7 @@ const FullIeltsMockScreen = lazyNamed(() => import("./src/screens/PremiumScreens
 
 const RecoveryScreen = React.lazy(() => import("./src/screens/RecoveryScreen"));
 const CourseTestScreen = React.lazy(() => import("./src/screens/CourseTestScreen"));
+const QuickSessionScreen = React.lazy(() => import("./src/screens/QuickSessionScreen"));
 const PracticeScreen = React.lazy(() => import("./src/screens/PracticeScreen"));
 
 const NAV_KEY = "@lingospark/navigation-v1";
@@ -199,6 +200,7 @@ function AppContent() {
       learn: 'Обучение',
       world: 'Английская жизнь',
       journey: 'Учебная тема',
+      quickSession: 'Занятие на 10 минут',
       ai: "ИИ-преподаватель",
       review: "Слова",
       profile: "Профиль",
@@ -317,6 +319,7 @@ function AppContent() {
   if (overlay?.type === 'review')
     return <SafeAreaView style={styles.safe}><View style={styles.overlayBack}><Pressable onPress={() => setOverlay(null)} style={styles.backButton}><Text style={styles.backText}>← Обучение</Text></Pressable><Pressable onPress={() => setOverlay({ type: 'vocabulary' })} style={styles.backButton}><Text style={styles.backText}>Словарь →</Text></Pressable></View><ReviewScreen /></SafeAreaView>;
   if (overlay?.type === 'courseTest') return <SafeAreaView style={styles.safe}><CourseTestScreen topicId={overlay.topicId} onClose={() => setOverlay({ type: 'journey', topicId: overlay.topicId })} /></SafeAreaView>;
+  if (overlay?.type === 'quickSession') return <SafeAreaView style={styles.safe}><QuickSessionScreen onClose={() => setOverlay(null)} onJourney={topicId => setOverlay({ type: 'journey', topicId })} onRetention={() => setOverlay({ type: 'retention' })} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></SafeAreaView>;
   if (overlay?.type === 'journey')
     return <SafeAreaView style={styles.safe}><LearningJourneyScreen topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></SafeAreaView>;
   if (overlay?.type === "lingoWorld")
@@ -779,6 +782,7 @@ function AppContent() {
             onJourney={(topicId = 'greetings') => setOverlay({ type: 'journey', topicId })}
             onAccount={() => setOverlay({ type: 'account' })}
             onSyncDetails={() => setOverlay({ type: 'diagnostics' })}
+            onQuickSession={() => setOverlay({ type: 'quickSession' })}
             onPhrases={() => setOverlay({ type: "phrases" })}
             onDictation={() => setOverlay({ type: "dictation" })}
             onDialogues={() => setOverlay({ type: "dialogues" })}

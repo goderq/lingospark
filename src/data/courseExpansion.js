@@ -1,10 +1,14 @@
 import { courseSupplement } from './courseSupplement.js';
+import { courseChoiceNotes } from './courseChoiceNotes.js';
 
 const cleanWords = (value) => value.replace(/[?.!,]/g, '').split(' ');
 
 const explanationFor = (exercise, lesson) => {
   if (exercise.explanation) return exercise.explanation;
   const hint = exercise.hint ? `${exercise.hint.replace(/[.!?]+$/, '')}. ` : '';
+  const pair = courseSupplement[lesson.id].find(entry => entry.includes(exercise.answer));
+  if (pair) return `${hint}В ситуации «${lesson.title}» выражение «${pair[0]}» означает «${pair[1]}». Сопоставь именно эту пару с исходным вопросом: у остальных фраз другое содержание.`;
+  if (courseChoiceNotes[exercise.id]) return `${hint}${Object.values(courseChoiceNotes[exercise.id])[0]} Допустимый ответ: «${exercise.answer}».`;
   if (exercise.type === 'translate') {
     return `${hint}В теме «${lesson.title}» перевод должен сохранить смысл, время и тон исходной фразы. Естественный вариант здесь — «${exercise.answer}»; добавлять ответ на втором языке не нужно.`;
   }
@@ -20,16 +24,22 @@ const explanationFor = (exercise, lesson) => {
   return `${hint}Для ситуации из темы «${lesson.title}» естественно звучит «${exercise.answer}»: этот вариант одновременно подходит по значению, форме и стилю.`;
 };
 
-const optionExplanationsFor = (exercise) => Object.fromEntries(
+const optionExplanationsFor = (exercise, lesson) => Object.fromEntries(
   (exercise.options || [])
     .filter((option) => option !== exercise.answer)
     .map((option) => [
       option,
-      exercise.prompt.includes('___')
-        ? `При подстановке «${option}» нарушается форма или устойчивое управление в данном предложении. В этом окружении требуется «${exercise.answer}».`
-        : `«${option}» передаёт другой смысл или звучит неестественно в указанной ситуации. Точный ответ — «${exercise.answer}».`,
+      courseChoiceNotes[exercise.id]?.[option] ? `${courseChoiceNotes[exercise.id][option]} Допустимый ответ: «${exercise.answer}».` : phraseContrast(exercise, option, courseSupplement[lesson.id]),
     ]),
 );
+
+function phraseContrast(exercise, option, phrases) {
+  const optionPair = phrases.find(pair => pair.includes(option));
+  const targetPair = phrases.find(pair => pair.includes(exercise.answer));
+  if (optionPair && targetPair) return `«${optionPair[0]}» означает «${optionPair[1]}». Задание требует другой смысл: «${targetPair[0]}» — «${targetPair[1]}».`;
+  if (exercise.prompt.includes('___')) return `Сравни подстановки в одно предложение: «${exercise.prompt.replace(/___/g, option)}» и «${exercise.prompt.replace(/___/g, exercise.answer)}». ${exercise.hint || 'Сохрани форму из условия задания.'}`;
+  return `Выбрано «${option}»; допустимый ответ в этом задании — «${exercise.answer}». ${exercise.hint ? `Опора из условия: ${exercise.hint}.` : 'Сопоставь обе фразы с намерением в вопросе.'} Без дополнительного контекста этот разбор не утверждает, что выбранная фраза неверна во всех ситуациях.`;
+}
 
 export const enrichLessons = (lessons) => lessons.map((lesson) => {
   const phrases = courseSupplement[lesson.id];
@@ -50,7 +60,7 @@ export const enrichLessons = (lessons) => lessons.map((lesson) => {
   const exercises = [...lesson.exercises, ...bonus].map((exercise) => ({
     ...exercise,
     explanation: explanationFor(exercise, lesson),
-    optionExplanations: optionExplanationsFor(exercise),
+    optionExplanations: optionExplanationsFor(exercise, lesson),
   }));
   return { ...lesson, exercises };
 });

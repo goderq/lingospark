@@ -36,6 +36,15 @@ function varyGap(item, context) {
 }
 
 export const courseReinforcement = {
+  'j-understand-1': task('Начать встречу', 'Ты впервые видишь нового одноклассника. Как начать знакомство?', 'Hello!', ['Goodbye!', 'Good night!'], 'Hello начинает разговор. Goodbye завершает встречу, Good night говорят перед сном.'),
+  'j-understand-2': task('Представиться', 'Тебя зовут Эмма. Выбери правильное представление.', 'My name is Emma.', ['My name am Emma.', 'My name Emma.'], 'My name требует is. Если начать с I, нужна другая конструкция: I am Emma.'),
+  'j-understand-3': task('Представить другого', 'Познакомь собеседника со своим другом Максом.', 'This is my friend Max.', ['My name is Max.', 'This my friend Max.'], 'This is представляет другого человека. My name is называет самого говорящего.'),
+  'j-words-1': task('Слово name', 'В анкете просят указать name. Что нужно написать?', 'Имя', ['Возраст', 'Адрес'], 'Name означает имя. Возраст — age, адрес — address.'),
+  'j-words-2': task('Слово friend', 'Как назвать человека, с которым ты дружишь?', 'a friend', ['a neighbour', 'a teacher'], 'Friend — друг. Neighbour — сосед, teacher — учитель.'),
+  'j-words-3': task('Ответить взаимностью', 'Тебе приятно познакомиться в ответ. Чем закончить Nice to meet you ___?', 'too', ['to', 'two'], 'Too значит «тоже». To — предлог или частица, two — число два.'),
+  'j-phrases-1': task('Представиться по имени', 'Представься новому соседу: тебя зовут Лео.', 'My name is Leo.', ['My name am Leo.', 'My name Leo.'], 'Основа My name is сохраняется; имя можно заменить.'),
+  'j-phrases-2': task('Представить друга', 'Представь свою подругу Эмму.', 'This is my friend Emma.', ['My name is Emma.', 'This my friend Emma.'], 'This is + человек — конструкция представления другого.'),
+  'j-phrases-3': task('Ответить взаимностью', 'Сосед сказал Nice to meet you. Ответь, что тебе тоже приятно.', 'Nice to meet you too.', ['Nice meet you too.', 'Nice to meet you two.'], 'Too в конце означает «тоже». Two — число два, а после nice нужна конструкция to meet.'),
   'mega-greetings-2': task("Представить друга", "Представь нового друга Макса своим коллегам.", "This is my friend Max", ["Let me introduce myself", "Where are you from?", "It was nice meeting you"], "Чтобы представить другого человека, используем This is…: This is my friend Max — это мой друг Макс. Let me introduce myself относится к представлению себя, а не друга."),
   g1: task("Приветствие", "Ты встретил друга утром. Как поздороваться?", "Hi!", ["Goodbye!", "Thank you!"], "Hi — дружеское приветствие, как и Hello. Goodbye говорят при прощании, Thank you — когда благодарят."),
   g2: task("Имя собеседника", "Как спросить имя нового одноклассника?", "What's your name?", ["Where do you live?", "How old are you?"], "What's — сокращение What is. Слово name показывает, что вопрос об имени; where — о месте, how old — о возрасте."),
@@ -78,6 +87,7 @@ const alternateCourseTasks = {
 };
 
 export function findReinforcement(item, context = {}) {
+  if (item.sourceExerciseId) item = { ...item, id: item.sourceExerciseId };
   const variant = Math.abs(context.practiceVariant || 0) % 2;
   if (variant && alternateCourseTasks[item.id]) return alternateCourseTasks[item.id];
   const source = courseReinforcement[item.id];

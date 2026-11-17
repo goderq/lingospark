@@ -8,7 +8,6 @@ const dueTime = value => typeof value === 'number' ? value : Date.parse(value ||
 
 export function buildUnifiedReview(progress, words, lessons, now = Date.now(), limit = 12) {
   const deck = [], seen = new Set();
-  const byId = new Map(words.map(word => [word.id, word]));
   const add = item => {
     const key = reviewId(item);
     if (!seen.has(key) && deck.length < limit) { seen.add(key); deck.push({ ...item, reviewId: key }); }
@@ -18,9 +17,15 @@ export function buildUnifiedReview(progress, words, lessons, now = Date.now(), l
     const lesson = memory.due[0];
     retentionDeck(lesson).forEach(item => add({ ...item, topic: lesson.title, reason: 'Отложенная проверка урока', retentionLessonId: lesson.id, retentionDueAt: progress.retention[lesson.id].dueAt }));
   }
+  if (deck.length >= limit) return deck;
+  const byId = new Map(words.map(word => [word.id, word]));
   const queued = progress.reviewQueue || {};
-  Object.values(queued).filter(entry => entry.dueAt <= now && (!entry.exercise.wordId || byId.has(entry.exercise.wordId) && !progress.wordPreferences?.hidden?.includes(entry.exercise.wordId))).sort((a, b) => a.dueAt - b.dueAt).forEach(entry => add({ ...entry.exercise, reason: entry.reason || 'Наступил срок повторения' }));
+  for (const entry of Object.values(queued).filter(entry => entry.dueAt <= now && entry.exercise && (!entry.exercise.wordId || byId.has(entry.exercise.wordId) && !progress.wordPreferences?.hidden?.includes(entry.exercise.wordId))).sort((a, b) => a.dueAt - b.dueAt)) {
+    add({ ...entry.exercise, reason: entry.reason || 'Наступил срок повторения' });
+    if (deck.length >= limit) return deck;
+  }
   for (const mistake of progress.mistakes || []) {
+    if (deck.length >= limit) return deck;
     if (dueTime(mistake.nextReviewAt) > now) continue;
     let item = { id: mistake.id, type: 'translate', prompt: mistake.prompt, answer: mistake.answer, answers: mistake.answers || [], explanation: mistake.explanation, topic: mistake.topic, sourceMistakeId: mistake.id, reason: `Ошибка: ${mistake.topic || 'практика'}` };
     const match = mistake.id?.match(/^review-(.*)-(en-ru|ru-en)$/);
@@ -33,8 +38,9 @@ export function buildUnifiedReview(progress, words, lessons, now = Date.now(), l
     add(item);
   }
   for (const [id, stats] of Object.entries(progress.reviewStats || {})) {
+    if (deck.length >= limit) break;
     const word = byId.get(id);
-    if (!word || !stats.total || dueTime(stats.dueDate) > now || progress.wordPreferences?.hidden?.includes(id)) continue;
+    if (!word || !stats?.total || dueTime(stats.dueDate) > now || progress.wordPreferences?.hidden?.includes(id)) continue;
     const item = { id: `word-${id}`, wordId: id, type: 'translate', skill: 'vocabulary', prompt: `Переведи: ${word.english}`, answer: progress.wordPreferences?.customTranslations?.[id] || word.russian, answers: word.translations || [], topic: 'Слова', explanation: word.example ? `${word.example}\n${word.exampleRu || ''}` : `${word.english} — ${word.russian}`, reason: 'Слово пора повторить' };
     if (!queued[reviewId(item)]) add(item);
   }

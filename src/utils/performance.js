@@ -12,6 +12,7 @@ export function recordTiming(name,duration){
   if(samples.length>240)samples.shift();
 }
 export function markStartup(){if(!startupRecorded){startupRecorded=true;recordTiming('startup_js',now()-started);}}
+export function resetPerformanceSamples() { samples.length = 0; transition = null; }
 export function performanceSummary(){
   const names=[...new Set(samples.map((sample)=>sample.name))];
   return names.map((name)=>{const entries=samples.filter((item)=>item.name===name);const sorted=entries.map(item=>item.ms).sort((a,b)=>a-b);return {name,count:entries.length,last:entries.at(-1).ms,max:sorted.at(-1),median:sorted[Math.floor(sorted.length/2)],p95:sorted[Math.max(0,Math.ceil(sorted.length*.95)-1)]};});

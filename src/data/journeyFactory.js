@@ -18,7 +18,7 @@ export function buildCourseJourney(lesson) {
     stages: [
       { id: 'understand', title: 'Понять', skill: 'grammar', mode: 'choice', intro: goal,
         cards: [{ title: 'Ситуация и смысл', simple: guide, detail: `${guide}\n${pitfall}`, example: phrases[0][0], translation: phrases[0][1] }, { title: 'На что обратить внимание', simple: pitfall, detail: `${pitfall}\nСравни английскую фразу с её переводом. При проверке сохраняй время, отрицание и степень уверенности.`, example: phrases[1][0], translation: phrases[1][1] }],
-        exercises: choices.map((item, i) => ({ ...item, id: `${prefix}-understand-${i}` })),
+        exercises: choices.map((item, i) => ({ ...item, sourceExerciseId: item.id, id: `${prefix}-understand-${i}` })),
       },
       { id: 'words', title: 'Выражения в контексте', skill: 'vocabulary', mode: 'choice', intro: 'Учи фразу целиком, вместе с её значением и ситуацией.', cards,
         exercises: phrases.slice(0, 3).map(([english, russian], i) => ({ id: `${prefix}-words-${i}`, type: 'choice', prompt: `Какой смысл передаёт «${english}»?`, answer: russian, options: phrases.map(pair => pair[1]), explanation: `В этой ситуации «${english}» значит «${russian}». ${pitfall}` })),
