@@ -1,3 +1,5 @@
+import { contextReplyForms } from '../data/contextReplyForms.js';
+
 export const normalizeAnswer = (value = '') => `${value}`
   .normalize('NFKC')
   .replace(/[‘’ʼ`]/g, "'")
@@ -206,6 +208,21 @@ export const gradeAnswer = (actual, variants = []) => {
   };
 };
 
+function matchesContextReply(exercise, input, variants) {
+  if (!exercise.dialogueHint || !Object.hasOwn(contextReplyForms, exercise.id) || !answerUsesExpectedScript(input, exercise.answer)) return false;
+  const normalizeReply = value => englishForm(String(value)
+    .replace(/[‘’ʼ`]/g, "'")
+    .replace(/\bI'd like\b/gi, 'I would like')
+    .replace(/\bit's\b/gi, 'it is')
+    .replace(/\bthat's\b/gi, 'that is')
+    .replace(/\b2:00(?:\s*p\.?m\.?)?(?=[ .!?]|$)/gi, '2'))
+    .replace(/^please /, '')
+    .replace(/^((?:can|could|may|would) (?:i|we|you)) please /, '$1 ')
+    .replace(/ please$/, '');
+  const key = normalizeReply(input);
+  return contextReplyForms[exercise.id].test(key) || variants.some(variant => normalizeReply(variant) === key);
+}
+
 // Single evaluation entry point for every learning mode. Screens should not
 // implement their own equality, language or free-word-order rules.
 export const evaluateExercise = (exercise = {}, input = "") => {
@@ -213,6 +230,9 @@ export const evaluateExercise = (exercise = {}, input = "") => {
   if ((exercise.type === 'choice' || exercise.options && exercise.type !== 'build') && exercise.type !== 'translate') {
     const correct = variants.some(answer => answersMatch(input, answer));
     return { status: correct ? 'correct' : 'wrong', correct, accepted: variants, expected: variants[0] || '', input: normalizeAnswer(input) };
+  }
+  if (matchesContextReply(exercise, input, variants)) {
+    return { status: 'correct', correct: true, analysis: analyzeAnswer(input, input), accepted: variants, expected: variants[0], input: normalizeAnswer(input) };
   }
   const evaluation = gradeAnswer(input, variants);
   return {

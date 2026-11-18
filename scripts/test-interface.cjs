@@ -338,7 +338,15 @@ async function main() {
   assert.equal(speechCalls.at(-1).text, 'Hi there. Do you need help?');
   await act(async () => namedButton('Подсказка').props.onPress());
   assert.ok(tree.root.findAllByType('Text').some(node => [node.props.children].flat().includes('How do I get to…?')));
-  await act(async () => tree.root.findByType('TextInput').props.onChangeText('How can I get to the station?'));
+  const dialogueInput = () => tree.root.findByType('TextInput');
+  await act(async () => dialogueInput().props.onChangeText('How can I get to the airport?'));
+  await act(async () => namedButton('Ответить').props.onPress());
+  assert.ok(namedButton('Исправить реплику'));
+  assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === 'How do I get to the station?'));
+  await act(async () => namedButton('Исправить реплику').props.onPress());
+  assert.equal(dialogueInput().props.value, 'How can I get to the airport?');
+  assert.equal(dialogueInput().props.editable, true);
+  await act(async () => dialogueInput().props.onChangeText('Could you please tell me how to reach the railway station?'));
   await act(async () => namedButton('Ответить').props.onPress());
   assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Ответ верный'));
   await act(async () => tree.unmount());

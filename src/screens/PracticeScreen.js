@@ -5,6 +5,7 @@ import { buildPracticeDeck } from '../data/practiceCatalog';
 import { buildUnifiedReview, hasReviewWordCandidates, validatePracticeSession } from '../utils/unifiedReview';
 import { includeCustomReviewWords, loadReviewWordIndex } from '../utils/reviewWords';
 import { evaluateExercise } from '../utils/answer';
+import { contextReplyFeedback } from '../data/contextReplyForms';
 import { balancedOptions } from '../utils/shuffle';
 import { speak, stopSpeech } from '../utils/speech';
 import { useProgress } from '../store/ProgressContext';
@@ -33,6 +34,8 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
   const [finished, setFinished] = useState(false);
   const [resultDetail, setResultDetail] = useState(null);
   const scroll = useRef(null);
+  const replyInput = useRef(null);
+  const focusAfterRetry = useRef(false);
   const completedRef = useRef(null);
   const autoStarted = useRef(false);
   const current = session?.deck[session.index];
@@ -65,10 +68,15 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
     if (validatePracticeSession(saved)) setSession(saved);
     else start();
   }, [autoStartReview, review]);
+  useEffect(() => {
+    if (!focusAfterRetry.current || session?.checked !== false) return;
+    focusAfterRetry.current = false;
+    replyInput.current?.focus?.();
+  }, [session?.checked]);
   const check = () => {
     if (!session || session.checked || !typed.trim()) return;
     Keyboard.dismiss();
-    setSession({ ...session, checked: true, responses: [...session.responses, { id: current.id, input: typed, assisted: !!session.assisted }] });
+    setSession({ ...session, checked: true, responses: [...session.responses, { id: current.id, input: typed, assisted: !!session.assisted, ...(session.retried && { retried: true }) }] });
   };
   const next = () => {
     if (!session?.checked) return;
@@ -80,11 +88,17 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
       onComplete?.(score, session.deck.length);
       setFinished(true);
     }
-    else setSession({ ...session, index: session.index + 1, input: '', built: [], checked: false, assisted: false, help: false });
+    else setSession({ ...session, index: session.index + 1, input: '', built: [], checked: false, assisted: false, help: false, retried: false, showReplyAnswer: false });
   };
   const exit = () => { if (session && !finished) savePracticeDraft(draftKey, session); Keyboard.dismiss(); onClose(); };
   const feedback = session?.checked && session.mode === 'learn';
   const correct = feedback && evaluateExercise(current, typed).correct;
+  const canCorrectReply = feedback && !!current.dialogueHint && !correct;
+  const retryReply = () => {
+    if (!canCorrectReply) return;
+    focusAfterRetry.current = true;
+    setSession({ ...session, checked: false, assisted: true, retried: true, showReplyAnswer: false, responses: session.responses.slice(0, session.index) });
+  };
   const results = finished ? session.deck.map((item, i) => ({ item, answer: session.responses[i], correct: evaluateExercise(item, session.responses[i].input).correct })) : [];
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.root}>
     <View style={s.header}><Pressable onPress={exit} style={s.back}><Text style={s.link}>← Назад</Text></Pressable><Text style={s.label}>{review ? 'Единое повторение' : 'Практика'}</Text></View>
@@ -109,10 +123,10 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
       </> : finished ? <>
         <Text style={s.title}>Результат: {results.filter(item => item.correct).length}/{results.length}</Text>
         <Text style={s.success}>+{progress.practiceResults?.[session.id]?.earnedXP || 0} XP · за самостоятельные верные ответы, один раз за вопрос в день</Text>
-        <Text style={s.text}>Самостоятельно верно: {results.filter(item => item.correct && !item.answer.assisted).length}. С подсказкой: {results.filter(item => item.answer.assisted).length}. Повторная практика не выдаёт повторно награду за прохождение курса.</Text>
+        <Text style={s.text}>Самостоятельно верно: {results.filter(item => item.correct && !item.answer.assisted).length}. {results.some(item => item.item.dialogueHint) ? "С подсказкой или после исправления" : "С подсказкой"}: {results.filter(item => item.answer.assisted).length}. Повторная практика не выдаёт повторно награду за прохождение курса.</Text>
         {results.map(({ item, answer, correct }, i) => <View key={i} style={s.card}>
           <Text style={s.heading}>{item.prompt}</Text>{!!item.dialogueHint && <Text style={s.text}>{item.context}</Text>}<Text style={s.text}>Твой ответ: {answer.input}</Text>
-          <Text style={correct ? s.success : s.warning}>{item.dialogueHint ? 'Пример ответа' : 'Ответ'}: {item.answer}{answer.assisted ? ' · с помощью' : ''}</Text>
+          <Text style={correct ? s.success : s.warning}>{item.dialogueHint ? 'Пример ответа' : 'Ответ'}: {item.answer}{answer.retried ? ' · после исправления' : answer.assisted ? ' · с помощью' : ''}</Text>
           {!!item.explanation && <Text style={s.text}>{item.explanation}</Text>}
           <Pressable onPress={() => setResultDetail(value => value === i ? null : i)} style={s.back}><Text style={s.link}>{resultDetail === i ? 'Свернуть разбор' : 'Разобрать ответ'}</Text></Pressable>
           {resultDetail === i && <ExplanationCard item={item} selected={answer.input} correct={correct} showStatus={false} />}
@@ -128,10 +142,17 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
         {current.type === 'choice' ? options.map(option => <Pressable key={option} disabled={session.checked} onPress={() => setSession({ ...session, input: option })} style={[s.card, session.input === option && s.selected]}><Text style={s.heading}>{option}</Text></Pressable>) : current.type === 'build' ? <>
           <View style={s.chips}>{session.built.map((tile, i) => <Pressable key={i} disabled={session.checked} onPress={() => setSession({ ...session, built: session.built.filter((_, index) => i !== index) })} style={s.chip}><Text style={s.chipText}>{options[tile]}</Text></Pressable>)}</View>
           <View style={s.chips}>{options.map((word, i) => <Pressable key={i} disabled={session.checked || session.built.includes(i)} onPress={() => setSession({ ...session, built: [...session.built, i] })} style={[s.chip, session.built.includes(i) && { opacity: 0.25 }]}><Text style={s.chipText}>{word}</Text></Pressable>)}</View>
-        </> : <TextInput editable={!session.checked} value={session.input} onChangeText={input => setSession({ ...session, input })} placeholder={/[а-яё]/i.test(current.answer) ? 'Ответ на русском…' : 'Ответ на английском…'} placeholderTextColor={colors.textMuted} autoCorrect={false} autoCapitalize="none" returnKeyType="done" onSubmitEditing={Keyboard.dismiss} style={s.input} />}
+        </> : <TextInput ref={replyInput} editable={!session.checked} value={session.input} onChangeText={input => setSession({ ...session, input })} placeholder={/[а-яё]/i.test(current.answer) ? 'Ответ на русском…' : 'Ответ на английском…'} placeholderTextColor={colors.textMuted} autoCorrect={false} autoCapitalize="none" returnKeyType="done" onSubmitEditing={Keyboard.dismiss} style={s.input} />}
         {!session.checked && session.mode === 'learn' && <PrimaryButton title={session.help ? 'Помощь открыта' : current.dialogueHint ? 'Подсказка' : 'Открыть помощь'} color={colors.cardLight} onPress={() => setSession({ ...session, help: true, assisted: true })} />}
         {session.help && <Text style={s.warning}>{current.dialogueHint || `Пример: ${current.answer}`}{'\n'}Ответ будет отмечен как выполненный с помощью.</Text>}
-        {feedback && <ExplanationCard key={current.id} item={current} selected={typed} correct={correct} />}
+        {canCorrectReply && <View style={s.card}>
+          <Text style={s.warning}>{contextReplyFeedback(current)}</Text>
+          <PrimaryButton title="Исправить реплику" color={colors.cardLight} onPress={retryReply} />
+          {!session.showReplyAnswer && <Pressable onPress={() => setSession({ ...session, showReplyAnswer: true })} style={s.back}>
+            <Text style={s.link}>Показать разбор</Text>
+          </Pressable>}
+        </View>}
+        {feedback && (!canCorrectReply || session.showReplyAnswer) && <ExplanationCard key={current.id} item={current} selected={typed} correct={correct} />}
         {!session.checked && <Pressable onPress={Keyboard.dismiss} style={s.back}><Text style={s.link}>Скрыть клавиатуру</Text></Pressable>}
         <PrimaryButton disabled={!session.checked && !typed.trim()} title={session.checked ? session.index + 1 === session.deck.length ? 'Завершить и посмотреть разбор' : 'Следующий вопрос' : 'Ответить'} onPress={session.checked ? next : check} />
         <Pressable onPress={() => Alert.alert('Начать заново?', 'Текущий черновик будет удалён. Результат незавершённой попытки не засчитывается.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Начать заново', style: 'destructive', onPress: () => { clearPracticeDraft(draftKey); setSession(null); } }])} style={s.back}><Text style={s.link}>Сменить настройки</Text></Pressable>
