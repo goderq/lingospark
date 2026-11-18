@@ -3,6 +3,7 @@ import wordSupplement from "./wordSupplement.json";
 import wordReferenceSupplement from "./wordReferenceSupplement.json";
 import { authoredWordDetails, wordLearningDetails } from "./wordLearningData";
 import { wordCandidates } from '../utils/sampling';
+import { sensesForWord } from './wordSenses';
 import { wordPhrasePacks } from './wordPhrasePacks';
 import { wordExpansion } from './wordExpansion';
 import { normalizeWordQuery } from '../utils/wordDictionary';
@@ -38,6 +39,7 @@ const baseCatalog = [...compactWordBank, ...additions.map(word => [word.english,
       .filter(Boolean);
     const fullTranslation = variants.slice(0, 3).join("; ");
     const learning = wordLearningDetails(english, fullTranslation);
+    const meanings = sensesForWord(english).map(sense => sense.meaning).join(" ");
     return {
       id: extra ? stableIndex : `bank-${stableIndex ?? index}`,
       english,
@@ -45,7 +47,7 @@ const baseCatalog = [...compactWordBank, ...additions.map(word => [word.english,
       translations: variants.slice(1, 3),
       fullTranslation,
       searchText: `${english} ${translation} ${transcription || ""}`.toLocaleLowerCase("ru"),
-      searchNormalized: normalizeWordQuery(`${english} ${translation}`),
+      searchNormalized: normalizeWordQuery(`${english} ${translation} ${meanings}`),
       russianSearch: normalizeWordQuery(variants[0] || translation),
       transcription,
       level,
@@ -82,7 +84,15 @@ const phraseCatalog = wordPhrasePacks.flatMap(pack => pack.words).map(word => ({
   searchNormalized: normalizeWordQuery(`${word.english} ${word.russian}`),
   russianSearch: normalizeWordQuery(word.russian),
 }));
-export const extendedWordBank = [...baseCatalog, ...extraCatalog, ...referenceCatalog, ...phraseCatalog];
+const pickup = {
+  id: 'dictionary-pick-up', english: 'pick up', russian: 'забрать',
+  translations: ['подобрать', 'заехать за кем-то', 'поднять трубку', 'взять трубку'],
+  fullTranslation: 'забрать; подобрать; заехать за кем-то; поднять трубку',
+  searchNormalized: normalizeWordQuery(`pick up подобрать взять трубку ${sensesForWord('pick up').map(sense => sense.meaning).join(' ')}`),
+  russianSearch: 'забрать',
+  transcription: '', level: 'B1', emoji: '🚀', frequency: null, partOfSpeech: 'фразовый глагол',
+};
+export const extendedWordBank = [...baseCatalog, ...extraCatalog, ...referenceCatalog, ...phraseCatalog, pickup];
 
 const coreLimits = { A1: 700, A2: 950, B1: 1250, B2: 900, C1: 550 };
 const excludedEnglish = new Set([

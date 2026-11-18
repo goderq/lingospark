@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { contextDialogueForTopic } from '../data/contextDialogues';
 import { getJourney } from '../data/learningJourney';
 import { stageAvailable, gradeJourneyStage, readJourneyDraft, isJourneyUnlocked } from '../utils/learningJourney';
 import { evaluateExercise } from '../utils/answer';
@@ -14,7 +15,7 @@ import { ScreenEntrance } from '../components/Motion';
 import { getCoursePracticePhrases } from '../data/courseDialogues';
 import useScreenTiming from '../components/useScreenTiming';
 
-export default function LearningJourneyScreen({ topicId = 'greetings', initialStageId, onClose, onCourse, onTest, onRetention, onAI, onWorld }) {
+export default function LearningJourneyScreen({ topicId = 'greetings', initialStageId, onClose, onCourse, onTest, onRetention, onAI, onWorld, onContextDialogue }) {
   useTheme();
   useScreenTiming('journey_open');
   const { progress } = useProgress();
@@ -24,6 +25,7 @@ export default function LearningJourneyScreen({ topicId = 'greetings', initialSt
   if (!journey) return <View style={s.content}><Text style={s.title}>Тема пока недоступна</Text><Button title="Назад" onPress={onClose} /></View>;
   if (!isJourneyUnlocked(progress, topicId)) return <View style={s.content}><Text style={s.title}>Сначала пройди предыдущий урок курса</Text><Button title="Назад" onPress={onClose} /></View>;
   if (active) return <JourneyStage key={active} journey={journey} stage={journey.stages.find(item => item.id === active)} onClose={() => setActive(null)} />;
+  const scene = contextDialogueForTopic(topicId);
   const saved = progress.journeys?.[topicId] || {};
   const done = journey.stages.filter(stage => saved.stages?.[stage.id]?.completedAt).length;
   const courseDone = progress.completed.includes(topicId);
@@ -55,6 +57,7 @@ export default function LearningJourneyScreen({ topicId = 'greetings', initialSt
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: routeDetails }} onPress={() => setRouteDetails(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={s.label}>{routeDetails ? 'Скрыть подробности' : 'Как работают практика и закрепление?'}</Text></Pressable>
       {routeDetails && <Text style={s.muted}>Закрепление памяти проверяется после перерыва. В разговор ИИ передаются тема и цель; модель можно установить отдельно в разделе ИИ. Учебные этапы работают без неё. Прохождение «Английской жизни» не засчитывает учебную тему автоматически.</Text>}
       <Button title="Продолжить эту тему с ИИ" onPress={() => onAI({ ...journey.ai, topicId, goal: journey.goal, focusMistakeIds: (progress.mistakes || []).filter(item => item.topic === journey.title).slice(0, 3).map(item => item.id), phrases: getCoursePracticePhrases(topicId) })} />
+      {!!scene && !!onContextDialogue && <Button title={`Диалог: ${scene.title}`} onPress={() => onContextDialogue(scene.id)} secondary />}
       <Button title="Открыть «Английскую жизнь»" onPress={onWorld} secondary />
     </ScrollView>
   </View>;

@@ -13,7 +13,7 @@ const byEnglish = new Map(extendedWordBank.map(word => [word.english, word]));
 assert.equal(byEnglish.size, extendedWordBank.length);
 assert.equal(new Set(extendedWordBank.map(word => word.id)).size, extendedWordBank.length);
 assert.ok(wordExpansion.length >= 250);
-assert.equal(extendedWordBank.length, legacy.length + wordExpansion.length + supplement.length + reference.length + phrases.length);
+assert.equal(extendedWordBank.length, legacy.length + wordExpansion.length + supplement.length + reference.length + phrases.length + 1);
 assert.ok(supplement.length >= 4000 && reference.length >= 1200);
 const compactKey = english => english.toLowerCase().replace(/[-']/g, '');
 const spellings = new Set([...legacy.map(([english]) => english), ...wordExpansion.map(word => word.english)].map(compactKey));
@@ -42,6 +42,20 @@ for (const pack of wordPhrasePacks) {
   }
 }
 assert.equal(searchDictionary(extendedWordBank, 'стойка регистрации')[0].english, 'front desk');
+const { wordSenses } = load(require('node:path').join(__dirname, '../src/data/wordSenses'));
+assert.equal(Object.keys(wordSenses).length, 12);
+for (const [english, senses] of Object.entries(wordSenses)) {
+  const entry = byEnglish.get(english);
+  assert.ok(entry, `missing dictionary entry for ${english}`);
+  assert.equal(senses.length, 3);
+  assert.equal(new Set(senses.map(sense => sense.meaning)).size, senses.length);
+  for (const sense of senses) {
+    assert.match(sense.english, /[.!?]$/);
+    assert.match(sense.russian, /[а-яё]/i);
+    assert.ok(searchDictionary([entry], sense.meaning).length, `missing search alias: ${sense.meaning}`);
+  }
+}
+assert.equal(searchDictionary(extendedWordBank, 'pick up')[0].id, 'dictionary-pick-up');
 assert.equal(byEnglish.get('unfamiliar').russian, 'незнакомый');
 assert.ok(byEnglish.get('unfamiliar').exampleRu);
 assert.equal(searchDictionary(extendedWordBank, 'lullaby')[0].russian, 'колыбельная');

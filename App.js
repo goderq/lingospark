@@ -49,6 +49,7 @@ const ProfileScreen = React.lazy(() => import("./src/screens/ProfileScreen"));
 const PhrasebookScreen = React.lazy(() => import("./src/screens/PhrasebookScreen"));
 const LessonScreen = React.lazy(() => import("./src/screens/LessonScreen"));
 const DictationScreen = React.lazy(() => import("./src/screens/DictationScreen"));
+const ContextDialoguesScreen = React.lazy(() => import("./src/screens/ContextDialoguesScreen"));
 const DialogueScreen = React.lazy(() => import("./src/screens/DialogueScreen"));
 const MistakesScreen = React.lazy(() => import("./src/screens/MistakesScreen"));
 const PlacementScreen = React.lazy(() => import("./src/screens/PlacementScreen"));
@@ -277,7 +278,7 @@ function AppContent() {
   if (overlay?.type === 'courseTest') return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><CourseTestScreen topicId={overlay.topicId} onClose={() => setOverlay({ type: 'journey', topicId: overlay.topicId })} /></ScreenFrame>;
   if (overlay?.type === 'quickSession') return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><QuickSessionScreen key={overlay.noticeKey} onClose={() => setOverlay(null)} onJourney={topicId => setOverlay({ type: 'journey', topicId })} onRetention={() => setOverlay({ type: 'retention' })} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
   if (overlay?.type === 'journey')
-    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><LearningJourneyScreen key={overlay.noticeKey} initialStageId={overlay.stageId} topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
+    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><LearningJourneyScreen key={overlay.noticeKey} initialStageId={overlay.stageId} topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onContextDialogue={sceneId => setOverlay({ type: 'contextDialogues', sceneId, topicId: overlay.topicId })} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
   if (overlay?.type === "lingoWorld")
     return (
       <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
@@ -337,6 +338,9 @@ function AppContent() {
         <DictationScreen onClose={() => setOverlay(null)} />
       </ScreenFrame>
     );
+  if (overlay?.type === 'contextDialogues') return <ScreenFrame transitionKey={overlay.type} style={styles.safe}>
+    <ContextDialoguesScreen initialSceneId={overlay.sceneId} onClose={() => setOverlay(overlay.topicId ? { type: 'journey', topicId: overlay.topicId } : null)} />
+  </ScreenFrame>;
   if (overlay?.type === "dialogues")
     return (
       <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>

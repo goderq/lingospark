@@ -30,6 +30,7 @@ export default function LearningHomeScreen({ onNavigate, onJourney, onCourse }) 
     ['grammarCenter', 'apps-outline', 'Все темы грамматики', 'Выбери то, что нужно сейчас'],
   ] : [
     ['quickSession', 'timer-outline', 'Занятие на 10 минут', 'Тема, повторение и разговор в одном маршруте'],
+    ['contextDialogues', 'chatbubbles-outline', 'Короткие диалоги', 'Письменные разговоры A1–B1'],
     ['practice', 'flash-outline', 'Практика', 'Один экран, разные навыки и самопроверка'],
     ['examCenter', 'ribbon-outline', 'Экзамены', 'Проверки отдельно от обучения'],
   ];

@@ -14,6 +14,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { speak } from "../utils/speech";
 import { worldLocations } from "../data/lingoWorld";
+import ContextDialoguesScreen from './ContextDialoguesScreen';
 import WorldPathsScreen from './WorldPathsScreen';
 import { buildWorldMission, worldArcs, worldUnlocked, worldMemory, worldDecisionAvailable, readWorldDraft } from '../data/worldExpansion';
 import { useProgress } from "../store/ProgressContext";
@@ -148,7 +149,8 @@ export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
   const [location, setLocation] = useState(null);
   const [tab, setTab] = useState("map");
   const [showPaths,setShowPaths]=useState(false);
-  useEffect(() => { onImmersiveChange?.(!!location || showPaths); }, [location, showPaths, onImmersiveChange]);
+  const [showDialogues, setShowDialogues] = useState(false);
+  useEffect(() => { onImmersiveChange?.(!!location || showPaths || showDialogues); }, [location, showPaths, showDialogues, onImmersiveChange]);
   useEffect(() => () => onImmersiveChange?.(false), [onImmersiveChange]);
   const completed = progress.world?.completed || [];
   const stars = progress.world?.stars || {};
@@ -156,6 +158,7 @@ export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
   const world = progress.world || {};
   const nextLocation = worldLocations.find((item) => !completed.includes(item.id) && worldUnlocked(item,world,worldLocations));
 
+  if (showDialogues) return <ContextDialoguesScreen onClose={() => setShowDialogues(false)} />;
   if(showPaths)return <WorldPathsScreen onClose={()=>setShowPaths(false)} />;
   if (location)
     return (
@@ -235,6 +238,11 @@ export default function LingoWorldScreen({ onClose, onImmersiveChange }) {
           <Text style={s.dailyTitle}>💼 🎓 🏡 Три жизненных пути</Text>
           <Text style={s.dailyPrompt}>Карьера, учёба и своя жизнь: отдельные решения и финалы. Здесь же — многоэтапный поиск жилья.</Text>
           <PrimaryButton title="Выбрать свой путь" onPress={()=>setShowPaths(true)} color={colors.purple}/>
+        </View>
+        <View style={s.dailyEvent}>
+          <Text style={s.dailyTitle}>Короткие диалоги</Text>
+          <Text style={s.dailyPrompt}>Разговоры в магазине, на вокзале, в кафе и на работе.</Text>
+          <PrimaryButton title="Выбрать диалог" onPress={() => setShowDialogues(true)} color={colors.purple} />
         </View>
         {nextLocation && <View style={s.dailyEvent}>
           <Text style={s.dailyTitle}>{world.draft?.locationId === nextLocation.id ? 'Продолжить незавершённую главу' : 'Следующий шаг твоей истории'}</Text>

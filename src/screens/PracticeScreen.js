@@ -111,8 +111,8 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
         <Text style={s.success}>+{progress.practiceResults?.[session.id]?.earnedXP || 0} XP · за самостоятельные верные ответы, один раз за вопрос в день</Text>
         <Text style={s.text}>Самостоятельно верно: {results.filter(item => item.correct && !item.answer.assisted).length}. С подсказкой: {results.filter(item => item.answer.assisted).length}. Повторная практика не выдаёт повторно награду за прохождение курса.</Text>
         {results.map(({ item, answer, correct }, i) => <View key={i} style={s.card}>
-          <Text style={s.heading}>{item.prompt}</Text><Text style={s.text}>Твой ответ: {answer.input}</Text>
-          <Text style={correct ? s.success : s.warning}>Ответ: {item.answer}{answer.assisted ? ' · с помощью' : ''}</Text>
+          <Text style={s.heading}>{item.prompt}</Text>{!!item.dialogueHint && <Text style={s.text}>{item.context}</Text>}<Text style={s.text}>Твой ответ: {answer.input}</Text>
+          <Text style={correct ? s.success : s.warning}>{item.dialogueHint ? 'Пример ответа' : 'Ответ'}: {item.answer}{answer.assisted ? ' · с помощью' : ''}</Text>
           {!!item.explanation && <Text style={s.text}>{item.explanation}</Text>}
           <Pressable onPress={() => setResultDetail(value => value === i ? null : i)} style={s.back}><Text style={s.link}>{resultDetail === i ? 'Свернуть разбор' : 'Разобрать ответ'}</Text></Pressable>
           {resultDetail === i && <ExplanationCard item={item} selected={answer.input} correct={correct} showStatus={false} />}
@@ -123,14 +123,14 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
         <Text style={s.text}>{current.topic || ''}{current.reason ? ` · ${current.reason}` : ''}</Text>
         <ScreenEntrance transitionKey={current.id}><Text style={s.title}>{current.prompt}</Text></ScreenEntrance>
         {!!current.context && <View style={s.card}><Text style={s.text}>{current.context}</Text></View>}
-        {!!current.audio && <PrimaryButton title="Послушать запись" onPress={() => speak(current.audio, { language: 'en-US', rate: 0.85 })} />}
+        {!!current.audio && <PrimaryButton title={current.dialogueHint ? 'Послушать собеседника' : 'Послушать запись'} onPress={() => speak(current.audio, { language: 'en-US', rate: 0.85 })} />}
         {current.skill === 'listening' && <PrimaryButton title="Послушать фразу" onPress={() => speak(current.speak, { language: 'en-US', rate: 0.8 })} />}
         {current.type === 'choice' ? options.map(option => <Pressable key={option} disabled={session.checked} onPress={() => setSession({ ...session, input: option })} style={[s.card, session.input === option && s.selected]}><Text style={s.heading}>{option}</Text></Pressable>) : current.type === 'build' ? <>
           <View style={s.chips}>{session.built.map((tile, i) => <Pressable key={i} disabled={session.checked} onPress={() => setSession({ ...session, built: session.built.filter((_, index) => i !== index) })} style={s.chip}><Text style={s.chipText}>{options[tile]}</Text></Pressable>)}</View>
           <View style={s.chips}>{options.map((word, i) => <Pressable key={i} disabled={session.checked || session.built.includes(i)} onPress={() => setSession({ ...session, built: [...session.built, i] })} style={[s.chip, session.built.includes(i) && { opacity: 0.25 }]}><Text style={s.chipText}>{word}</Text></Pressable>)}</View>
         </> : <TextInput editable={!session.checked} value={session.input} onChangeText={input => setSession({ ...session, input })} placeholder={/[а-яё]/i.test(current.answer) ? 'Ответ на русском…' : 'Ответ на английском…'} placeholderTextColor={colors.textMuted} autoCorrect={false} autoCapitalize="none" returnKeyType="done" onSubmitEditing={Keyboard.dismiss} style={s.input} />}
-        {!session.checked && session.mode === 'learn' && <PrimaryButton title={session.help ? 'Помощь открыта' : 'Открыть помощь'} color={colors.cardLight} onPress={() => setSession({ ...session, help: true, assisted: true })} />}
-        {session.help && <Text style={s.warning}>Пример: {current.answer}. Этот ответ будет отмечен как выполненный с помощью.</Text>}
+        {!session.checked && session.mode === 'learn' && <PrimaryButton title={session.help ? 'Помощь открыта' : current.dialogueHint ? 'Подсказка' : 'Открыть помощь'} color={colors.cardLight} onPress={() => setSession({ ...session, help: true, assisted: true })} />}
+        {session.help && <Text style={s.warning}>{current.dialogueHint || `Пример: ${current.answer}`}{'\n'}Ответ будет отмечен как выполненный с помощью.</Text>}
         {feedback && <ExplanationCard key={current.id} item={current} selected={typed} correct={correct} />}
         {!session.checked && <Pressable onPress={Keyboard.dismiss} style={s.back}><Text style={s.link}>Скрыть клавиатуру</Text></Pressable>}
         <PrimaryButton disabled={!session.checked && !typed.trim()} title={session.checked ? session.index + 1 === session.deck.length ? 'Завершить и посмотреть разбор' : 'Следующий вопрос' : 'Ответить'} onPress={session.checked ? next : check} />

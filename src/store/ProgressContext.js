@@ -311,6 +311,7 @@ export function ProgressProvider({ children }) {
                 ...(old.lessonResults || {}),
                 [lesson.id]: {
                   ...result,
+                  attempts: (old.lessonResults?.[lesson.id]?.attempts || 1) + 1,
                   bestAccuracy: Math.max(
                     old.lessonResults?.[lesson.id]?.bestAccuracy || 0,
                     result.accuracy,
@@ -349,6 +350,7 @@ export function ProgressProvider({ children }) {
               ...(old.lessonResults || {}),
               [lesson.id]: {
                 ...result,
+                attempts: 1,
                 bestAccuracy: Math.max(
                   old.lessonResults?.[lesson.id]?.bestAccuracy || 0,
                   result.accuracy,

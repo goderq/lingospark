@@ -243,6 +243,12 @@ async function main() {
   assert.equal(tree.root.findByType('FlatList').props.data[0].id, 'dictionary-lullaby');
   await act(async () => { searchInput().props.onChangeText('стойка регистрации'); await flush(); });
   assert.equal(tree.root.findByType('FlatList').props.data[0].id, 'phrase-pack-front-desk');
+  await act(async () => { searchInput().props.onChangeText('pick up'); await flush(); });
+  await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel?.startsWith('pick up, ')).props.onPress());
+  await act(async () => namedButton('Примеры по значениям · 3').props.onPress());
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'поднять трубку'));
+  await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Послушать пример: поднять трубку').props.onPress());
+  assert.equal(speechCalls.at(-1).text, "Please pick up. It's urgent.");
   await act(async () => { searchInput().props.onChangeText(''); await flush(); });
   await act(async () => namedButton('Выражения').props.onPress());
   assert.equal(tree.root.findByType('FlatList').props.data.length, 72, 'the expressions filter shows all six phrase packs');
@@ -324,9 +330,19 @@ async function main() {
   await act(async () => namedButton('Продолжить диалог').props.onPress());
   assert.deepEqual(chosenModels, ['light']);
   await act(async () => tree.unmount());
-  // Actual chat UI: keyboard positions use the measured window origin. The
-  // composer has no accessory toolbar, input survives layout changes, and late
-  // stopped completions cannot replace the current conversation.
+  const ContextDialogues = load('src/screens/ContextDialoguesScreen.js').default;
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(ContextDialogues))); await flush(); });
+  await act(async () => namedButton('Найти дорогу к вокзалу').props.onPress());
+  await act(async () => { namedButton('Начать практику').props.onPress(); await flush(); });
+  await act(async () => namedButton('Послушать собеседника').props.onPress());
+  assert.equal(speechCalls.at(-1).text, 'Hi there. Do you need help?');
+  await act(async () => namedButton('Подсказка').props.onPress());
+  assert.ok(tree.root.findAllByType('Text').some(node => [node.props.children].flat().includes('How do I get to…?')));
+  await act(async () => tree.root.findByType('TextInput').props.onChangeText('How can I get to the station?'));
+  await act(async () => namedButton('Ответить').props.onPress());
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Ответ верный'));
+  await act(async () => tree.unmount());
+  // Actual chat UI: measured keyboard position, draft retention and cancellation.
   const Chat = load('src/screens/AITutorScreen.js').TutorChat;
   await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Chat, { model: { id: 'light', title: 'Лёгкий', color: '#6544DB' } })), { createNodeMock: element => element.type === 'View' ? { measureInWindow: callback => callback(0, 59, 390, 751) } : { scrollToEnd() {} } }); await flush(); });
   const chatInput = () => tree.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === 'Сообщение Lingo');
@@ -506,6 +522,11 @@ async function main() {
   await act(async () => tree.unmount());
   await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
   assert.equal(homeSelected(), true, 'a new application instance must start at Today');
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Английская жизнь').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Выбрать диалог').props.onPress(); await flush(); });
+  assert.ok(namedButton('Вернуть покупку'), 'the world opens the same catalogue of short dialogues');
+  await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Назад').props.onPress());
+  assert.ok(namedButton('Выбрать диалог'), 'closing the catalogue returns to the world');
   assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start must not automatically reopen the last exercise');
   await act(async () => tree.unmount());
   progress.settings = { reviewReminderEnabled: true, modelNotificationEnabled: true };

@@ -54,6 +54,7 @@ export const courseReinforcement = {
   s1: task("Как дела", "Друг говорит: How's it going? Что он хочет узнать?", "Как у тебя дела?", ["Куда ты идёшь?", "Как тебя зовут?"], "How's it going — разговорный вариант How is it going: вопрос о делах, а не о направлении движения."),
   sh3: task("Возврат денег", "Магазин вернул тебе стоимость покупки. Ты получил…", "a refund", ["a discount", "a receipt"], "Refund — возвращённые деньги. Discount — скидка при покупке; receipt — чек."),
   pa1: task("Прошлая форма go", "Last Saturday, Leo ___ to the museum.", "went", ["goes", "has gone"], "Last Saturday — завершённое время. Нужен Past Simple: go → went; goes относится к настоящему, has gone — Present Perfect."),
+  pa3: task('Отрицание с didn’t', 'Скажи, что вчера ты не нашёл ключи.', "I didn't find my keys yesterday.", ["I didn't found my keys yesterday.", "I don't found my keys yesterday."], 'Didn’t выражает прошедшее время. После него нужна начальная форма find.'),
   pa2: task("Вопрос с did", "Выбери вопрос о вчерашнем звонке.", "Did you call her yesterday?", ["Did you called her yesterday?", "Do you called her yesterday?"], "Вопрос в Past Simple: Did + подлежащее + начальная форма call. Прошедшее время уже выражено через did."),
   pp5: task("Длительность с for", "He has lived here ___ three months.", "for", ["since", "during"], "Three months — длительность, поэтому for. Since указывает начальную точку: since March."),
   ph2: task("Снять одежду", "It's warm inside. Please ___ your coat.", "take off", ["turn off", "put off"], "Take off используют со снимаемой одеждой. Turn off — выключить устройство; put off — отложить событие."),
@@ -83,6 +84,8 @@ const alternateCourseTasks = {
   'mega-greetings-2': task('Представить друга', 'Познакомь коллегу со своим другом Дэвидом.', 'This is my friend David', ['My name is David', 'Nice to meet you'], 'This is… представляет другого человека. My name is… называет твоё собственное имя.'),
   c2: task('Счёт в кафе', 'Ты готов оплатить ужин. Как вежливо обратиться к официанту?', 'Could I have the bill, please?', ['Could I have the menu, please?', 'Could I have some water, please?'], 'The bill — счёт за еду. Menu — меню, water — вода. Could I have… — вежливая просьба.'),
   t2: task('Посадочный талон', 'Как назвать по-английски талон, который сканируют перед входом в самолёт?', 'boarding pass', ['passport control', 'baggage claim'], 'Boarding pass — посадочный талон; passport control — паспортный контроль, baggage claim — выдача багажа.'),
+  pa2: task('Вопрос с did', 'Спроси, открыли ли вчера новый парк.', 'Did they open the new park yesterday?', ['Did they opened the new park yesterday?', 'Do they opened the new park yesterday?'], 'После Did и подлежащего нужна начальная форма open.'),
+  pa3: task('Отрицание с didn’t', 'Скажи, что в прошлую пятницу ты не смотрел фильм.', "I didn't watch the film last Friday.", ["I didn't watched the film last Friday.", "I don't watched the film last Friday."], 'После didn’t используется watch, поскольку прошлое время уже выражено через did.'),
   pp5: task('Длительность с for', 'They have studied together ___ six months.', 'for', ['since', 'at'], 'Six months — длительность. For обозначает, как долго; since требует начальную точку.'),
   pa1: task('Прошлая форма go', 'Last Sunday, we ___ to the park.', 'went', ['go', 'gone'], 'Last Sunday — завершённое прошлое. Нужна форма Past Simple: went. Gone используется с вспомогательным have.'),
   ph2: task('Снять одежду', 'Please ___ your hat before the ceremony.', 'take off', ['turn off', 'put off'], 'Take off означает снять одежду. Turn off — выключить, put off — отложить событие.'),
@@ -91,7 +94,7 @@ const alternateCourseTasks = {
 const constructionByExercise = {
   g3: 'name', 'j-understand-2': 'name', 'j-phrases-1': 'name',
   'j-understand-3': 'introduceFriend', 'j-phrases-2': 'introduceFriend', 'mega-greetings-2': 'introduceFriend',
-  pa2: 'pastQuestion', c2: 'bill',
+  pa1: 'pastGo', pa2: 'pastQuestion', pa3: 'pastNegative', c2: 'bill', pp5: 'duration', ph2: 'takeOff',
 };
 
 export const constructionForExercise = item => constructionByExercise[item.sourceExerciseId || item.id];
