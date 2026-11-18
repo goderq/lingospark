@@ -16,6 +16,7 @@ const events = new Map();
 const animations = [];
 const speechCalls = [];
 const tutorRequests = [];
+const modelDownloads = [], openedLinks = [];
 const tutorApi = { loadModel: async () => {}, loadTutorSessions: async () => [], loadTutorMemory: async () => ({ completedMissions: [] }), loadTutorFeedback: async () => [], getDailyTutorMission: () => ({ id: 'test-mission', title: 'Обсуди свой день', description: 'Скрытые подробности миссии' }), getTutorMissionProgress: () => ({ current: 0, target: 2, completed: false }), saveTutorSession: async () => {}, stopGeneration: async () => {}, completeTutorMessage: args => new Promise((resolve, reject) => { args.onStatus?.('thinking'); tutorRequests.push({ args, resolve, reject }); }) };
 let system = 'light', override = null, reduced = false;
 const emit = (name, value) => { for (const callback of events.get(name) || []) callback(value); };
@@ -32,6 +33,7 @@ const native = {
   AccessibilityInfo: { isReduceMotionEnabled: async () => reduced, addEventListener: (_, callback) => subscribe('motion', callback) },
   AppState: { currentState: 'active', addEventListener: (_, callback) => subscribe('appstate', callback) },
   Keyboard: { dismiss() {}, addListener: (name, callback) => subscribe(name, callback) }, BackHandler: { addEventListener: (_, callback) => subscribe('back', callback) }, Alert: { alert() {} }, Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Linking: { openURL: async url => openedLinks.push(url) },
   Animated: { Value, View: host('AnimatedView'), timing: animate, spring: animate }, Easing: { out: value => value, cubic: value => value },
 };
 const progress = { name: 'Лео', onboarded: true, dailyGoal: 30, totalXP: 40, dailyXP: 10, streak: 2, completed: [], journeys: {}, retention: {}, reviewStats: {}, reviewQueue: {}, mistakes: [], settings: {}, stats: {}, activity: {} };
@@ -77,6 +79,7 @@ function load(filename) {
   return module.exports;
 }
 const theme = load('src/theme.js');
+Object.assign(tutorApi, { AI_MODELS: load('src/data/aiModels.js').AI_MODELS, getDownloadState: () => ({ status: 'idle', modelId: null, progress: 0 }), subscribeToDownload: () => () => {}, getFreeSpace: async () => 20000000000, downloadModel: async model => modelDownloads.push(model.id) });
 const { palettes, foregroundFor } = load('src/design/palettes.js');
 const luminance = hex => {
   const values = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
@@ -265,6 +268,34 @@ async function main() {
   await act(async () => tree.unmount());
   actions.saveWordSession = oldSave; actions.recordReview = oldReview;
   delete progress.wordPreferences;
+  const Library = load('src/screens/AITutorScreen.js').ModelLibrary;
+  const models = tutorApi.AI_MODELS, chosenModels = [];
+  const libraryProps = { installed: {}, activeId: null, onRefresh: async () => {}, onStart: model => chosenModels.push(model.id) };
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Library, libraryProps))); await flush(); });
+  const sourceLinks = () => tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel?.startsWith('Источник '));
+  assert.equal(sourceLinks().length, 3, 'show three new models by default');
+  assert.equal(modelDownloads.length, 0, 'opening the library must not download anything');
+  assert.equal(chosenModels.length, 0, 'opening the library must not select a model');
+  await act(async () => sourceLinks()[0].props.onPress());
+  assert.equal(openedLinks.at(-1), models[0].sourceUrl);
+  const licenseButton = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === `Условия ${models[0].shortTitle}`);
+  await act(async () => licenseButton.props.onPress());
+  assert.ok(tree.root.findAllByType('Text').some(node => typeof node.props.children === 'string' && node.props.children.startsWith('LLAMA 3.2 COMMUNITY LICENSE AGREEMENT')));
+  await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Закрыть условия').props.onPress());
+  const modelCard = tree.root.findAllByType('View').filter(node => node.findAllByType('Text').some(text => text.props.children === models[0].model) && node.findAllByType('Text').some(text => text.props.children === 'Скачать модель')).at(-1);
+  await act(async () => modelCard.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === 'Скачать модель')).props.onPress());
+  assert.deepEqual(modelDownloads, [models[0].id]);
+  assert.equal(chosenModels.length, 0, 'downloading must not open a chat automatically');
+  await act(async () => namedButton('Показать прежние модели Qwen').props.onPress());
+  assert.equal(sourceLinks().length, 6);
+  await act(async () => { controls.setMode('pink'); await flush(); });
+  assert.equal(sourceLinks().length, 6, 'theme change must preserve the model list selection');
+  await act(async () => tree.unmount());
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Library, { ...libraryProps, activeId: 'light', installed: { light: { installed: true } } }))); await flush(); });
+  assert.equal(sourceLinks().length, 4, 'already installed legacy model must remain accessible without expanding the list');
+  await act(async () => namedButton('Продолжить диалог').props.onPress());
+  assert.deepEqual(chosenModels, ['light']);
+  await act(async () => tree.unmount());
   // Actual chat UI: keyboard positions use the measured window origin. The
   // composer has no accessory toolbar, input survives layout changes, and late
   // stopped completions cannot replace the current conversation.
@@ -350,7 +381,7 @@ async function main() {
   assert.equal(homeSelected(), true, 'a new application instance must start at Today');
   assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start must not automatically reopen the last exercise');
   await act(async () => tree.unmount());
-  console.log('Interface passed: themes/motion, dictionary/search/status, word sessions, measured chat keyboard inset/input, chat stop/late reply/retry, simplified Home routes, background preserves work and cold start opens Today. Native model quality and keyboard movement still require iPhone checks.');
+  console.log('Interface passed: model library/manual downloads/legacy/terms, themes, word sessions, chat keyboard inset/input, stop/retry, Home routes, background preserves work and cold start opens Today. Native model quality and keyboard movement still require iPhone checks.');
 }
 const watchdog = setTimeout(() => { console.error('Interface test did not finish'); process.exitCode = 1; }, 20000);
 main().then(() => clearTimeout(watchdog), cause => { clearTimeout(watchdog); console.error(cause); process.exitCode = 1; });

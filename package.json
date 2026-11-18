@@ -1,11 +1,12 @@
 {
   "name": "lingospark-expo",
-  "version": "4.3.0",
+  "version": "4.4.0",
   "private": true,
   "main": "index.js",
   "scripts": {
     "test:interface": "node scripts/test-interface.cjs",
     "test:tutor-reply": "node scripts/test-tutor-reply.cjs",
+    "test:ai-models": "node scripts/test-ai-models.cjs",
     "test:word-dictionary": "node scripts/test-word-dictionary.cjs",
     "test:learning-quality": "node scripts/test-learning-quality.mjs",
     "benchmark:learning": "node scripts/benchmark-learning.mjs",

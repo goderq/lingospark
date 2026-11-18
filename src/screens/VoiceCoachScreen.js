@@ -317,7 +317,7 @@ export default function VoiceCoachScreen({ model, onClose }) {
       await saveTutorSession({
         id: `voice-${scenario.id}-${Date.now()}`,
         modelId: model.id,
-        modelTitle: model.title,
+        modelTitle: model.shortTitle || model.title,
         level,
         topic: `Голосовой тренер · ${scenario.title}`,
         title: `${scenario.emoji} ${scenario.title}`,
@@ -488,7 +488,7 @@ function VoiceSetup(props) {
         <Pressable onPress={onClose} style={s.headerButton}><Ionicons name="chevron-back" size={24} color={colors.text} /></Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.sessionTitle}>Голосовой тренер</Text>
-          <Text style={s.sessionMeta}>{model.title} модель · локально</Text>
+          <Text style={s.sessionMeta}>{model.shortTitle || model.title} · локально</Text>
         </View>
       </View>
       <ScrollView contentContainerStyle={s.setupContent} showsVerticalScrollIndicator={false}>

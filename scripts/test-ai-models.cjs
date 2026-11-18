@@ -1,0 +1,86 @@
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const load = require('./load-data.cjs');
+const { AI_MODELS, PRIMARY_AI_MODELS, LEGACY_AI_MODELS, isLightModel } = load(path.join(__dirname, '../src/data/aiModels'));
+const { modelCompletionOptions, modelSizeProblem } = load(path.join(__dirname, '../src/utils/aiModelRuntime'));
+assert.equal(PRIMARY_AI_MODELS.length, 3);
+assert.equal(new Set(AI_MODELS.map(model => model.id)).size, 6);
+assert.equal(new Set(AI_MODELS.map(model => model.filename)).size, 6);
+assert.deepEqual(PRIMARY_AI_MODELS.map(model => [model.family, model.tier]), [['llama', 'light'], ['gemma', 'standard'], ['llama', 'advanced']]);
+assert.deepEqual(LEGACY_AI_MODELS.map(model => model.id), ['light', 'standard', 'advanced']);
+for (const model of PRIMARY_AI_MODELS) {
+  assert.match(model.url, new RegExp(`/resolve/${model.revision}/`));
+  assert.match(model.revision, /^[a-f0-9]{40}$/); assert.match(model.sha256, /^[a-f0-9]{64}$/);
+  assert.ok(Number.isInteger(model.size) && model.size > 700000000);
+  assert.equal(modelSizeProblem(model, model.size), '');
+  assert.ok(modelSizeProblem(model, model.size - 1));
+  assert.ok(modelSizeProblem(model, model.size + 1));
+  assert.ok(model.license && model.licenseUrl.startsWith('https://'));
+}
+assert.ok(isLightModel(PRIMARY_AI_MODELS[0]) && isLightModel(LEGACY_AI_MODELS[0]));
+const original = { messages: [{ role: 'system', content: 'Speak English.' }, { role: 'user', content: 'hi' }, { role: 'assistant', content: 'Hello!' }, { role: 'user', content: 'what' }, { role: 'user', content: 'please clarify' }], response_format: { type: 'json_schema' } };
+const snapshot = JSON.stringify(original);
+const gemma = modelCompletionOptions(PRIMARY_AI_MODELS[1], original);
+assert.equal(gemma.messages[0].role, 'user');
+assert.match(gemma.messages[0].content, /^Speak English\./);
+assert.ok(!gemma.messages.some(item => item.role === 'system'));
+assert.ok(gemma.stop.includes('<end_of_turn>'));
+assert.equal(gemma.messages.at(-1).content, 'what\n\nplease clarify');
+assert.equal(gemma.jinja, true);
+assert.equal(gemma.response_format, original.response_format);
+assert.equal(JSON.stringify(original), snapshot, 'formatting must not mutate saved messages');
+const llama = modelCompletionOptions(PRIMARY_AI_MODELS[0], original);
+assert.equal(llama.messages[0].role, 'system'); assert.ok(llama.stop.includes('<|eot_id|>'));
+assert.ok(modelCompletionOptions(LEGACY_AI_MODELS[0], original).stop.includes('<|im_end|>'));
+
+const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
+async function main() {
+  const fixture = require('./mock-local-ai.cjs')({ installed: false });
+  const { downloads, files, filePath, storage } = fixture;
+  const ai = fixture.serviceLoad('src/services/localAi.js');
+  await ai.setActiveModelId('light');
+  const old = LEGACY_AI_MODELS[0];
+  files.set(filePath(old), { size: old.size, header: 'R0dVRg==' });
+  await ai.saveTutorSession({ id: 'old-dialogue', modelId: 'light', messages: [{ role: 'user', content: 'hi' }] });
+  assert.ok((await ai.inspectModels()).light.installed);
+  assert.equal(await ai.getActiveModelId(), 'light', 'inspecting new models must not switch an old active selection');
+  for (const model of PRIMARY_AI_MODELS) {
+    const download = ai.downloadModel(model); await flush();
+    const job = downloads.at(-1);
+    assert.equal(job.url, model.url); assert.equal(job.destination, filePath(model));
+    job.progress(Math.floor(model.size / 2), model.size);
+    assert.equal(ai.getDownloadState().status, 'downloading');
+    await assert.rejects(ai.downloadModel(old), /Другая модель/);
+    job.finish(model.size); await download;
+    assert.ok((await ai.verifyModelFile(model)).verified);
+    assert.equal(await ai.getActiveModelId(), model.id);
+    assert.ok(files.has(filePath(old)), 'new downloads must not replace old Qwen files');
+  }
+  assert.equal((await ai.loadTutorSessions())[0].modelId, 'light', 'history must keep its original model ID');
+  const model = PRIMARY_AI_MODELS[0];
+  for (const [bytes, status, header] of [[model.size - 1, 200, 'R0dVRg=='], [model.size, 200, 'SFRNTA=='], [100, 403, 'SFRNTA==']]) {
+    const activeBefore = await ai.getActiveModelId();
+    const attempt = ai.downloadModel(model); await flush(); downloads.at(-1).finish(bytes, status, header);
+    await assert.rejects(attempt);
+    assert.equal(await ai.getActiveModelId(), activeBefore, 'failed download must not select an invalid model');
+    assert.equal(ai.getDownloadState().status, 'error');
+  }
+  const attempt = ai.downloadModel(model).catch(error => error); await flush();
+  const paused = downloads.at(-1); paused.progress(100000, model.size);
+  assert.equal(await ai.pauseActiveModelDownload(), true);
+  paused.fail(Error('native task paused')); await attempt;
+  const saved = JSON.parse(storage.get('@lingospark/ai-download-resume-v1'));
+  assert.equal(saved.modelId, model.id);
+  const resumed = ai.resumePendingModelDownload(); await flush();
+  assert.equal(downloads.at(-1).resumeData, 'native-resume-data');
+  assert.equal(downloads.at(-1).url, model.url);
+  downloads.at(-1).finish(model.size); await resumed;
+  assert.equal(storage.has('@lingospark/ai-download-resume-v1'), false);
+  assert.equal(await ai.getActiveModelId(), model.id);
+  await ai.deleteModel(model);
+  assert.equal(await ai.getActiveModelId(), null);
+  assert.ok(files.has(filePath(old)));
+  console.log('Models passed: pinned catalog, unique IDs/paths, legacy selection/history, family templates/stops, exact size/header, three downloads, failures, exclusivity, pause/resume and deletion. Native GGUF inference still needs iPhone verification.');
+}
+const watchdog = setTimeout(() => { console.error('Model test did not finish'); process.exitCode = 1; }, 15000);
+main().then(() => clearTimeout(watchdog), error => { clearTimeout(watchdog); console.error(error); process.exitCode = 1; });

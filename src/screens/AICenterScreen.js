@@ -113,7 +113,7 @@ export default function AICenterScreen({ onClose, onPronunciation, onSpeechModel
         <Row icon="phone-portrait-outline" title={Device.modelName || "iPhone"} value={deviceMemory ? `${formatBytes(deviceMemory)} RAM` : "iOS"} />
         <Row icon="hardware-chip-outline" title="Ускорение Metal" value={data.engine.gpu === false ? "Недоступно" : "Автоматически"} good={data.engine.gpu !== false} />
         <Row icon="speedometer-outline" title="Скорость генерации" value={data.engine.tokensPerSecond ? `${data.engine.tokensPerSecond.toFixed(1)} ток./с` : "После первого ответа"} />
-        <Row icon="cube-outline" title="Модель в памяти" value={AI_MODELS.find((item) => item.id === data.engine.loadedModelId)?.title || "Не загружена"} />
+        <Row icon="cube-outline" title="Модель в памяти" value={AI_MODELS.find((item) => item.id === data.engine.loadedModelId)?.shortTitle || "Не загружена"} />
         <Pressable disabled={!data.engine.loadedModelId} onPress={async () => { await unloadModel(); await refresh(); }} style={[styles.outlineButton, !data.engine.loadedModelId && { opacity: 0.4 }]}>
           <Ionicons name="power-outline" size={19} color={colors.orange} /><Text style={styles.outlineText}>Выгрузить модель из памяти</Text>
         </Pressable>
@@ -175,7 +175,7 @@ export default function AICenterScreen({ onClose, onPronunciation, onSpeechModel
       </View>
       {AI_MODELS.map((model) => {
         const state = data.models[model.id];
-        return state?.installed ? <View key={model.id} style={styles.modelRow}><View style={[styles.modelMark, { backgroundColor: `${model.color}22` }]}><Ionicons name="checkmark-circle" color={model.color} size={24} /></View><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{model.title} · {model.sizeLabel}</Text><Text style={styles.rowSub}>GGUF проверен · {riskFor(model)}</Text></View></View> : null;
+        return state?.installed ? <View key={model.id} style={styles.modelRow}><View style={[styles.modelMark, { backgroundColor: `${model.color}22` }]}><Ionicons name="checkmark-circle" color={model.color} size={24} /></View><View style={{ flex: 1 }}><Text style={styles.rowTitle}>{model.shortTitle || model.title} · {model.sizeLabel}</Text><Text style={styles.rowSub}>Заголовок GGUF проверен · {riskFor(model)} по размеру файла</Text></View></View> : null;
       })}
 
       <Text style={styles.section}>ОБСЛУЖИВАНИЕ</Text>

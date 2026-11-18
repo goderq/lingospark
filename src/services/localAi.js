@@ -3,6 +3,9 @@ import { budgetMessages, recentTranscript } from '../utils/contextBudget';
 import { now, recordTiming } from '../utils/performance';
 import { dialogueGuidance } from '../utils/conversationCoach';
 import { generateTutorReply, tutorLanguageRule } from '../utils/tutorReply';
+import { AI_MODELS, isLightModel } from '../data/aiModels';
+import { modelCompletionOptions, modelSizeProblem } from '../utils/aiModelRuntime';
+export { AI_MODELS } from '../data/aiModels';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { initLlama, releaseAllLlama } from "@pocketpalai/llama.rn";
@@ -26,52 +29,6 @@ const EMPTY_TUTOR_MEMORY = {
   completedMissions: [],
   updatedAt: 0,
 };
-
-export const AI_MODELS = [
-  {
-    id: "light",
-    title: "Лёгкий",
-    subtitle: "Быстрые диалоги и простые объяснения",
-    size: 397808192,
-    sizeLabel: "398 МБ",
-    model: "Qwen 2.5 · 0.5B · Q4",
-    filename: "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf",
-    context: 2048,
-    color: "#2ED3B7",
-    icon: "flash",
-    device: "Подойдёт для большинства iPhone",
-  },
-  {
-    id: "standard",
-    title: "Обычный",
-    subtitle: "Лучший баланс качества и скорости",
-    size: 986048768,
-    sizeLabel: "986 МБ",
-    model: "Qwen 2.5 · 1.5B · Q4",
-    filename: "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf",
-    context: 3072,
-    color: "#7C5CFC",
-    icon: "sparkles",
-    recommended: true,
-    device: "Рекомендуется iPhone 12 и новее",
-  },
-  {
-    id: "advanced",
-    title: "Продвинутый",
-    subtitle: "Глубокие объяснения и сложные диалоги",
-    size: 1929903264,
-    sizeLabel: "1,93 ГБ",
-    model: "Qwen 2.5 · 3B · Q4",
-    filename: "Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-    url: "https://huggingface.co/bartowski/Qwen2.5-3B-Instruct-GGUF/resolve/main/Qwen2.5-3B-Instruct-Q4_K_M.gguf",
-    context: 4096,
-    color: "#FF9F43",
-    icon: "diamond",
-    device: "Рекомендуется iPhone 14 Pro и новее",
-  },
-];
 
 let context = null;
 let contextModelId = null;
@@ -317,7 +274,8 @@ export async function verifyModelFile(model) {
   const info = await FileSystem.getInfoAsync(modelPath(model), { size: true });
   if (!info.exists) return { installed: false, verified: false, bytes: 0, reason: "Файл не найден" };
   const bytes = info.size || 0;
-  if (bytes < model.size * 0.98) return { installed: false, verified: false, bytes, reason: "Файл загружен не полностью" };
+  const sizeProblem = modelSizeProblem(model, bytes);
+  if (sizeProblem) return { installed: false, verified: false, bytes, reason: sizeProblem };
   try {
     const header = await FileSystem.readAsStringAsync(modelPath(model), {
       encoding: FileSystem.EncodingType.Base64,
@@ -398,6 +356,7 @@ async function runDownload(model, resumeData = null) {
   const promise = (async () => {
     try {
       const result = await task.downloadAsync();
+      if (result?.status && ![200, 206].includes(result.status)) throw new Error(`Источник не отдал файл модели (HTTP ${result.status}). Попробуй скачать позже.`);
       if (!result?.uri) throw new Error("Файл модели не был сохранён");
       const verification = await verifyModelFile(model);
       if (!verification.verified) {
@@ -604,7 +563,7 @@ async function completeWithGuard(llama, options, onToken, timeoutMs = 90000) {
   const model = AI_MODELS.find(item => item.id === contextModelId);
   const contextSize = engineDiagnostics.contextSize || (settings.economyMode ? Math.min(2048, model?.context || 2048) : model?.context || 2048);
   const predicted = Math.min(options.n_predict || 280, Math.floor(contextSize * 0.5));
-  options = { ...options, n_predict: predicted, messages: budgetMessages(options.messages, (contextSize - predicted - 160) * 2.4) };
+  options = modelCompletionOptions(model, { ...options, n_predict: predicted, messages: budgetMessages(options.messages, (contextSize - predicted - 160) * 2.4) });
   let timer;
   try {
     const result = await Promise.race([
@@ -701,7 +660,6 @@ async function improveTutorReply({ llama, draft, messages, level, dialogueMode, 
     top_k: 30,
     top_p: 0.85,
     repeat_penalty: 1.15,
-    stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
   }, undefined, 100000);
   return result;
 }
@@ -717,7 +675,7 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
   const grammarNotes = lastUserText.trim().split(/\s+/).length <= 2 && topic !== 'Грамматика' ? '' : grammarNotesFor(lastUserText, topic, level, tutorMemory);
   const rawHistory = messages.filter((item) => (item.role === "user" || item.role === "assistant") && !String(item.id || '').startsWith('welcome') && item.content?.trim());
   const fullHistory = rawHistory.map(({ role, content }) => ({ role, content }));
-  const historyLimit = model.id === "light" ? 8 : 14;
+  const historyLimit = isLightModel(model) ? 8 : 14;
   const history = fullHistory.slice(-historyLimit);
   const longContext = compactConversationContext(rawHistory.slice(0, -historyLimit));
   const learnerFeedback = feedbackPrompt(tutorFeedback);
@@ -726,12 +684,11 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
     llama,
     {
       messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext + dialogueGuidance(messages) + '\n' + tutorLanguageRule(messages) }, ...history],
-      n_predict: model.id === "light" ? 190 : 280,
+      n_predict: isLightModel(model) ? 190 : 280,
       temperature: 0.76,
       top_k: 40,
       top_p: 0.9,
       repeat_penalty: 1.13,
-      stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
     },
     undefined,
     90000,
@@ -888,12 +845,11 @@ async function requestConversationAnalysis({ llama, model, level, topic, transcr
       type: "json_schema",
       json_schema: { strict: true, schema: ANALYSIS_SCHEMA },
     },
-    n_predict: compact ? 700 : model.id === "light" ? 900 : 1150,
+    n_predict: compact ? 700 : isLightModel(model) ? 900 : 1150,
     temperature: 0.18,
     top_k: 25,
     top_p: 0.82,
     repeat_penalty: 1.05,
-    stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
   }, undefined, compact ? 120000 : 170000);
 }
 
@@ -969,7 +925,6 @@ ${grammarContext ? `Проверенная грамматическая памя
       top_k: 40,
       top_p: 0.9,
       repeat_penalty: 1.08,
-      stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
     },
     ({ token }) => onToken?.(token || ""),
     75000,

@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
+  Modal,
   Keyboard,
   Pressable,
   ScrollView,
@@ -27,6 +29,8 @@ import { ProgressBar } from "../components/UI";
 import { speak, stopSpeech } from "../utils/speech";
 import { useProgressActions, useProgressSelector } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
+import { foregroundFor } from '../design/palettes';
+import llamaLicense from '../data/llamaLicense.json';
 import VoiceCoachScreen from "./VoiceCoachScreen";
 import AICenterScreen from "./AICenterScreen";
 import PronunciationLabScreen from "./PronunciationLabScreen";
@@ -102,9 +106,9 @@ const welcomeFor = (level, topic, modeId = "conversation") => ({
 
 function formatSpace(bytes) {
   if (!Number.isFinite(bytes)) return "";
-  return bytes >= 1024 ** 3
-    ? `${(bytes / 1024 ** 3).toFixed(1)} ГБ`
-    : `${Math.round(bytes / 1024 ** 2)} МБ`;
+  return bytes >= 1e9
+    ? `${(bytes / 1e9).toFixed(2)} ГБ`
+    : `${Math.round(bytes / 1e6)} МБ`;
 }
 
 export default function AITutorScreen({ onImmersiveChange, onNavigate, practice, onPracticeConsumed }) {
@@ -210,11 +214,13 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate, practice,
   );
 }
 
-function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation, onDirector }) {
-  useTheme();
+export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation, onDirector }) {
+  const { reduceMotion } = useTheme();
   const [download, setDownload] = useState(getDownloadState());
   const [freeSpace, setFreeSpace] = useState(null);
   const [error, setError] = useState("");
+  const [showLegacy, setShowLegacy] = useState(false);
+  const [licenseModel, setLicenseModel] = useState(null);
   const cancelledRef = useRef(false);
 
   useEffect(() => {
@@ -232,8 +238,8 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
   const install = async (model) => {
     cancelledRef.current = false;
     setError("");
-    if (freeSpace && freeSpace < model.size * 1.25) {
-      setError(`Недостаточно места. Освободите не менее ${model.sizeLabel}.`);
+    if (Number.isFinite(freeSpace) && freeSpace < model.size * 1.25) {
+      setError(`Для загрузки нужно около ${formatSpace(model.size * 1.25)} свободного места с запасом.`);
       return;
     }
     try {
@@ -324,7 +330,10 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
         {freeSpace ? <Text style={styles.storage}>Свободно {formatSpace(freeSpace)}</Text> : null}
       </View>
 
-      {AI_MODELS.map((model) => {
+      <Text style={styles.smallMuted}>Начни с Llama 1B. Gemma 1B — альтернативный вариант, Llama 3B требует больше памяти. Скачивание запускается только по нажатию.</Text>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: showLegacy }} onPress={() => setShowLegacy(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>{showLegacy ? 'Скрыть неустановленные Qwen' : 'Показать прежние модели Qwen'}</Text></Pressable>
+      {AI_MODELS.filter(model => !model.legacy || showLegacy || installed[model.id]?.installed || activeId === model.id || download.modelId === model.id).map((model) => {
+        const accent = model.tier === 'light' ? colors.mint : model.tier === 'advanced' ? colors.orange : colors.purple;
         const isInstalled = installed[model.id]?.installed;
         const isDownloading = download.status === "downloading" && download.modelId === model.id;
         const blocked = download.status === "downloading" && !isDownloading;
@@ -333,25 +342,29 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
             key={model.id}
             style={[
               styles.modelCard,
-              (activeId === model.id || isDownloading) && { borderColor: model.color },
+              (activeId === model.id || isDownloading) && { borderColor: accent },
             ]}
           >
             <View style={styles.modelTop}>
-              <View style={[styles.modelIcon, { backgroundColor: `${model.color}22` }]}>
-                <Ionicons name={model.icon} size={23} color={model.color} />
+              <View style={[styles.modelIcon, { backgroundColor: `${accent}22` }]}>
+                <Ionicons name={model.icon} size={23} color={accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.nameRow}>
                   <Text style={styles.modelTitle}>{model.title}</Text>
-                  {model.recommended ? <Text style={styles.recommended}>СОВЕТУЕМ</Text> : null}
+                  {model.recommended ? <Text style={styles.recommended}>ДЛЯ СТАРТА</Text> : null}
                 </View>
                 <Text style={styles.modelSubtitle}>{model.subtitle}</Text>
               </View>
-              <Text style={[styles.size, { color: model.color }]}>{model.sizeLabel}</Text>
+              <Text style={[styles.size, { color: accent }]}>{model.sizeLabel}</Text>
             </View>
             <View style={styles.modelFacts}>
               <Text style={styles.fact}>{model.model}</Text>
               <Text style={styles.fact}>{model.device}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+              <Pressable accessibilityRole="link" accessibilityLabel={`Источник ${model.shortTitle || model.title}`} onPress={() => Linking.openURL(model.sourceUrl).catch(() => setError('Не удалось открыть источник модели.'))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>Источник</Text></Pressable>
+              <Pressable accessibilityRole={model.family === 'llama' ? 'button' : 'link'} accessibilityLabel={`Условия ${model.shortTitle || model.title}`} onPress={() => model.family === 'llama' ? setLicenseModel(model) : Linking.openURL(model.licenseUrl).catch(() => setError('Не удалось открыть условия модели.'))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>{model.license}</Text></Pressable>
             </View>
 
             {isDownloading ? (
@@ -360,7 +373,7 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
                   <Text style={styles.downloadText}>Загрузка {Math.round(download.progress * 100)}%</Text>
                   <Text style={styles.smallMuted}>{formatSpace(download.written)} из {model.sizeLabel}</Text>
                 </View>
-                <ProgressBar value={download.progress} color={model.color} height={8} />
+                <ProgressBar value={download.progress} color={accent} height={8} />
                 <Text style={styles.backgroundHint}>Можно перейти в другой раздел — загрузка продолжится</Text>
                 <Pressable onPress={cancel} style={styles.cancelButton}>
                   <Text style={styles.cancelText}>Отменить загрузку</Text>
@@ -368,9 +381,9 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
               </View>
             ) : isInstalled ? (
               <View style={styles.installedActions}>
-                <Pressable onPress={() => onStart(model)} style={[styles.startButton, { backgroundColor: model.color }]}>
-                  <Ionicons name="chatbubbles" size={19} color={colors.text} />
-                  <Text style={styles.startText}>{activeId === model.id ? "Продолжить диалог" : "Выбрать и запустить"}</Text>
+                <Pressable onPress={() => onStart(model)} style={[styles.startButton, { backgroundColor: accent }]}>
+                  <Ionicons name="chatbubbles" size={19} color={foregroundFor(accent)} />
+                  <Text style={[styles.startText, { color: foregroundFor(accent) }]}>{activeId === model.id ? "Продолжить диалог" : "Выбрать и запустить"}</Text>
                 </Pressable>
                 <Pressable onPress={() => remove(model)} style={styles.deleteButton}>
                   <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
@@ -380,10 +393,10 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
               <Pressable
                 disabled={blocked}
                 onPress={() => install(model)}
-                style={[styles.installButton, blocked && { opacity: 0.35 }]}
+                style={[styles.installButton, blocked && { backgroundColor: colors.disabledBackground, borderColor: colors.buttonBorder }]}
               >
-                <Ionicons name="cloud-download-outline" size={20} color={model.color} />
-                <Text style={[styles.installText, { color: model.color }]}>Скачать модель</Text>
+                <Ionicons name="cloud-download-outline" size={20} color={blocked ? colors.disabledText : accent} />
+                <Text style={[styles.installText, { color: blocked ? colors.disabledText : accent }]}>Скачать модель</Text>
               </Pressable>
             )}
           </View>
@@ -396,7 +409,13 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
-      <Text style={styles.licenseText}>Модели Qwen 2.5 Instruct · формат GGUF · лицензия Apache 2.0</Text>
+      <Text style={styles.licenseText}>Built with Llama · Gemma от Google · квантованные GGUF от bartowski. У каждой семьи собственные условия использования.</Text>
+      {!!licenseModel && <Modal transparent animationType={reduceMotion ? 'none' : 'fade'} visible onRequestClose={() => setLicenseModel(null)}>
+        <View style={{ flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' }}><View accessibilityViewIsModal style={{ maxHeight: '88%', backgroundColor: colors.card, borderTopLeftRadius: 26, borderTopRightRadius: 26, padding: 20, paddingBottom: 34 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Text style={[styles.modelTitle, { flex: 1 }]}>Условия Llama 3.2</Text><Pressable accessibilityLabel="Закрыть условия" onPress={() => setLicenseModel(null)} style={{ minWidth: 48, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><Ionicons name="close" size={24} color={colors.text} /></Pressable></View>
+          <ScrollView contentContainerStyle={{ paddingVertical: 16, gap: 16 }}><Text style={styles.smallMuted}>Llama 3.2 is licensed under the Llama 3.2 Community License, Copyright © Meta Platforms, Inc. All Rights Reserved.</Text><Text style={{ color: colors.text, fontSize: 14, lineHeight: 22 }}>{llamaLicense}</Text><Pressable accessibilityRole="link" onPress={() => Linking.openURL(licenseModel.licenseUrl).catch(() => setError('Не удалось открыть условия модели.'))} style={{ minHeight: 48, justifyContent: 'center' }}><Text style={styles.speakText}>Официальный источник</Text></Pressable></ScrollView>
+        </View></View>
+      </Modal>}
     </ScrollView>
   );
 }
@@ -519,7 +538,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       saveTutorSession({
         id: sessionId,
         modelId: model.id,
-        modelTitle: model.title,
+        modelTitle: model.shortTitle || model.title,
         level,
         topic,
         dialogueMode,
@@ -852,7 +871,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       <View style={styles.chatHeader}>
         <View style={[styles.onlineDot, { backgroundColor: modelReady ? colors.mint : colors.orange }]} />
         <View style={{ flex: 1 }}>
-          <Text numberOfLines={1} style={styles.chatTitle}>Lingo · {model.title}</Text>
+          <Text numberOfLines={1} style={styles.chatTitle}>Lingo · {model.shortTitle || model.title}</Text>
           <Text accessibilityLiveRegion="polite" style={styles.chatStatus}>{!modelReady ? `Загружаю модель · ${progressLabel}` : speechTranscribing ? 'Распознаю речь…' : listening ? 'Слушаю…' : generating ? replyStage === 'stopped' ? 'Останавливаю…' : replyStage === 'rewriting' ? 'Переформулирую ответ…' : replyStage === 'checking' ? 'Проверяю язык и повторы…' : 'Обдумываю ответ…' : replyStage === 'stopped' ? 'Ответ остановлен' : 'Английский диалог · офлайн'}</Text>
         </View>
         <Pressable accessibilityLabel={keyboardVisible ? 'Скрыть клавиатуру' : 'Инструменты разговора'} onPress={() => { Keyboard.dismiss(); if (!keyboardVisible) setToolsOpen(true); }} style={styles.headerButton}><Ionicons name={keyboardVisible ? 'chevron-down' : 'ellipsis-horizontal'} size={25} color={colors.text} /></Pressable>
