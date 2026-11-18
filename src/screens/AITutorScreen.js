@@ -88,7 +88,7 @@ const RESPONSE_ACTIONS = [
   { id: "detail", title: "Подробнее", icon: "expand", instruction: "Объясни этот ответ подробнее, но без воды. Добавь причину и один полезный нюанс." },
   { id: "example", title: "Пример", icon: "bulb", instruction: "Покажи два естественных примера по теме: один простой и один немного сложнее. Добавь русский перевод." },
   { id: "exercise", title: "Задание", icon: "school", instruction: "Создай одно короткое задание по этому ответу. Сначала задай вопрос и не показывай правильный ответ." },
-  { id: "translate", title: "Перевод", icon: "language", instruction: "Дай точный русский перевод английской части ответа и кратко объясни естественные выражения." },
+  { id: "translate", title: "Перевод", icon: "language" },
   { id: "retry", title: "Иначе", icon: "refresh", instruction: "Ответь заново другим способом: не повторяй структуру, начало и вопрос из прежнего ответа." },
 ];
 
@@ -432,7 +432,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [coursePractice, setCoursePractice] = useState(null);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [toolsPanel, setToolsPanel] = useState(null);
   const [lessonHelp, setLessonHelp] = useState(0);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
   useEffect(() => { setGoalSummaryOpen(false); }, [coursePractice?.topicId, coursePractice?.requestId]);
@@ -662,6 +662,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       displayContent: options.displayContent || text,
       kind: options.kind || "message",
       action: options.action || null,
+      ...(options.action === 'translate' ? { translationSource: text } : {}),
       ...(interview?.next && options.kind !== 'command' ? { interviewStepId: interview.next.id } : {}),
     };
     const nextMessages = (options.retry ? messages.filter(item => item.id !== 'streaming') : [...messages, userMessage]).slice(-59);
@@ -694,6 +695,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: finalText,
+        ...(options.action === 'translate' ? { action: 'translate' } : {}),
         quality: result?.quality || null,
       };
       const completedMessages = [...nextMessages, assistantMessage];
@@ -725,8 +727,11 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   const send = () => submitMessage(input);
 
   const runResponseAction = (message, action) => {
-    const excerpt = String(message.content || "").slice(0, 1200);
-    submitMessage(`${action.instruction}\n\nОтвет Lingo, с которым нужно работать:\n${excerpt}`, {
+    const content = String(message.content || '');
+    const text = action.id === 'translate'
+      ? content
+      : `${action.instruction}\n\nОтвет Lingo, с которым нужно работать:\n${content.slice(0, 1200)}`;
+    submitMessage(text, {
       kind: "command",
       displayContent: action.title,
       action: action.id,
@@ -759,7 +764,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
     try { await stopGeneration(); } catch { /* Completion owns the error UI. */ }
   };
 
-  const speakMessage = (text) => speak(text, { language: "en-US", rate: 0.88 });
+  const speakMessage = (text, language = 'en-US') => speak(text, { language, rate: 0.88 });
   const progressLabel = loadProgress > 0 ? `${Math.round(loadProgress * 100)}%` : "подготовка";
 
   const startConversation = (mode) => {
@@ -901,29 +906,52 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
           <Text numberOfLines={1} style={styles.chatTitle}>Lingo · {model.shortTitle || model.title}</Text>
           <Text accessibilityLiveRegion="polite" style={styles.chatStatus}>{!modelReady ? `Загружаю модель · ${progressLabel}` : speechTranscribing ? 'Распознаю речь…' : listening ? 'Слушаю…' : generating ? replyStage === 'stopped' ? 'Останавливаю…' : replyStage === 'rewriting' ? 'Переформулирую ответ…' : replyStage === 'checking' ? 'Проверяю язык и повторы…' : 'Обдумываю ответ…' : replyStage === 'stopped' ? 'Ответ остановлен' : 'Английский диалог · офлайн'}</Text>
         </View>
-        <Pressable accessibilityLabel={keyboardVisible ? 'Скрыть клавиатуру' : 'Инструменты разговора'} onPress={() => { Keyboard.dismiss(); if (!keyboardVisible) setToolsOpen(true); }} style={styles.headerButton}><Ionicons name={keyboardVisible ? 'chevron-down' : 'ellipsis-horizontal'} size={25} color={colors.text} /></Pressable>
-        <ToolSheet visible={toolsOpen} onClose={() => setToolsOpen(false)} title="Твой разговор" actions={[
+        <Pressable accessibilityLabel={keyboardVisible ? 'Скрыть клавиатуру' : 'Инструменты разговора'} onPress={() => { Keyboard.dismiss(); if (!keyboardVisible) setToolsPanel('menu'); }} style={styles.headerButton}><Ionicons name={keyboardVisible ? 'chevron-down' : 'ellipsis-horizontal'} size={25} color={colors.text} /></Pressable>
+        {toolsPanel && <ToolSheet visible onClose={() => setToolsPanel(null)} title={toolsPanel === 'settings' ? 'Настройки диалога' : 'Твой разговор'} actions={toolsPanel === 'menu' ? [
+          { title: 'Настройки диалога', detail: `${level} · ${topic} · ${DIALOGUE_MODES.find(item => item.id === dialogueMode)?.title || 'Живой'}`, icon: 'options-outline', onPress: () => setToolsPanel('settings') },
           { title: 'Новое собеседование', detail: 'Три шага и короткий разбор', icon: 'briefcase-outline', onPress: () => startConversation('interview') },
           { title: 'Голосовой режим', detail: 'Практика речи с собеседником', icon: 'mic-outline', onPress: onVoice },
           { title: 'История разговоров', detail: 'Открой сохранённый диалог вручную', icon: 'time-outline', onPress: () => setHistoryOpen(true) },
           { title: 'Локальные модели', detail: 'Выбрать и скачать модель', icon: 'hardware-chip-outline', onPress: onModels },
-        ]} />
+        ] : []}>
+          {toolsPanel === 'settings' && <>
+            <Text style={styles.settingsLabel}>Уровень</Text>
+            <View style={styles.settingsChoices}>
+              {LEVELS.map(item => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: level === item, disabled: generating }} disabled={generating} onPress={() => { if (item !== level) { setLevel(item); setCoursePractice(null); } }} style={[styles.settingsChoice, level === item && styles.settingsChoiceActive]}>
+                <Text style={styles.settingsChoiceText}>{item}</Text>
+              </Pressable>)}
+            </View>
+            {!interview && <>
+              <Text style={styles.settingsLabel}>Тема</Text>
+              <View style={styles.settingsChoices}>
+                {TOPICS.map(item => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: topic === item, disabled: generating }} disabled={generating} onPress={() => { if (item !== topic) { setTopic(item); setCoursePractice(null); } }} style={[styles.settingsChoice, topic === item && styles.settingsChoiceActive]}>
+                  <Text style={styles.settingsChoiceText}>{item}</Text>
+                </Pressable>)}
+              </View>
+            </>}
+            <Text style={styles.settingsLabel}>Режим</Text>
+            <View style={styles.settingsChoices}>
+              {DIALOGUE_MODES.map(item => {
+                const active = dialogueMode === item.id;
+                return <Pressable key={item.id} accessibilityRole="button" accessibilityState={{ selected: active, disabled: generating }} disabled={generating} onPress={() => {
+                  if (active) return;
+                  if (interview || item.id === 'interview') {
+                    startConversation(item.id);
+                    setToolsPanel(null);
+                  } else {
+                    setDialogueMode(item.id);
+                    setCoursePractice(null);
+                  }
+                }} style={[styles.settingsChoice, active && styles.settingsChoiceActive]}>
+                  <Ionicons name={item.icon} size={18} color={active ? colors.purple : colors.textMuted} />
+                  <Text style={styles.settingsChoiceText}>{item.title}</Text>
+                </Pressable>;
+              })}
+            </View>
+            <Text style={styles.smallMuted}>{DIALOGUE_MODES.find(item => item.id === dialogueMode)?.hint}</Text>
+          </>}
+        </ToolSheet>}
       </View>
-
-      {!keyboardVisible && <View style={styles.optionsStrip}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          {LEVELS.map((item) => (
-            <Pressable key={item} disabled={generating} onPress={() => { setLevel(item); setCoursePractice(null); }} style={[styles.chip, level === item && styles.chipActive]}>
-              <Text style={[styles.chipText, level === item && styles.chipTextActive]}>{item}</Text>
-            </Pressable>
-          ))}
-          {!interview && TOPICS.map((item) => (
-            <Pressable key={item} disabled={generating} onPress={() => { setTopic(item); setCoursePractice(null); }} style={[styles.topicChip, topic === item && styles.topicChipActive]}>
-              <Text style={[styles.topicText, topic === item && { color: colors.white }]}>{item}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>}
 
       {!keyboardVisible && !!courseTutorContext(coursePractice, level, topic) && <ScrollView style={{ maxHeight: 240, flexGrow: 0 }} contentContainerStyle={{ padding: 16, backgroundColor: colors.card, gap: 9 }}>
         <Text style={{ color: colors.mint, fontWeight: '800' }}>Цель: {coursePractice.goal || topic}</Text>
@@ -940,24 +968,6 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         {lessonHelp > 0 && <Text style={{ color: colors.text, lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
         {lessonHelp >= 3 && !!coursePractice.phrases?.[0] && <Pressable onPress={() => addReviewPhrase({ ...coursePractice.phrases[0], topic })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>Добавить эту фразу в повторение</Text></Pressable>}
       </ScrollView>}
-      {!keyboardVisible && <View style={styles.modeStrip}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeChips}>
-          {DIALOGUE_MODES.map((item) => {
-            const active = dialogueMode === item.id;
-            return (
-              <Pressable key={item.id} disabled={generating} onPress={() => {
-                if (active) return;
-                if (interview || item.id === 'interview') startConversation(item.id);
-                else { setDialogueMode(item.id); setCoursePractice(null); }
-              }} style={[styles.modeChip, active && styles.modeChipActive]}>
-                <Ionicons name={item.icon} size={15} color={active ? colors.purple : colors.textMuted} />
-                <Text style={[styles.modeText, active && { color: colors.text }]}>{item.title}</Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-        <Text numberOfLines={1} style={styles.modeHint}>{DIALOGUE_MODES.find((item) => item.id === dialogueMode)?.hint}</Text>
-      </View>}
 
       {!modelReady && !error ? (
         <View style={styles.loadingModel}>
@@ -1020,7 +1030,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
                 {message.role === "assistant" && message.content && message.id !== "streaming" ? (
                   <>
                     <View style={styles.bubbleActions}>
-                      <Pressable onPress={() => speakMessage(message.content)} style={styles.speakButton}>
+                      <Pressable onPress={() => speakMessage(message.content, message.action === 'translate' ? 'ru-RU' : 'en-US')} style={styles.speakButton}>
                         <Ionicons name="volume-medium" size={17} color={colors.purple} />
                         <Text style={styles.speakText}>Озвучить</Text>
                       </Pressable>
@@ -1395,21 +1405,11 @@ const styles = createThemedStyles(() => ({
   chatHeaderButtonPrimary: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
   chatHeaderButtonPressed: { opacity: 0.65, transform: [{ scale: 0.94 }] },
   chatHeaderButtonText: { color: colors.textMuted, fontSize: 8, lineHeight: 10, fontWeight: "800" },
-  optionsStrip: { borderBottomWidth: 1, borderColor: colors.border },
-  chips: { paddingHorizontal: 14, paddingVertical: 10, gap: 7 },
-  chip: { height: 34, minWidth: 44, paddingHorizontal: 12, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
-  chipActive: { backgroundColor: colors.accentSoft },
-  chipText: { color: colors.textMuted, fontSize: 12, fontWeight: "900" },
-  chipTextActive: { color: colors.text },
-  topicChip: { height: 34, paddingHorizontal: 13, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  topicChipActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,0.14)" },
-  topicText: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
-  modeStrip: { borderBottomWidth: 1, borderColor: colors.border, paddingBottom: 7 },
-  modeChips: { paddingHorizontal: 14, paddingTop: 8, gap: 7 },
-  modeChip: { height: 34, paddingHorizontal: 11, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, flexDirection: "row", alignItems: "center", gap: 6 },
-  modeChipActive: { backgroundColor: "rgba(124,92,252,0.2)", borderColor: colors.purple },
-  modeText: { color: colors.textMuted, fontSize: 11, fontWeight: "800" },
-  modeHint: { color: colors.textMuted, fontSize: 9, marginTop: 5, paddingHorizontal: 16 },
+  settingsLabel: { color: colors.text, fontSize: 15, fontWeight: '800', marginTop: 12, marginBottom: 8 },
+  settingsChoices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  settingsChoice: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardLight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  settingsChoiceActive: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
+  settingsChoiceText: { color: colors.text, fontSize: 13, fontWeight: '700' },
   loadingModel: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 36, gap: 12 },
   modelLoadingTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   messages: { flex: 1 },

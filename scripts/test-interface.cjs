@@ -317,6 +317,12 @@ async function main() {
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'Hello! Would you like to talk about food or travel?' }); await flush(); });
   assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Hello! Would you like to talk about food or travel?'));
   assert.ok(!tree.root.findAllByType('Text').some(node => ['Проверено по контексту', 'Опора на справочник'].includes(node.props.children)));
+  await act(async () => namedButton('Действия').props.onPress());
+  await act(async () => { namedButton('Перевод').props.onPress(); await flush(); });
+  const translationRequest = tutorRequests.at(-1);
+  assert.equal(translationRequest.args.messages.at(-1).translationSource, 'Hello! Would you like to talk about food or travel?');
+  await act(async () => { translationRequest.resolve({ text: 'Привет! Хочешь поговорить о еде или путешествиях?' }); await flush(); });
+  assert.ok(tree.root.findByType('FlatList').props.data.some(item => item.content === 'Привет! Хочешь поговорить о еде или путешествиях?'));
   await act(async () => chatInput().props.onChangeText('what'));
   await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'I mean: which topic do you prefer, food or travel?' }); await flush(); });
@@ -334,7 +340,14 @@ async function main() {
   await act(async () => { namedButton('Повторить ответ').props.onPress(); await flush(); });
   assert.equal(tutorRequests.at(-1).args.messages.filter(item => item.role === 'user').length, userCount, 'retry must not insert the learner message twice');
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'Let’s try again. What did you enjoy today?' }); await flush(); });
+  assert.equal(namedButton('A2'), undefined, 'level controls must not take space in the chat');
+  await act(async () => chatButton('Инструменты разговора').props.onPress());
+  await act(async () => namedButton('Настройки диалога').props.onPress());
+  assert.ok(namedButton('A2').props.accessibilityState.selected);
+  await act(async () => namedButton('B1').props.onPress());
+  assert.ok(namedButton('B1').props.accessibilityState.selected);
   await act(async () => namedButton('Собеседование').props.onPress());
+  assert.equal(namedButton('B1'), undefined, 'starting an interview closes the settings');
   const containsText = text => tree.root.findAllByType('Text').some(node => String(React.Children.toArray(node.props.children).join('')).includes(text));
   assert.ok(containsText('шаг 1 из 3'));
   await act(async () => namedButton('Подсказка').props.onPress());
