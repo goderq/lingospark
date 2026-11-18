@@ -6,15 +6,18 @@ const { wordExpansion } = load(require('node:path').join(__dirname, '../src/data
 const { dictionaryWithoutDuplicates, searchDictionary, wordLearningState, normalizeWordQuery, wordAmountLabel } = load(require('node:path').join(__dirname, '../src/utils/wordDictionary'));
 const legacy = require('../src/data/wordBank.json');
 const supplement = require('../src/data/wordSupplement.json');
+const reference = require('../src/data/wordReferenceSupplement.json');
+const { wordPhrasePacks } = load(require('node:path').join(__dirname, '../src/data/wordPhrasePacks'));
+const phrases = wordPhrasePacks.flatMap(pack => pack.words);
 const byEnglish = new Map(extendedWordBank.map(word => [word.english, word]));
 assert.equal(byEnglish.size, extendedWordBank.length);
 assert.equal(new Set(extendedWordBank.map(word => word.id)).size, extendedWordBank.length);
 assert.ok(wordExpansion.length >= 250);
-assert.equal(extendedWordBank.length, legacy.length + wordExpansion.length + supplement.length);
-assert.ok(supplement.length >= 4000);
+assert.equal(extendedWordBank.length, legacy.length + wordExpansion.length + supplement.length + reference.length + phrases.length);
+assert.ok(supplement.length >= 4000 && reference.length >= 1200);
 const compactKey = english => english.toLowerCase().replace(/[-']/g, '');
 const spellings = new Set([...legacy.map(([english]) => english), ...wordExpansion.map(word => word.english)].map(compactKey));
-for (const [english, russian, part] of supplement) {
+for (const [english, russian, part] of [...supplement, ...reference]) {
   const key = compactKey(english);
   assert.ok(!spellings.has(key), `duplicate or spelling variant: ${english}`);
   spellings.add(key);
@@ -26,6 +29,21 @@ for (const [english, russian, part] of supplement) {
   assert.equal(entry?.russian, russian);
   assert.ok(entry.partOfSpeech && ['B1', 'B2', 'C1'].includes(entry.level));
 }
+assert.equal(wordPhrasePacks.length, 6);
+assert.equal(phrases.length, 72);
+for (const pack of wordPhrasePacks) {
+  for (const phrase of pack.words) {
+    assert.match(phrase.english, /^[a-z][a-z'-]*(?: [a-z][a-z'-]*)+$/);
+    assert.match(phrase.russian, /^[а-яё][а-яё -]+$/);
+    assert.ok(phrase.example.toLowerCase().includes(phrase.english), `missing phrase in example: ${phrase.english}`);
+    assert.match(phrase.exampleRu, /[.!?]$/);
+    assert.equal(phrase.themeId, pack.id);
+    assert.equal(byEnglish.get(phrase.english).id, phrase.id);
+  }
+}
+assert.equal(searchDictionary(extendedWordBank, 'стойка регистрации')[0].english, 'front desk');
+assert.equal(byEnglish.get('unfamiliar').russian, 'незнакомый');
+assert.ok(byEnglish.get('unfamiliar').exampleRu);
 assert.equal(searchDictionary(extendedWordBank, 'lullaby')[0].russian, 'колыбельная');
 assert.equal(searchDictionary(extendedWordBank, 'muffin')[0].russian, 'кекс');
 for (const [english, russian, transcription, id] of legacy) {
@@ -70,4 +88,4 @@ assert.deepEqual([1, 2, 5, 11, 21, 24].map(wordAmountLabel), ['1 слово', '2
 const times = [];
 for (let i = 0; i < 60; i++) { const start = performance.now(); searchDictionary(extendedWordBank, ['е', 'back', 'при', 'head', 'щетка', 'work'][i % 6]); times.push(performance.now() - start); }
 times.sort((a, b) => a - b);
-console.log(`Dictionary passed: ${extendedWordBank.length} unique words, ${wordExpansion.length} authored additions and ${supplement.length} cross-checked entries, legacy IDs unchanged, search/status checks. Search median ${times[30].toFixed(2)} ms, p95 ${times[57].toFixed(2)} ms in Node (not iPhone FPS).`);
+console.log(`Dictionary passed: ${extendedWordBank.length} unique words, ${wordExpansion.length + phrases.length} authored additions and ${supplement.length + reference.length} cross-checked entries, legacy IDs unchanged, search/status checks. Search median ${times[30].toFixed(2)} ms, p95 ${times[57].toFixed(2)} ms in Node (not iPhone FPS).`);

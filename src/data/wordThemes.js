@@ -1,12 +1,13 @@
 import { vocabularyTopics } from "./megaPractice";
 import { extendedVocabularyTopics } from "./growthContent";
+import { wordPhrasePacks } from "./wordPhrasePacks";
 import { wordBank } from "./wordBank";
 
 const bankByEnglish = new Map(
   wordBank.map((word) => [word.english.toLowerCase(), word]),
 );
 
-export const wordThemes = [
+const existingThemes = [
   ...vocabularyTopics,
   ...extendedVocabularyTopics,
 ].map((topic) => ({
@@ -33,3 +34,5 @@ export const wordThemes = [
     };
   }),
 }));
+
+export const wordThemes = [...wordPhrasePacks, ...existingThemes];

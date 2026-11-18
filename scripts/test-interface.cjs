@@ -241,6 +241,12 @@ async function main() {
   await act(async () => namedButton(`Вся база · ${bank.extendedWordBankSize.toLocaleString('ru-RU')}`).props.onPress());
   await act(async () => { searchInput().props.onChangeText('lullaby'); await flush(); });
   assert.equal(tree.root.findByType('FlatList').props.data[0].id, 'dictionary-lullaby');
+  await act(async () => { searchInput().props.onChangeText('стойка регистрации'); await flush(); });
+  assert.equal(tree.root.findByType('FlatList').props.data[0].id, 'phrase-pack-front-desk');
+  await act(async () => { searchInput().props.onChangeText(''); await flush(); });
+  await act(async () => namedButton('Выражения').props.onPress());
+  assert.equal(tree.root.findByType('FlatList').props.data.length, 72, 'the expressions filter shows all six phrase packs');
+  await act(async () => namedButton('Все слова').props.onPress());
   await act(async () => { searchInput().props.onChangeText(''); await flush(); });
   assert.equal(tree.root.findByType('FlatList').props.data.length, bank.extendedWordBankSize);
   for (const mode of ['light', 'dark', 'pink']) {
@@ -280,6 +286,13 @@ async function main() {
   assert.equal(reviewedWords.length, 1);
   assert.equal(reviewedWords[0][0].id, 'extra-backpack');
   assert.equal(reviewedWords[0][1], true, 'new word translation must be accepted');
+  await act(async () => tree.unmount());
+  delete progress.wordPreferences;
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Review))); await flush(); });
+  await act(async () => namedButton('В гостинице').props.onPress());
+  await act(async () => namedButton('Начать · 10 слов').props.onPress());
+  assert.ok(savedWords.at(-1).deck.every(card => card.themeId === 'phrases-hotel' && card.exampleRu), 'the themed drill uses its own phrases and Russian examples');
+  assert.ok(load('src/utils/wordSession.js').readWordSession(savedWords.at(-1)).deck, 'a phrase session can be reopened');
   await act(async () => tree.unmount());
   actions.saveWordSession = oldSave; actions.recordReview = oldReview;
   delete progress.wordPreferences;

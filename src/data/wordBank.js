@@ -1,7 +1,9 @@
 import compactWordBank from "./wordBank.json";
 import wordSupplement from "./wordSupplement.json";
-import { wordLearningDetails } from "./wordLearningData";
+import wordReferenceSupplement from "./wordReferenceSupplement.json";
+import { authoredWordDetails, wordLearningDetails } from "./wordLearningData";
 import { wordCandidates } from '../utils/sampling';
+import { wordPhrasePacks } from './wordPhrasePacks';
 import { wordExpansion } from './wordExpansion';
 import { normalizeWordQuery } from '../utils/wordDictionary';
 
@@ -56,8 +58,7 @@ const baseCatalog = [...compactWordBank, ...additions.map(word => [word.english,
 );
 
 const supplementParts = { n: 'существительное', v: 'глагол', adj: 'прилагательное', adv: 'наречие', interj: 'междометие' };
-const extraCatalog = wordSupplement.map(([english, russian, part], index) => {
-  const level = index < 500 ? 'B1' : index < 2100 ? 'B2' : 'C1';
+function supplementWord([english, russian, part], level) {
   return {
     id: `dictionary-${english}`,
     english,
@@ -71,9 +72,17 @@ const extraCatalog = wordSupplement.map(([english, russian, part], index) => {
     emoji: emojiForLevel[level],
     frequency: null,
     partOfSpeech: supplementParts[part],
+    ...authoredWordDetails(english),
   };
-});
-export const extendedWordBank = [...baseCatalog, ...extraCatalog];
+}
+const extraCatalog = wordSupplement.map((row, index) => supplementWord(row, index < 500 ? 'B1' : index < 2100 ? 'B2' : 'C1'));
+const referenceCatalog = wordReferenceSupplement.map((row, index) => supplementWord(row, index < 300 ? 'B2' : 'C1'));
+const phraseCatalog = wordPhrasePacks.flatMap(pack => pack.words).map(word => ({
+  ...word,
+  searchNormalized: normalizeWordQuery(`${word.english} ${word.russian}`),
+  russianSearch: normalizeWordQuery(word.russian),
+}));
+export const extendedWordBank = [...baseCatalog, ...extraCatalog, ...referenceCatalog, ...phraseCatalog];
 
 const coreLimits = { A1: 700, A2: 950, B1: 1250, B2: 900, C1: 550 };
 const excludedEnglish = new Set([

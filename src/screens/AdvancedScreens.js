@@ -259,6 +259,7 @@ export function VocabularyScreen({ onClose }) {
         : byLevel[level] || [];
     let words = level === "Мои" ? custom : level === "Все" && custom.length ? [...custom, ...baseWords] : baseWords;
     if (hiddenIds.size) words = words.filter((word) => !hiddenIds.has(word.id));
+    if (filter === "phrases") words = words.filter(word => word.partOfSpeech === "выражение");
     if (filter === "favorites")
       words = words.filter((word) => favoriteIds.has(word.id));
     if (filter === "hard")
@@ -313,7 +314,7 @@ export function VocabularyScreen({ onClose }) {
             <View style={s.row}>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigTitle}>Офлайн-словарь</Text>
-                <Text style={s.subtitleLeft}>{extendedWordBankSize.toLocaleString("ru-RU")} слов · перевод, значения и примеры</Text>
+                <Text style={s.subtitleLeft}>{extendedWordBankSize.toLocaleString("ru-RU")} слов и выражений</Text>
               </View>
               <Pressable onPress={() => setAdding(!adding)} style={s.add}>
                 <Ionicons name={adding ? "close" : "add"} size={26} color={colors.text} />
@@ -333,7 +334,10 @@ export function VocabularyScreen({ onClose }) {
               {!!query && <Pressable onPress={() => setQuery("")}><Ionicons name="close-circle" size={20} color={colors.textMuted} /></Pressable>}
             </View>
             <View style={[s.dictionaryChips, { flexDirection: 'row', flexWrap: 'wrap' }]}>
-              { [['extended', `Вся база · ${extendedWordBankSize.toLocaleString('ru-RU')}`], ['core', `Основные · ${wordBankSize.toLocaleString('ru-RU')}`]].map(([id, title]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: catalog === id }} onPress={() => setCatalog(id)} style={[s.dictionaryChip, catalog === id && s.dictionaryChipActive]}><Text style={[s.dictionaryChipText, catalog === id && { color: colors.purple }]}>{title}</Text></Pressable>) }
+              { [['extended', `Вся база · ${extendedWordBankSize.toLocaleString('ru-RU')}`], ['core', `Основные · ${wordBankSize.toLocaleString('ru-RU')}`]].map(([id, title]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: catalog === id }} onPress={() => {
+                setCatalog(id);
+                if (id === 'core' && filter === 'phrases') setFilter('all');
+              }} style={[s.dictionaryChip, catalog === id && s.dictionaryChipActive]}><Text style={[s.dictionaryChipText, catalog === id && { color: colors.purple }]}>{title}</Text></Pressable>) }
             </View>
             <Text style={s.dictionaryHint}>Нажми на слово, чтобы открыть значения и доступные примеры. Уровни — ориентир для обучения.</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.dictionaryChips}>
@@ -344,8 +348,14 @@ export function VocabularyScreen({ onClose }) {
               ))}
             </ScrollView>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.dictionaryChips}>
-              {[["all", "Все слова"], ["new", "Новые"], ["learning", "Учу"], ["due", "Пора повторить"], ["learned", "Освоено"], ["favorites", "★ Избранные"], ["hard", "Сложные"]].map(([id, title]) => (
-                <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: filter === id }} onPress={() => setFilter(id)} style={[s.dictionaryChip, filter === id && s.dictionaryChipActive]}>
+              {[["all", "Все слова"], ["phrases", "Выражения"], ["new", "Новые"], ["learning", "Учу"], ["due", "Пора повторить"], ["learned", "Освоено"], ["favorites", "★ Избранные"], ["hard", "Сложные"]].map(([id, title]) => (
+                <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: filter === id }} onPress={() => {
+                  if (id === 'phrases') {
+                    setCatalog('extended');
+                    if (level === 'Мои') setLevel('Все');
+                  }
+                  setFilter(id);
+                }} style={[s.dictionaryChip, filter === id && s.dictionaryChipActive]}>
                   <Text style={[s.dictionaryChipText, filter === id && { color: colors.purple }]}>{title}</Text>
                 </Pressable>
               ))}

@@ -81,6 +81,18 @@ const common = {
   improve: ["глагол", "I want to improve my English.", "Я хочу улучшить свой английский."],
   confident: ["прилагательное", "I feel more confident now.", "Теперь я чувствую себя увереннее."],
   comfortable: ["прилагательное", "These shoes are comfortable.", "Эта обувь удобная."],
+  overlap: ["глагол", "These two areas overlap.", "Эти две области частично перекрываются."],
+  inevitable: ["прилагательное", "Some delay was inevitable.", "Некоторая задержка была неизбежна."],
+  unfamiliar: ["прилагательное", "The route was unfamiliar to me.", "Этот маршрут был мне незнаком."],
+  noisy: ["прилагательное", "The street is noisy at night.", "На этой улице по ночам шумно."],
+  outdated: ["прилагательное", "This map is outdated.", "Эта карта устарела."],
+  jealous: ["прилагательное", "He gets jealous easily.", "Он легко начинает ревновать."],
+  rotate: ["глагол", "The wheels rotate at different speeds.", "Колёса вращаются с разной скоростью."],
+  truthful: ["прилагательное", "Please give a truthful answer.", "Пожалуйста, ответь правдиво."],
+  doubtful: ["прилагательное", "It is doubtful that the shop will open today.", "Сомнительно, что магазин сегодня откроется."],
+  spontaneous: ["прилагательное", "It was a spontaneous decision.", "Это было спонтанное решение."],
+  inhale: ["глагол", "Slowly inhale through your nose.", "Медленно вдохни через нос."],
+  primer: ["существительное", "Apply the primer before you paint.", "Перед покраской нанесите грунтовку."],
 };
 
 const functionWords = {
@@ -90,11 +102,16 @@ const functionWords = {
   conjunction: new Set(["and", "or", "but", "if", "because", "while", "although", "unless"]),
 };
 
-export function wordLearningDetails(english, translation = "") {
+export function authoredWordDetails(english) {
   const extra = expansionDetails.get(english);
   if (extra) return { partOfSpeech: extra.partOfSpeech, example: extra.example, exampleRu: extra.exampleRu, curated: true };
-  const curated = common[english];
-  if (curated) return { partOfSpeech: curated[0], example: curated[1], exampleRu: curated[2], curated: true };
+  const entry = Object.hasOwn(common, english) ? common[english] : null;
+  return entry ? { partOfSpeech: entry[0], example: entry[1], exampleRu: entry[2], curated: true } : null;
+}
+
+export function wordLearningDetails(english, translation = "") {
+  const authored = authoredWordDetails(english);
+  if (authored) return authored;
   if (functionWords.article.has(english)) return { partOfSpeech: "артикль" };
   if (functionWords.pronoun.has(english)) return { partOfSpeech: "местоимение" };
   if (functionWords.preposition.has(english)) return { partOfSpeech: "предлог" };

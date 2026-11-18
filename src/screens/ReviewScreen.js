@@ -188,7 +188,8 @@ export default function ReviewScreen() {
     const ru=custom || card.russian,reverse=card.direction==='en-ru';
     const expected=reverse?ru:card.english;
     const accepted=reverse?[ru,...(custom?[]:(card.translations || []))]:[card.english];
-    const candidates=getWordCandidates(card.id,24,activeWordBank).map((word)=>reverse?word.russian:word.english);
+    const phraseTheme = card.partOfSpeech === "выражение" ? wordThemes.find(theme => theme.id === card.themeId) : null;
+    const candidates=getWordCandidates(card.id,24,phraseTheme?.words || activeWordBank).map((word)=>reverse?word.russian:word.english);
     return balancedOptions([expected,...distinctDistractors(candidates,accepted)],expected,index,optionSeed);
   },[deck,index,preferences.customTranslations,activeWordBank,optionSeed]);
   const wordOfDay = activeWordBank[dateSeed % activeWordBank.length];
@@ -262,7 +263,7 @@ export default function ReviewScreen() {
           <Text style={styles.heroEmoji}>📚</Text>
           <Text style={styles.setupTitle}>Слова в контексте</Text>
           <Text style={styles.setupSubtitle}>
-            {extendedWordBankSize.toLocaleString("ru-RU")} слов в офлайн-словаре
+            {extendedWordBankSize.toLocaleString("ru-RU")} слов и выражений в офлайн-словаре
           </Text>
         </View>
 
@@ -506,8 +507,8 @@ export default function ReviewScreen() {
   const card = deck[index];
   const customTranslation = preferences.customTranslations[card.id];
   const activeCard = {
-    ...card,
     ...wordLearningDetails(card.english, customTranslation || card.russian),
+    ...card,
     ...(customTranslation ? {
         russian: customTranslation,
         fullTranslation: customTranslation,

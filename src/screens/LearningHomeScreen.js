@@ -22,7 +22,7 @@ export default function LearningHomeScreen({ onNavigate, onJourney, onCourse }) 
   const next = lessons.find(lesson => !completed.has(lesson.id));
   const sections = section === 'words' ? [
     ['review', 'library-outline', 'Изучать слова', 'Карточки, примеры и произношение'],
-    ['vocabulary', 'search-outline', 'Словарь', 'Найти слово или сохранить своё'],
+    ['vocabulary', 'search-outline', 'Словарь', 'Вся база, выражения и примеры'],
     ['unifiedReview', 'time-outline', 'Повторение', 'Вернуться к словам в нужный момент'],
   ] : section === 'grammar' ? [
     ['tenses', 'time-outline', 'Времена', 'От ситуации к форме и практике'],
