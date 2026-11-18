@@ -88,13 +88,14 @@ export default function ExplanationCard({
         </View>
         <View style={styles.headerText}>
           <Text style={[styles.status, { color }]}>
-            {correct ? "Ответ верный" : `Правильный ответ: ${item.answer}`}
+            {correct ? "Ответ верный" : feedback.title}
           </Text>
-          <Text style={styles.short}>{why}</Text>
+          <Text style={styles.short}>{correct ? why : feedback.text}</Text>
         </View>
       </View>}
 
-      {!correct && !!selected && <Section icon="git-compare-outline" title={feedback.title} text={feedback.text} color={colors.orange} />}
+      {!showStatus && !correct && !!selected && <Section icon="git-compare-outline" title={feedback.title} text={feedback.text} color={colors.orange} />}
+      {!correct && <Section icon="checkmark-circle-outline" title="Допустимый ответ" text={item.answer} color={colors.mint} />}
 
       <View style={styles.actions}>
         <Action
@@ -106,7 +107,7 @@ export default function ExplanationCard({
         {!correct && (
           <Action
             icon="close-circle-outline"
-            title="Почему ошибка"
+            title="Сравнить формулировки"
             active={mistakeOpen}
             onPress={() => setMistakeOpen((value) => !value)}
           />

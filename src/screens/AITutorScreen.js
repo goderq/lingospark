@@ -3,13 +3,12 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { courseTutorContext } from '../utils/learningJourney';
 import { courseDialogueEvidence, learnerTurns } from '../utils/conversationCoach';
 import ToolSheet from '../components/ToolSheet';
+import useKeyboardDock from '../components/useKeyboardDock';
 import {
   ActivityIndicator,
   Alert,
-  InputAccessoryView,
+  FlatList,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,7 +25,7 @@ import {
 import { colors , useTheme, createThemedStyles } from "../theme";
 import { ProgressBar } from "../components/UI";
 import { speak, stopSpeech } from "../utils/speech";
-import { useProgress } from "../store/ProgressContext";
+import { useProgressActions, useProgressSelector } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import VoiceCoachScreen from "./VoiceCoachScreen";
 import AICenterScreen from "./AICenterScreen";
@@ -91,14 +90,14 @@ const welcomeFor = (level, topic, modeId = "conversation") => ({
   id: `welcome-${Date.now()}`,
   role: "assistant",
   content: modeId === "roleplay"
-    ? `Ролевая игра готова. Уровень ${level}, тема «${topic}». Опиши место и мою роль по-английски — я войду в образ и начну сцену.`
+    ? 'Let’s practise a real situation. Where are we, and who am I?'
     : modeId === "debate"
-      ? `Режим дебатов готов. Назови мнение по теме «${topic}» на английском — я займу другую позицию и попрошу тебя её защитить.`
+      ? 'Let’s discuss an opinion. What would you like to debate?'
       : modeId === "story"
-        ? `Создадим историю на английском вместе. Напиши героя или первую фразу — дальше я продолжу сюжет и дам выбор.`
+        ? 'Let’s create a story together. Who is our main character?'
         : modeId === "strict"
-          ? `Строгий режим включён. Напиши фразу по-английски: я проверю каждую заметную ошибку и дам следующее задание.`
-          : `Привет! Я Lingo — твой локальный преподаватель. Сейчас уровень ${level}, тема «${topic}». Напиши или скажи фразу по-английски — я продолжу живой разговор и объясню только реальные ошибки.`,
+          ? 'Write a sentence in English. I will help you make it clear and natural.'
+          : 'Hi! I’m Lingo. Let’s speak English. What would you like to talk about today?',
 });
 
 function formatSpace(bytes) {
@@ -402,9 +401,11 @@ function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPro
   );
 }
 
-function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice, onPracticeConsumed }) {
+export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice, onPracticeConsumed }) {
   useTheme();
-  const { progress, toggleNotebook, addCustomWord, addReviewPhrase } = useProgress();
+  const keyboard = useKeyboardDock();
+  const progress = useProgressSelector(({ progress: value }) => ({ notebook: value.notebook, customWords: value.customWords, mistakes: value.mistakes }));
+  const { toggleNotebook, addCustomWord, addReviewPhrase } = useProgressActions();
   const [level, setLevel] = useState("A2");
   const [topic, setTopic] = useState(TOPICS[0]);
   const [coursePractice, setCoursePractice] = useState(null);
@@ -415,6 +416,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
   useEffect(() => { setLessonHelp(0); }, [coursePractice?.topicId, coursePractice?.requestId]);
   const [dialogueMode, setDialogueMode] = useState("conversation");
   const [mission, setMission] = useState(null);
+  const [missionOpen, setMissionOpen] = useState(false);
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
   const evidenceKey = learnerTurns(messages).map(item => item.content).join('\u0000');
   const dialogueEvidence = useMemo(() => coursePractice?.topicId ? courseDialogueEvidence(coursePractice.topicId, messages) : [], [coursePractice?.topicId, evidenceKey]);
@@ -433,12 +435,15 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
   const [speechModel, setSpeechModel] = useState(null);
   const [speechTranscribing, setSpeechTranscribing] = useState(false);
   const [error, setError] = useState("");
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const keyboardVisible = keyboard.visible;
+  const [replyStage, setReplyStage] = useState('thinking');
+  const [retryRequest, setRetryRequest] = useState(null);
+  const requestRef = useRef(null);
   const [openActionsId, setOpenActionsId] = useState(null);
   const [feedbackMap, setFeedbackMap] = useState({});
   const scrollRef = useRef(null);
+  const followTail = useRef(true);
   const generationText = useRef("");
-  const updateTimer = useRef(null);
   const historyReady = useRef(false);
   const localSpeechRef = useRef(false);
 
@@ -449,7 +454,8 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
       .catch((loadError) => mounted && setError(loadError?.message || "Не удалось запустить модель"));
     return () => {
       mounted = false;
-      if (updateTimer.current) clearTimeout(updateTimer.current);
+      requestRef.current?.abort();
+      stopGeneration().catch(() => {});
       stopSpeech();
       cancelSpeechRecording().catch(() => {});
     };
@@ -470,15 +476,6 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
     });
     return () => { mounted = false; };
   }, [level, topic, analysis]);
-
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener("keyboardWillHide", () => setKeyboardVisible(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -615,27 +612,27 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
     });
   };
 
-  const updateStreamingMessage = (content) => {
-    setMessages((current) =>
-      current.map((item) => (item.id === "streaming" ? { ...item, content } : item)),
-    );
-  };
-
   const submitMessage = async (rawText, options = {}) => {
     const text = String(rawText || "").trim();
-    if (!text || generating || !modelReady) return;
+    if (!text || generating || requestRef.current || !modelReady) return;
     Keyboard.dismiss();
     if (options.kind !== "command") setInput("");
     setOpenActionsId(null);
     setError("");
+    setRetryRequest(null);
+    followTail.current = true;
+    setReplyStage('thinking');
+    const request = new AbortController();
+    requestRef.current = request;
     const userMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       role: "user",
       content: text,
       displayContent: options.displayContent || text,
       kind: options.kind || "message",
+      action: options.action || null,
     };
-    const nextMessages = [...messages, userMessage];
+    const nextMessages = (options.retry ? messages.filter(item => item.id !== 'streaming') : [...messages, userMessage]).slice(-59);
     setMessages([...nextMessages, { id: "streaming", role: "assistant", content: "" }]);
     setGenerating(true);
     generationText.current = "";
@@ -648,21 +645,18 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         courseContext: courseTutorContext(coursePractice, level, topic, progress),
         messages: nextMessages,
         analysis,
+        signal: request.signal,
+        onStatus: stage => { if (!request.signal.aborted) setReplyStage(stage); },
         onToken: (token) => {
-          generationText.current += token;
-          if (!updateTimer.current) {
-            updateTimer.current = setTimeout(() => {
-              updateTimer.current = null;
-              updateStreamingMessage(generationText.current);
-            }, 70);
-          }
+          if (!request.signal.aborted) generationText.current += token;
         },
       });
+      if (request.signal.aborted) return;
       const finalText = (result?.text || generationText.current).trim();
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: finalText || "Попробуем ещё раз.",
+        content: finalText,
         quality: result?.quality || null,
       };
       const completedMessages = [...nextMessages, assistantMessage];
@@ -679,11 +673,14 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         messages: completedMessages.slice(-60),
         analysis,
         createdAt: sessions.find((item) => item.id === sessionId)?.createdAt || Date.now(),
-      });
+      }).catch(() => { if (!request.signal.aborted) setError('Ответ получен, но сохранить разговор на устройстве не удалось.'); });
     } catch (generationError) {
+      if (request.signal.aborted) return;
       setMessages((current) => current.filter((item) => item.id !== "streaming"));
       setError(generationError?.message || "Не удалось получить ответ");
+      setRetryRequest({ text, options });
     } finally {
+      if (requestRef.current === request) requestRef.current = null;
       setGenerating(false);
     }
   };
@@ -695,6 +692,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
     submitMessage(`${action.instruction}\n\nОтвет Lingo, с которым нужно работать:\n${excerpt}`, {
       kind: "command",
       displayContent: action.title,
+      action: action.id,
     });
   };
 
@@ -717,35 +715,29 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
   );
 
   const stop = async () => {
-    await stopGeneration();
-    const partial = generationText.current.trim();
-    setMessages((current) =>
-      current.map((item) =>
-        item.id === "streaming"
-          ? {
-              id: `assistant-${Date.now()}`,
-              role: "assistant",
-              content: partial || "Ответ остановлен.",
-            }
-          : item,
-      ),
-    );
-    setGenerating(false);
+    requestRef.current?.abort();
+    setReplyStage('stopped');
+    setMessages(current => current.filter(item => item.id !== 'streaming'));
+    setRetryRequest(null);
+    try { await stopGeneration(); } catch { /* Completion owns the error UI. */ }
   };
 
   const speakMessage = (text) => speak(text, { language: "en-US", rate: 0.88 });
   const progressLabel = loadProgress > 0 ? `${Math.round(loadProgress * 100)}%` : "подготовка";
 
   const newConversation = () => {
+    if (requestRef.current) return;
     setCoursePractice(null);
     const id = `ai-${Date.now()}`;
     setSessionId(id);
     setMessages([welcomeFor(level, topic, dialogueMode)]);
     setAnalysis(null);
+    setRetryRequest(null); setError('');
     setHistoryOpen(false);
   };
 
   const openSession = (session) => {
+    if (requestRef.current) return;
     setCoursePractice(session.coursePractice || null);
     setSessionId(session.id);
     setLevel(session.level || "A2");
@@ -753,6 +745,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
     setDialogueMode(session.dialogueMode || "conversation");
     setMessages(session.messages?.length ? session.messages : [welcomeFor(session.level || "A2", session.topic || TOPICS[0], session.dialogueMode)]);
     setAnalysis(session.analysis || null);
+    setRetryRequest(null); setError('');
     setHistoryOpen(false);
   };
 
@@ -775,6 +768,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
   };
 
   const runAnalysis = async () => {
+    if (generating || analyzing) return;
     const userCount = messages.filter((item) => item.role === "user" && item.kind !== "command").length;
     if (userCount < 2) {
       setError("Для разбора напиши или скажи хотя бы две фразы по-английски.");
@@ -854,18 +848,14 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.chatPage}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={8}
-    >
+    <View ref={keyboard.ref} collapsable={false} onLayout={keyboard.onLayout} style={[styles.chatPage, { paddingBottom: keyboard.inset }]}>
       <View style={styles.chatHeader}>
         <View style={[styles.onlineDot, { backgroundColor: modelReady ? colors.mint : colors.orange }]} />
         <View style={{ flex: 1 }}>
           <Text numberOfLines={1} style={styles.chatTitle}>Lingo · {model.title}</Text>
-          <Text style={styles.chatStatus}>{modelReady ? "Локально · без интернета" : `Запуск модели · ${progressLabel}`}</Text>
+          <Text accessibilityLiveRegion="polite" style={styles.chatStatus}>{!modelReady ? `Загружаю модель · ${progressLabel}` : speechTranscribing ? 'Распознаю речь…' : listening ? 'Слушаю…' : generating ? replyStage === 'stopped' ? 'Останавливаю…' : replyStage === 'rewriting' ? 'Переформулирую ответ…' : replyStage === 'checking' ? 'Проверяю язык и повторы…' : 'Обдумываю ответ…' : replyStage === 'stopped' ? 'Ответ остановлен' : 'Английский диалог · офлайн'}</Text>
         </View>
-        <Pressable accessibilityLabel="Инструменты разговора" onPress={() => { Keyboard.dismiss(); setToolsOpen(true); }} style={styles.headerButton}><Ionicons name="ellipsis-horizontal" size={25} color={colors.text} /></Pressable>
+        <Pressable accessibilityLabel={keyboardVisible ? 'Скрыть клавиатуру' : 'Инструменты разговора'} onPress={() => { Keyboard.dismiss(); if (!keyboardVisible) setToolsOpen(true); }} style={styles.headerButton}><Ionicons name={keyboardVisible ? 'chevron-down' : 'ellipsis-horizontal'} size={25} color={colors.text} /></Pressable>
         <ToolSheet visible={toolsOpen} onClose={() => setToolsOpen(false)} title="Твой разговор" actions={[
           { title: 'Голосовой режим', detail: 'Практика речи с собеседником', icon: 'mic-outline', onPress: onVoice },
           { title: 'История разговоров', detail: 'Открой сохранённый диалог вручную', icon: 'time-outline', onPress: () => setHistoryOpen(true) },
@@ -873,20 +863,20 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         ]} />
       </View>
 
-      <View style={styles.optionsStrip}>
+      {!keyboardVisible && <View style={styles.optionsStrip}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {LEVELS.map((item) => (
-            <Pressable key={item} onPress={() => { setLevel(item); setCoursePractice(null); }} style={[styles.chip, level === item && styles.chipActive]}>
+            <Pressable key={item} disabled={generating} onPress={() => { setLevel(item); setCoursePractice(null); }} style={[styles.chip, level === item && styles.chipActive]}>
               <Text style={[styles.chipText, level === item && styles.chipTextActive]}>{item}</Text>
             </Pressable>
           ))}
           {TOPICS.map((item) => (
-            <Pressable key={item} onPress={() => { setTopic(item); setCoursePractice(null); }} style={[styles.topicChip, topic === item && styles.topicChipActive]}>
+            <Pressable key={item} disabled={generating} onPress={() => { setTopic(item); setCoursePractice(null); }} style={[styles.topicChip, topic === item && styles.topicChipActive]}>
               <Text style={[styles.topicText, topic === item && { color: colors.white }]}>{item}</Text>
             </Pressable>
           ))}
         </ScrollView>
-      </View>
+      </View>}
 
       {!keyboardVisible && !!courseTutorContext(coursePractice, level, topic) && <ScrollView style={{ maxHeight: 240, flexGrow: 0 }} contentContainerStyle={{ padding: 16, backgroundColor: colors.card, gap: 9 }}>
         <Text style={{ color: colors.mint, fontWeight: '800' }}>Цель: {coursePractice.goal || topic}</Text>
@@ -903,20 +893,20 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
         {lessonHelp > 0 && <Text style={{ color: colors.text, lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
         {lessonHelp >= 3 && !!coursePractice.phrases?.[0] && <Pressable onPress={() => addReviewPhrase({ ...coursePractice.phrases[0], topic })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>Добавить эту фразу в повторение</Text></Pressable>}
       </ScrollView>}
-      <View style={styles.modeStrip}>
+      {!keyboardVisible && <View style={styles.modeStrip}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.modeChips}>
           {DIALOGUE_MODES.map((item) => {
             const active = dialogueMode === item.id;
             return (
-              <Pressable key={item.id} onPress={() => { setDialogueMode(item.id); setCoursePractice(null); }} style={[styles.modeChip, active && styles.modeChipActive]}>
-                <Ionicons name={item.icon} size={15} color={active ? "white" : colors.textMuted} />
+              <Pressable key={item.id} disabled={generating} onPress={() => { setDialogueMode(item.id); setCoursePractice(null); }} style={[styles.modeChip, active && styles.modeChipActive]}>
+                <Ionicons name={item.icon} size={15} color={active ? colors.purple : colors.textMuted} />
                 <Text style={[styles.modeText, active && { color: colors.text }]}>{item.title}</Text>
               </Pressable>
             );
           })}
         </ScrollView>
         <Text numberOfLines={1} style={styles.modeHint}>{DIALOGUE_MODES.find((item) => item.id === dialogueMode)?.hint}</Text>
-      </View>
+      </View>}
 
       {!modelReady && !error ? (
         <View style={styles.loadingModel}>
@@ -925,16 +915,24 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
           <Text style={styles.smallMuted}>Первый запуск может занять несколько секунд. Модель загружается только в память iPhone.</Text>
         </View>
       ) : (
-        <ScrollView
+        <FlatList
           ref={scrollRef}
           style={styles.messages}
           contentContainerStyle={styles.messagesContent}
           keyboardShouldPersistTaps="handled"
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-        >
-          {mission ? (
+          data={messages}
+          keyExtractor={item => item.id}
+          initialNumToRender={8}
+          maxToRenderPerBatch={6}
+          windowSize={5}
+          keyboardDismissMode="interactive"
+          onScroll={event => { const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent; followTail.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 80; }}
+          scrollEventThrottle={80}
+          onContentSizeChange={() => { if (followTail.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
+          onLayout={() => { if (followTail.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
+          ListHeaderComponent={mission ? (
             <View style={[styles.missionCard, missionProgress.completed && styles.missionCardDone]}>
-              <View style={styles.missionTop}>
+              <Pressable accessibilityRole="button" accessibilityState={{ expanded: missionOpen }} onPress={() => setMissionOpen(value => !value)} style={[styles.missionTop, { minHeight: 44 }]}>
                 <View style={[styles.missionIcon, missionProgress.completed && { backgroundColor: "rgba(46,211,183,0.16)" }]}>
                   <Ionicons name={missionProgress.completed ? "checkmark" : "flag"} size={20} color={missionProgress.completed ? colors.mint : colors.orange} />
                 </View>
@@ -942,15 +940,17 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
                   <Text style={styles.missionLabel}>МИССИЯ ДНЯ</Text>
                   <Text style={styles.missionTitle}>{mission.title}</Text>
                 </View>
-                <Text style={[styles.missionCount, missionProgress.completed && { color: colors.mint }]}>{missionProgress.current}/{missionProgress.target}</Text>
-              </View>
+                <Ionicons name={missionOpen ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textMuted} />
+              </Pressable>
+              {missionOpen && <>
               <Text style={styles.missionDescription}>{mission.description}</Text>
               <ProgressBar value={missionProgress.current / Math.max(1, missionProgress.target)} color={missionProgress.completed ? colors.mint : colors.orange} height={6} />
               {missionProgress.completed ? <Text style={styles.missionDone}>Миссия выполнена — Lingo запомнил результат</Text> : null}
               <Pressable onPress={onDirector} style={styles.routeLink}><Ionicons name="sparkles" size={15} color={colors.purple} /><Text style={styles.routeLinkText}>Открыть полный ИИ-маршрут</Text><Ionicons name="chevron-forward" size={16} color={colors.purple} /></Pressable>
+              </>}
             </View>
           ) : null}
-          {messages.map((message, index) => {
+          renderItem={({ item: message, index }) => {
             const note = message.role === "assistant" && message.id !== "streaming" ? noteForMessage(message, index) : null;
             const saved = note && progress.notebook?.some((item) => item.id === note.id);
             return (
@@ -958,16 +958,10 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
               <View style={[styles.bubble, message.role === "user" ? styles.userBubble : styles.aiBubble]}>
                 {message.role === "assistant" ? <Text style={styles.lingoLabel}>✦ LINGO</Text> : null}
                 {message.role === "user" && message.kind === "command" ? <Text style={styles.commandLabel}>ДЕЙСТВИЕ С ОТВЕТОМ</Text> : null}
-                {message.role === "assistant" && message.quality ? (
-                  <View style={styles.qualityBadge}>
-                    <Ionicons name={message.quality.source === "grammar" ? "library" : "shield-checkmark"} size={12} color={message.quality.confidence === "high" ? colors.mint : colors.purple} />
-                    <Text style={styles.qualityText}>{message.quality.checked === "double" ? "Двойная проверка" : message.quality.checked === "regenerated" ? "Ответ исправлен проверкой" : message.quality.source === "grammar" ? "Опора на справочник" : "Проверено по контексту"}</Text>
-                  </View>
-                ) : null}
                 {message.id === "streaming" && !message.content ? (
                   <View style={styles.thinkingRow}>
                     <ActivityIndicator size="small" color={colors.purple} />
-                    <Text style={styles.smallMuted}>Думаю на устройстве…</Text>
+                    <Text style={styles.smallMuted}>{replyStage === 'rewriting' ? 'Уточняю формулировку…' : replyStage === 'checking' ? 'Проверяю ответ…' : 'Думаю на устройстве…'}</Text>
                   </View>
                 ) : (
                   <Text style={styles.messageText}>{message.displayContent || message.content}</Text>
@@ -979,20 +973,15 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
                         <Ionicons name="volume-medium" size={17} color={colors.purple} />
                         <Text style={styles.speakText}>Озвучить</Text>
                       </Pressable>
-                      {note ? (
-                        <Pressable onPress={() => toggleNotebook(note)} style={styles.speakButton}>
-                          <Ionicons name={saved ? "bookmark" : "bookmark-outline"} size={16} color={saved ? colors.orange : colors.textMuted} />
-                          <Text style={[styles.speakText, saved && { color: colors.orange }]}>{saved ? "Сохранено" : "В тетрадь"}</Text>
-                        </Pressable>
-                      ) : null}
                       {!message.id.startsWith("welcome") ? <Pressable onPress={() => setOpenActionsId((current) => current === message.id ? null : message.id)} style={styles.speakButton}><Ionicons name="options" size={16} color={openActionsId === message.id ? colors.mint : colors.textMuted} /><Text style={[styles.speakText, { color: openActionsId === message.id ? colors.mint : colors.textMuted }]}>Действия</Text></Pressable> : null}
                     </View>
-                    {!message.id.startsWith("welcome") ? <View style={styles.feedbackRow}>
+                    {openActionsId === message.id && !message.id.startsWith("welcome") ? <View style={styles.feedbackRow}>
                       <Text style={styles.feedbackLabel}>Полезный ответ?</Text>
                       <Pressable hitSlop={8} onPress={() => recordFeedback(message, "up")} style={[styles.feedbackButton, feedbackMap[message.id]?.rating === "up" && styles.feedbackButtonUp]}><Ionicons name={feedbackMap[message.id]?.rating === "up" ? "thumbs-up" : "thumbs-up-outline"} size={15} color={feedbackMap[message.id]?.rating === "up" ? colors.mint : colors.textMuted} /></Pressable>
                       <Pressable hitSlop={8} onPress={() => dislike(message)} style={[styles.feedbackButton, feedbackMap[message.id]?.rating === "down" && styles.feedbackButtonDown]}><Ionicons name={feedbackMap[message.id]?.rating === "down" ? "thumbs-down" : "thumbs-down-outline"} size={15} color={feedbackMap[message.id]?.rating === "down" ? colors.pink : colors.textMuted} /></Pressable>
                     </View> : null}
                     {openActionsId === message.id ? <View style={styles.responsePanel}>
+                      {note && <Pressable onPress={() => toggleNotebook(note)} style={[styles.speakButton, { minHeight: 44 }]}><Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.orange} /><Text style={styles.speakText}>{saved ? 'Сохранено в тетради' : 'Сохранить в тетрадь'}</Text></Pressable>}
                       <Text style={styles.responsePanelTitle}>ИЗМЕНИТЬ ОТВЕТ</Text>
                       <View style={styles.responseActionGrid}>{RESPONSE_ACTIONS.map((action) => <Pressable key={action.id} disabled={generating} onPress={() => runResponseAction(message, action)} style={styles.responseAction}><Ionicons name={action.icon} size={16} color={colors.purple} /><Text style={styles.responseActionText}>{action.title}</Text></Pressable>)}</View>
                       <Text style={styles.responsePanelTitle}>ОТКРЫТЬ УПРАЖНЕНИЕ</Text>
@@ -1007,9 +996,9 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
                 ) : null}
               </View>
             </View>
-          )})}
-          {messages.filter((item) => item.role === "user" && item.kind !== "command").length >= 2 ? (
-            <Pressable onPress={runAnalysis} style={styles.analysisBanner}>
+          ); }}
+          ListFooterComponent={messages.filter((item) => item.role === "user" && item.kind !== "command").length >= 2 ? (
+            <Pressable disabled={generating} onPress={runAnalysis} style={styles.analysisBanner}>
               <View style={styles.analysisBannerIcon}>
                 <Ionicons name="school" size={23} color={colors.orange} />
               </View>
@@ -1020,13 +1009,14 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </Pressable>
           ) : null}
-        </ScrollView>
+        />
       )}
 
       {error ? (
         <View style={styles.chatError}>
           <Ionicons name="alert-circle" color={colors.orange} size={18} />
           <Text style={styles.chatErrorText}>{error}</Text>
+          {!!retryRequest && <Pressable accessibilityRole="button" onPress={() => submitMessage(retryRequest.text, { ...retryRequest.options, retry: true })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>Повторить ответ</Text></Pressable>}
         </View>
       ) : null}
 
@@ -1035,6 +1025,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
           {speechTranscribing ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name={listening ? "stop" : "mic"} size={22} color={colors.text} />}
         </Pressable>
         <TextInput
+          accessibilityLabel="Сообщение Lingo"
           value={input}
           onChangeText={setInput}
           placeholder={speechTranscribing ? "Распознаю на iPhone…" : listening ? `Слушаю${speechModel ? " · Whisper" : ""}…` : "Напиши по-английски…"}
@@ -1044,9 +1035,10 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
           returnKeyType="send"
           blurOnSubmit
           onSubmitEditing={send}
-          inputAccessoryViewID="lingospark-ai-keyboard"
         />
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={generating ? 'Остановить ответ' : 'Отправить сообщение'}
           onPress={generating ? stop : send}
           disabled={!generating && (!input.trim() || !modelReady)}
           style={[styles.sendButton, !generating && (!input.trim() || !modelReady) && { opacity: 0.35 }]}
@@ -1054,18 +1046,7 @@ function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice,
           <Ionicons name={generating ? "stop" : "arrow-up"} size={22} color={colors.onAccent} />
         </Pressable>
       </View>
-      {Platform.OS === "ios" ? (
-        <InputAccessoryView nativeID="lingospark-ai-keyboard">
-          <View style={styles.keyboardToolbar}>
-            <Text style={styles.keyboardToolbarText}>Напиши фразу по-английски</Text>
-            <Pressable onPress={Keyboard.dismiss} style={styles.keyboardDone}>
-              <Text style={styles.keyboardDoneText}>Скрыть</Text>
-              <Ionicons name="chevron-down" size={18} color={colors.text} />
-            </Pressable>
-          </View>
-        </InputAccessoryView>
-      ) : null}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

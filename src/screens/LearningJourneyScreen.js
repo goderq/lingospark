@@ -9,7 +9,7 @@ import { speak, stopSpeech } from '../utils/speech';
 import { useProgress } from '../store/ProgressContext';
 import { colors , useTheme, createThemedStyles } from '../theme';
 import ExplanationCard from '../components/ExplanationCard';
-import { PrimaryButton } from '../components/UI';
+import { PrimaryButton, ProgressBar } from '../components/UI';
 import { ScreenEntrance } from '../components/Motion';
 import { getCoursePracticePhrases } from '../data/courseDialogues';
 import useScreenTiming from '../components/useScreenTiming';
@@ -20,18 +20,22 @@ export default function LearningJourneyScreen({ topicId = 'greetings', onClose, 
   const { progress } = useProgress();
   const journey = getJourney(topicId);
   const [active, setActive] = useState(null);
+  const [routeDetails, setRouteDetails] = useState(false);
   if (!journey) return <View style={s.content}><Text style={s.title}>Тема пока недоступна</Text><Button title="Назад" onPress={onClose} /></View>;
   if (!isJourneyUnlocked(progress, topicId)) return <View style={s.content}><Text style={s.title}>Сначала пройди предыдущий урок курса</Text><Button title="Назад" onPress={onClose} /></View>;
   if (active) return <JourneyStage key={active} journey={journey} stage={journey.stages.find(item => item.id === active)} onClose={() => setActive(null)} />;
   const saved = progress.journeys?.[topicId] || {};
   const done = journey.stages.filter(stage => saved.stages?.[stage.id]?.completedAt).length;
   const courseDone = progress.completed.includes(topicId);
+  const nextStage = journey.stages.find(stage => stage.id === saved.draft?.stageId && stageAvailable(progress, topicId, stage.id)) || journey.stages.find(stage => !saved.stages?.[stage.id]?.completedAt);
   return <View style={s.root}>
     <Header title={journey.title} onClose={onClose} />
     <ScrollView contentContainerStyle={s.content}>
       <Text style={s.label}>МАРШРУТ · {journey.level}</Text>
       <Text style={s.title}>{journey.goal}</Text>
       <Text style={s.muted}>Пройдено этапов: {done}/{journey.stages.length}. Ошибки ведут к разбору; жизни здесь не теряются.</Text>
+      <ProgressBar value={done / journey.stages.length} />
+      <Text style={s.label}>{courseDone ? 'ТЕМА ПРОЙДЕНА · МОЖНО ПОВТОРИТЬ' : nextStage ? `СЕЙЧАС: ${nextStage.title}` : 'СЕЙЧАС: САМОПРОВЕРКА ТЕМЫ'}</Text>
       {journey.stages.map((stage, index) => {
         const available = stageAvailable(progress, topicId, stage.id);
         const state = saved.stages?.[stage.id];
@@ -42,16 +46,16 @@ export default function LearningJourneyScreen({ topicId = 'greetings', onClose, 
         </Pressable>;
       })}
       <Text style={s.stepTitle}>Проверь тему без подсказок</Text>
-      <Text style={s.muted}>После пяти учебных этапов пройди самопроверку. От 80% — тема пройдена и открыт следующий курс. Закрепление памяти проверяется отдельно после перерыва.</Text>
+      <Text style={s.muted}>Заверши этапы и набери от 80% в самопроверке, чтобы открыть следующую тему.</Text>
       <Button disabled={done < journey.stages.length && !courseDone} title={courseDone ? 'Повторить самопроверку' : 'Самопроверка темы'} onPress={() => onTest(topicId)} />
       {done < journey.stages.length && !courseDone && <Text style={s.muted}>Для самопроверки заверши все этапы темы: сейчас {done} из {journey.stages.length}.</Text>}
       <Button title={progress.lessonDraft?.lessonId === topicId ? 'Продолжить сохранённую практику' : 'Дополнительная практика с разбором'} onPress={() => onCourse(topicId)} secondary />
       <Button title="Проверки памяти и расписание" onPress={onRetention} secondary />
       <Text style={s.stepTitle}>Примени в разговоре</Text>
-      <Text style={s.muted}>ИИ получит тему и цель этой встречи. Модель устанавливается по выбору в разделе ИИ. Учебные этапы выше работают без неё.</Text>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: routeDetails }} onPress={() => setRouteDetails(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={s.label}>{routeDetails ? 'Скрыть подробности' : 'Как работают практика и закрепление?'}</Text></Pressable>
+      {routeDetails && <Text style={s.muted}>Закрепление памяти проверяется после перерыва. В разговор ИИ передаются тема и цель; модель можно установить отдельно в разделе ИИ. Учебные этапы работают без неё. Прохождение «Английской жизни» не засчитывает учебную тему автоматически.</Text>}
       <Button title="Продолжить эту тему с ИИ" onPress={() => onAI({ ...journey.ai, topicId, goal: journey.goal, focusMistakeIds: (progress.mistakes || []).filter(item => item.topic === journey.title).slice(0, 3).map(item => item.id), phrases: getCoursePracticePhrases(topicId) })} />
       <Button title="Открыть «Английскую жизнь»" onPress={onWorld} secondary />
-      <Text style={s.muted}>Примени изученные выражения в подходящей сцене мира. Прохождение мира не засчитывается автоматически.</Text>
     </ScrollView>
   </View>;
 }

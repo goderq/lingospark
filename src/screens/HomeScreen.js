@@ -1,42 +1,46 @@
-import React, { useState } from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { lessons } from '../data/course';
 import { useProgressSelector } from '../store/ProgressContext';
-import DailyLearningPlan from '../components/DailyLearningPlan';
+import { nextLearningStep, readQuickSession } from '../utils/learningContinuation';
+import { retentionSummary } from '../utils/retention';
+import { wordLearningState } from '../utils/wordDictionary';
 import SyncStatus from '../components/SyncStatus';
 import { ProgressBar } from '../components/UI';
 import { MotionPressable } from '../components/Motion';
 import { colors, useTheme, createThemedStyles } from '../theme';
 
-export default function HomeScreen({ onLesson, onJourney, onRetention, onReview, onDictation, onMistakes, onAdaptive, onLearningHub, onSearch, onBookmarks, onAccount, onSyncDetails, onQuickSession, onTenses }) {
+export default function HomeScreen({ onJourney, onRetention, onLearningHub, onLearning, onSearch, onBookmarks, onAccount, onSyncDetails, onQuickSession }) {
   useTheme();
-  const [planOpen, setPlanOpen] = useState(false);
   const progress = useProgressSelector(({ progress: p }) => ({
-    name: p.name, streak: p.streak, completed: p.completed, retention: p.retention, journeys: p.journeys, lessonDraft: p.lessonDraft, mistakes: p.mistakes, dailyActions: p.dailyActions, dailyXP: p.dailyXP, dailyGoal: p.dailyGoal, reviewStats: p.reviewStats, reviewQueue: p.reviewQueue, quickSession: p.quickSession,
+    name: p.name, streak: p.streak, completed: p.completed, retention: p.retention, journeys: p.journeys, dailyXP: p.dailyXP, dailyGoal: p.dailyGoal, reviewStats: p.reviewStats, quickSession: p.quickSession,
   }));
   const next = lessons.find(item => !progress.completed.includes(item.id));
+  const step = useMemo(() => nextLearningStep(progress), [progress.completed, progress.journeys]);
+  const quick = useMemo(() => readQuickSession(progress.quickSession, progress), [progress.quickSession, progress.completed, progress.journeys]);
+  const today = new Date().toISOString().slice(0, 10);
+  const dueWords = useMemo(() => Object.values(progress.reviewStats || {}).filter(stats => wordLearningState(stats, today) === 'due').length, [progress.reviewStats, today]);
+  const dueTopics = useMemo(() => retentionSummary(progress, lessons).due.length, [progress.retention, progress.completed, today]);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
   return <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.content}>
     <View style={s.header}><View style={{ flex: 1 }}><Text style={s.eyebrow}>LINGOSPARK / СЕГОДНЯ</Text><Text style={s.greeting}>{greeting}, {progress.name}</Text></View><Pressable accessibilityLabel="Поиск" onPress={onSearch} style={s.icon}><Ionicons name="search-outline" size={22} color={colors.text} /></Pressable><Pressable accessibilityLabel="Закладки" onPress={onBookmarks} style={s.icon}><Ionicons name="bookmark-outline" size={21} color={colors.text} /></Pressable></View>
-    <Text style={s.title}>Твой английский.{"\n"}Каждый день.</Text>
-    <MotionPressable accessibilityRole="button" onPress={() => next ? onJourney(next.id) : onLearningHub()}>
+    <Text style={s.title}>Немного практики.{"\n"}Каждый день.</Text>
+    <MotionPressable accessibilityRole="button" accessibilityLabel={quick && quick.step < 3 ? 'Продолжить занятие' : 'Начать занятие'} onPress={onQuickSession}>
       <LinearGradient colors={[colors.heroStart, colors.heroEnd]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.hero}>
         <View pointerEvents="none" style={s.orbit} /><View pointerEvents="none" style={s.orbitSmall} />
-        <View style={s.heroTop}><Text style={s.heroLabel}>ТВОЙ СЛЕДУЮЩИЙ ШАГ</Text><Ionicons name="sparkles" size={24} color={colors.heroMuted} /></View>
-        <Text style={s.heroTitle}>{next?.title || 'Новый вызов'}</Text>
-        <Text style={s.heroSubtitle}>{next ? next.subtitle : 'Все темы пройдены. Выбери навык для практики.'}</Text>
-        <View style={s.heroBottom}><Text style={s.heroButton}>{next ? 'Продолжить тему' : 'Выбрать практику'} →</Text><Text style={s.heroCount}>{progress.completed.length}/{lessons.length} тем</Text></View>
+        <View style={s.heroTop}><Text style={s.heroLabel}>10 МИНУТ ДЛЯ СЕБЯ</Text><Ionicons name="sparkles" size={24} color={colors.heroMuted} /></View>
+        <Text style={s.heroTitle}>{quick && quick.step < 3 ? 'Продолжим занятие?' : 'Твоё занятие на сегодня'}</Text>
+        <Text style={s.heroSubtitle}>Учебная тема, повторение и короткая практика. Всё по шагам.</Text>
+        <View style={s.heroBottom}><Text style={s.heroButton}>{quick && quick.step < 3 ? 'Продолжить занятие' : 'Начать занятие'} →</Text></View>
       </LinearGradient>
     </MotionPressable>
-    <Pressable onPress={onQuickSession} style={s.quick}><View style={s.quickIcon}><Ionicons name="timer-outline" size={25} color={colors.purple} /></View><View style={{ flex: 1, gap: 4 }}><Text style={s.heading}>{progress.quickSession && progress.quickSession.step < 3 ? 'Продолжить короткое занятие' : 'Всего 10 минут'}</Text><Text style={s.muted}>Тема, повторение и небольшой разговор</Text></View><Ionicons name="arrow-forward" size={21} color={colors.purple} /></Pressable>
+    <MotionPressable accessibilityRole="button" onPress={() => next ? onJourney(step.topicId) : (onLearning || onLearningHub)()} style={s.quick}><View style={s.quickIcon}><Ionicons name="map-outline" size={25} color={colors.purple} /></View><View style={{ flex: 1, gap: 4 }}><Text style={s.heading}>{next ? step.title : 'Все темы пройдены'}</Text><Text style={s.muted}>{next ? `Следующий этап: ${step.stageTitle}` : 'Выбери тему для повторения'}</Text></View><Ionicons name="chevron-forward" size={21} color={colors.purple} /></MotionPressable>
+    <MotionPressable accessibilityRole="button" onPress={onRetention} style={s.quick}><View style={[s.quickIcon, { backgroundColor: colors.successSoft }]}><Ionicons name="time-outline" size={25} color={colors.mint} /></View><View style={{ flex: 1, gap: 4 }}><Text style={s.heading}>Повторение</Text><Text style={s.muted}>{dueWords + dueTopics ? `Пора вернуться: ${dueWords} слов · ${dueTopics} тем` : 'Повтори изученное в удобном темпе'}</Text></View><Ionicons name="chevron-forward" size={21} color={colors.mint} /></MotionPressable>
     <View style={s.daily}><View style={s.dailyTop}><Text style={s.heading}>Маленькая цель дня</Text><Text style={s.accent}>{progress.dailyXP} / {progress.dailyGoal} XP</Text></View><ProgressBar value={progress.dailyXP / Math.max(1, progress.dailyGoal)} /><View style={s.dailyTop}><Text style={s.muted}>Каждое занятие — шаг вперёд</Text><Text style={s.streak}>🔥 {progress.streak} дн.</Text></View></View>
-    <View style={s.section}><Text style={s.sectionTitle}>В своём темпе</Text><Text style={s.eyebrow}>ВЫБЕРИ НАВЫК</Text></View>
-    <View style={s.grid}>{[['library-outline', 'Слова', 'С примерами и озвучкой', onReview, colors.accentSoft], ['flash-outline', 'Практика', 'Проверь свои знания', onAdaptive, colors.warningSoft], ['time-outline', 'Повторение', 'Закрепи изученное', onRetention, colors.successSoft], ['school-outline', 'Грамматика', 'Пойми, как устроен язык', onTenses, colors.dangerSoft]].map(([icon, title, subtitle, action, tint]) => <Pressable key={title} onPress={action} style={s.tile}><View style={[s.tileIcon, { backgroundColor: tint }]}><Ionicons name={icon} size={23} color={colors.text} /></View><Text style={s.heading}>{title}</Text><Text style={s.muted}>{subtitle}</Text></Pressable>)}</View>
-    <Pressable onPress={() => setPlanOpen(value => !value)} style={s.planToggle}><Text style={s.heading}>Мой план на сегодня</Text><Ionicons name={planOpen ? 'chevron-up' : 'chevron-down'} size={21} color={colors.textMuted} /></Pressable>
-    {planOpen && <DailyLearningPlan progress={progress} next={next || lessons[0]} onLesson={onLesson} onJourney={onJourney} onRetention={onRetention} onMistakes={onMistakes} onReview={onReview} onDictation={onDictation} onLearningHub={onLearningHub} />}
+    <MotionPressable accessibilityRole="button" onPress={onLearning || onLearningHub} style={s.quick}><Ionicons name="grid-outline" size={23} color={colors.purple} /><View style={{ flex: 1, gap: 4 }}><Text style={s.heading}>Все занятия</Text><Text style={s.muted}>Слова, курсы, грамматика и другие навыки</Text></View><Ionicons name="chevron-forward" size={21} color={colors.textMuted} /></MotionPressable>
     <SyncStatus onAccount={onAccount} onDetails={onSyncDetails} />
   </ScrollView>;
 }

@@ -2,6 +2,7 @@ import { withNativeResource, registerResource, releaseNativeResource } from './n
 import { budgetMessages, recentTranscript } from '../utils/contextBudget';
 import { now, recordTiming } from '../utils/performance';
 import { dialogueGuidance } from '../utils/conversationCoach';
+import { generateTutorReply, tutorLanguageRule } from '../utils/tutorReply';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
 import { initLlama, releaseAllLlama } from "@pocketpalai/llama.rn";
@@ -654,50 +655,24 @@ function memoryPrompt(memory) {
 }
 
 function systemPrompt(level, topic, analysis, turnNumber = 1, dialogueMode = "conversation", tutorMemory = EMPTY_TUTOR_MEMORY, mission = null, grammarNotes = "", longContext = "", learnerFeedback = "") {
-  const analysisMemory = analysis
-    ? `\nПамять о последнем разборе: оценки — грамматика ${analysis.scores?.grammar || 0}/100, словарь ${analysis.scores?.vocabulary || 0}/100, связность ${analysis.scores?.fluency || 0}/100. Повторяющиеся места для практики: ${(analysis.mistakes || []).slice(0, 3).map((item) => item.explanation).join("; ") || "закрепление естественной речи"}. Учитывай это мягко и не повторяй один и тот же комментарий в каждом ответе.\n`
-    : "";
-  const dialogueMoves = [
-    "Продолжи ситуацию конкретным уточняющим вопросом, связанным с последней репликой ученика.",
-    "Добавь небольшой неожиданный поворот или новую деталь и предложи ученику отреагировать.",
-    "Попроси ученика выбрать между двумя естественными вариантами и объяснить выбор.",
-    "Задай ролевую мини-ситуацию на одну реплику. Не давай готовый ответ заранее.",
-    "Спроси мнение или личный пример по теме, не повторяя предыдущий вопрос.",
-  ];
-  const currentMove = dialogueMoves[Math.max(0, turnNumber - 1) % dialogueMoves.length];
-  const modeRules = {
-    conversation: `Режим «Живой разговор». Текущий ход: ${currentMove}`,
-    roleplay: `Режим «Ролевая игра». Выбери правдоподобного персонажа по теме «${topic}», сразу обозначь его роль и оставайся в ней. Продвигай сцену по одному событию за ход. Добавляй небольшие препятствия и реакции персонажа. Исправления отделяй одной короткой строкой после реплики персонажа. Не описывай действия в скобках и не выходи из роли без просьбы ученика.`,
-    debate: `Режим «Дебаты». Займи разумную позицию, отличную от позиции ученика. В каждом ходе оспаривай только один тезис, проси причину, пример или доказательство и иногда признавай сильный аргумент. Не соглашайся автоматически и не превращай ответ в лекцию. Исправление языка давай после аргумента одной короткой строкой.`,
-    story: `Режим «История с выбором». Пиши совместную историю по теме «${topic}». За ход добавляй 2–3 коротких предложения, затем предлагай два разных решения A и B или проси придумать своё. Никогда не выбирай за ученика и не пересказывай всю историю заново. Мягко исправляй реплику ученика отдельной короткой строкой.`,
-    strict: `Режим «Строгий преподаватель». Проверяй каждую реплику точно, без пустой похвалы. Сначала ответь на смысл одним предложением. Если есть ошибки, используй компактный формат «Твоя фраза: ...», «Лучше: ...», «Почему: ...». Затем дай одно новое задание без готового ответа. Если ошибок нет, прямо скажи «Фраза верная» и усложни следующее задание.`,
+  const modes = {
+    conversation: "Be a conversation partner. React to the learner's answer, add one concrete detail and ask at most one related question.",
+    roleplay: "Stay in your character and advance the scene by one event. Do not answer for the learner.",
+    debate: "Discuss one claim at a time. Give a reason or a counterexample and invite a response.",
+    story: "Continue the shared story briefly, then offer choices A and B. Let the learner decide.",
+    strict: "Respond to meaning first. Correct only a real error with a short English explanation, then set one related task without its answer.",
   };
-  const modeInstruction = modeRules[dialogueMode] || modeRules.conversation;
-  const longTermMemory = memoryPrompt(tutorMemory);
-  const missionPrompt = mission ? `Сегодняшняя миссия ученика: ${mission.description} Мягко создавай возможности выполнить её, но не выполняй за ученика.` : "";
-  const referencePrompt = grammarNotes ? `Проверенная грамматическая памятка: ${grammarNotes} Опирайся на неё и не выдумывай исключения.` : "";
-  return `Ты — Lingo, живой и внимательный преподаватель английского в приложении LingoSpark. Ученик говорит по-русски и учит английский на уровне ${level}. Тема занятия: ${topic}.${analysisMemory}
-
-${longTermMemory}
-${missionPrompt}
-${referencePrompt}
-${longContext ? `Краткий контекст более ранней части этого диалога: ${longContext}` : ""}
-${learnerFeedback}
-
-${modeInstruction}
-
-Правила:
-1. Реагируй именно на смысл последней реплики и учитывай факты из предыдущих сообщений. Не начинай каждый ответ с Sure, Great, Of course или похвалы.
-2. Если реплика ученика состоит из одного-двух слов или непонятна, не додумывай за него: предложи естественную полную фразу и задай один уточняющий вопрос.
-3. Исправляй только реальные ошибки. Сначала поддержи смысл разговора, затем коротко покажи «Лучше: ...» и объясни по-русски. Если ошибки нет, не создавай раздел с исправлением.
-4. Не повторяй уже заданный вопрос, одинаковую конструкцию ответа или одну и ту же похвалу в соседних сообщениях.
-5. Следуй выбранному режиму и не смешивай его с другими режимами без просьбы ученика.
-6. Не отвечай за ученика и не показывай готовую реплику, если просишь его выполнить задание. Можно дать только короткую подсказку или начало фразы.
-7. Подстраивай лексику под ${level}. На A1–A2 используй больше русского в объяснениях; на B1–C1 веди основную беседу по-английски.
-8. Обычно пиши 2–6 предложений. Чередуй вопрос, ролевую ситуацию, выбор, мнение и небольшую языковую задачу.
-9. Никогда не проси настоящие персональные или платёжные данные и не утверждай, что имеешь доступ к интернету. Ты работаешь на устройстве.`;
+  return `You are Lingo, an offline English conversation tutor. Level: ${level}. Topic: ${topic}.
+Speak English in the conversation at EVERY level. At A1/A2 use short sentences and everyday words, not Russian. Russian is allowed only for an explicit translation or explanation request.
+${modes[dialogueMode] || modes.conversation}
+Answer the latest message before changing the subject. "hi" is a valid greeting, not a grammar error. "what?" usually asks you to clarify your previous question: rephrase it simply rather than greeting again.
+Never repeat recent greetings, questions or praise unless explicitly asked to repeat them. Do not invent learner facts or mistakes. Ask one specific question, not "give me more details". Do not provide the solution to your own exercise. Keep replies to 1–4 sentences. Do not claim internet access.
+${memoryPrompt(tutorMemory).slice(0, 350)}
+${mission ? `Optional conversation goal: ${mission.description}` : ''}
+${grammarNotes ? `Reference for genuine language errors only, never translate it into the conversation by default: ${grammarNotes.slice(0, 400)}` : ''}
+${longContext ? `Earlier context: ${longContext.slice(0, 350)}` : ''}
+${learnerFeedback.slice(0, 250)}`;
 }
-
 function compactConversationContext(messages) {
   if (!messages.length) return "";
   const userFacts = messages.filter((item) => item.role === "user" && item.kind !== "command").slice(-8).map((item) => String(item.content || "").replace(/\s+/g, " ").trim().slice(0, 100)).filter(Boolean);
@@ -708,39 +683,13 @@ function compactConversationContext(messages) {
   return parts.join(". ").slice(0, 900);
 }
 
-function normalizedWords(text) {
-  return String(text || "").toLowerCase().replace(/[^a-zа-яё0-9\s]/gi, " ").split(/\s+/).filter((word) => word.length > 2);
-}
-
-function replySimilarity(left, right) {
-  const a = new Set(normalizedWords(left));
-  const b = new Set(normalizedWords(right));
-  if (!a.size || !b.size) return 0;
-  const intersection = [...a].filter((word) => b.has(word)).length;
-  return intersection / Math.max(a.size, b.size);
-}
-
-function findReplyProblems({ reply, messages, dialogueMode }) {
-  const text = String(reply || "").trim();
-  const problems = [];
-  if (text.length < 12) problems.push("ответ слишком короткий или пустой");
-  if (text.length > 2400) problems.push("ответ слишком длинный для учебного диалога");
-  if (/```|<\|im_|<\|end|\{\s*"(?:role|content)"/i.test(text)) problems.push("в ответ попал технический текст");
-  const previous = messages.filter((item) => item.role === "assistant").slice(-3);
-  if (previous.some((item) => normalizedWords(item.content).length > 8 && replySimilarity(text, item.content) > 0.72)) problems.push("ответ слишком похож на недавнюю реплику");
-  const lastUser = [...messages].reverse().find((item) => item.role === "user")?.content || "";
-  if (normalizedWords(lastUser).length <= 2 && !/[?？]/.test(text)) problems.push("непонятная короткая реплика ученика была додумана без уточнения");
-  if (dialogueMode === "story" && !/\bA[).:]|\bB[).:]|выбор|choice|what (?:do|would) you/i.test(text)) problems.push("история не оставляет ученику выбора");
-  return problems;
-}
-
-async function improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes, onToken }) {
+async function improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes }) {
   const context = messages.slice(-8).map((item) => `${item.role === "user" ? "Ученик" : "Lingo"}: ${item.content}`).join("\n");
   const result = await completeWithGuard(llama, {
     messages: [
       {
         role: "system",
-        content: `Ты — скрытый редактор ответа преподавателя английского. Верни только итоговую реплику Lingo без комментариев о проверке. Сохрани смысл диалога, но убери повторы, выдуманные исправления, технический текст и готовые ответы на задания. Уровень ученика: ${level}. Режим: ${dialogueMode}. ${grammarNotes ? `Используй только подходящие правила из памятки: ${grammarNotes}` : "Не объявляй грамматическую ошибку, если не уверен."}`,
+        content: `Rewrite the English tutor reply. Output only the final reply, no commentary about editing. Level: ${level}. Mode: ${dialogueMode}. Respond to the latest learner message. Resolve the listed problems. If the learner says what?, explain your previous question simply, do not greet again. Use 1–4 sentences and at most one new question. Never repeat a recent answer or question. Do not invent errors. ${tutorLanguageRule(messages)}`,
       },
       {
         role: "user",
@@ -753,11 +702,11 @@ async function improveTutorReply({ llama, draft, messages, level, dialogueMode, 
     top_p: 0.85,
     repeat_penalty: 1.15,
     stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
-  }, ({ token }) => onToken?.(token || ""), 100000);
-  return String(result?.text || "").trim() ? result : { ...result, text: draft };
+  }, undefined, 100000);
+  return result;
 }
 
-async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken, courseContext = '' }) {
+async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken, onStatus, signal, courseContext = '' }) {
   const llama = await loadModelUnsafe(model);
   const settings = await getAiSettings();
   const tutorMemory = await loadTutorMemory();
@@ -765,17 +714,18 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
   const mission = getDailyTutorMission({ level, topic, memory: tutorMemory });
   const turnNumber = messages.filter((item) => item.role === "user" && item.kind !== "command").length;
   const lastUserText = [...messages].reverse().find((item) => item.role === "user")?.content || "";
-  const grammarNotes = grammarNotesFor(lastUserText, topic, level, tutorMemory);
-  const rawHistory = messages.filter((item) => item.role === "user" || item.role === "assistant");
+  const grammarNotes = lastUserText.trim().split(/\s+/).length <= 2 && topic !== 'Грамматика' ? '' : grammarNotesFor(lastUserText, topic, level, tutorMemory);
+  const rawHistory = messages.filter((item) => (item.role === "user" || item.role === "assistant") && !String(item.id || '').startsWith('welcome') && item.content?.trim());
   const fullHistory = rawHistory.map(({ role, content }) => ({ role, content }));
   const historyLimit = model.id === "light" ? 8 : 14;
   const history = fullHistory.slice(-historyLimit);
   const longContext = compactConversationContext(rawHistory.slice(0, -historyLimit));
   const learnerFeedback = feedbackPrompt(tutorFeedback);
-  const draft = await completeWithGuard(
+  const result = await generateTutorReply({ messages, dialogueMode, qualityMode: settings.qualityMode, signal, onStatus,
+    generate: () => completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext + dialogueGuidance(messages) }, ...history],
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext + dialogueGuidance(messages) + '\n' + tutorLanguageRule(messages) }, ...history],
       n_predict: model.id === "light" ? 190 : 280,
       temperature: 0.76,
       top_k: 40,
@@ -783,28 +733,13 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
       repeat_penalty: 1.13,
       stop: ["<|im_end|>", "<|endoftext|>", "</s>"],
     },
-    settings.qualityMode ? undefined : ({ token }) => onToken?.(token || ""),
+    undefined,
     90000,
-  );
-  const draftText = String(draft?.text || "").trim();
-  const problems = findReplyProblems({ reply: draftText, messages, dialogueMode });
-  const baseQuality = {
-    checked: settings.qualityMode ? "double" : "automatic",
-    confidence: grammarNotes ? "high" : problems.length ? "medium" : "normal",
-    source: grammarNotes ? "grammar" : "context",
-  };
-  if (!settings.qualityMode && !problems.length) return { ...draft, quality: baseQuality };
-  const improved = await improveTutorReply({
-    llama,
-    draft: draftText,
-    messages,
-    level,
-    dialogueMode,
-    problems,
-    grammarNotes,
-    onToken: settings.qualityMode ? onToken : undefined,
+  ),
+    repair: (draft, problems) => improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes }),
   });
-  return { ...improved, quality: { ...baseQuality, checked: settings.qualityMode ? "double" : "regenerated", confidence: grammarNotes ? "high" : "medium" } };
+  onToken?.(result.text || '');
+  return result;
 }
 
 function parseAnalysis(text) {

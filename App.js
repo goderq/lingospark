@@ -709,6 +709,7 @@ function AppContent() {
             onAccount={() => setOverlay({ type: 'account' })}
             onSyncDetails={() => setOverlay({ type: 'diagnostics' })}
             onQuickSession={() => setOverlay({ type: 'quickSession' })}
+            onLearning={() => navigate('learn')}
             onPhrases={() => setOverlay({ type: "phrases" })}
             onDictation={() => setOverlay({ type: "dictation" })}
             onDialogues={() => setOverlay({ type: "dialogues" })}
@@ -780,9 +781,13 @@ function TabBar({ tab, setTab }) {
   useEffect(() => {
     const show = Keyboard.addListener("keyboardWillShow", () => setKeyboardVisible(true));
     const hide = Keyboard.addListener("keyboardWillHide", () => setKeyboardVisible(false));
+    const shown = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hidden = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
     return () => {
       show.remove();
       hide.remove();
+      shown.remove();
+      hidden.remove();
     };
   }, []);
   if (keyboardVisible) return null;

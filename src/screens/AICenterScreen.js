@@ -127,7 +127,7 @@ export default function AICenterScreen({ onClose, onPronunciation, onSpeechModel
         </View>
         <View style={styles.notice}><Ionicons name="information-circle" color={colors.purple} size={20} /><Text style={styles.noticeText}>Изменение применится при следующем запуске модели. iOS не отдаёт приложению точную температуру, поэтому нагрузка ниже — это безопасная оценка.</Text></View>
         <View style={styles.switchRow}>
-          <View style={{ flex: 1 }}><Text style={styles.rowTitle}>Режим высокого качества</Text><Text style={styles.rowSub}>Скрытая вторая проверка точности и повторов перед показом ответа</Text></View>
+          <View style={{ flex: 1 }}><Text style={styles.rowTitle}>Дополнительная редактура</Text><Text style={styles.rowSub}>Дополнительный проход для ясности и разнообразия. Ответ занимает больше времени.</Text></View>
           <Switch value={data.settings.qualityMode} trackColor={{ false: colors.border, true: `${colors.purple}88` }} thumbColor={data.settings.qualityMode ? colors.purple : colors.textMuted} onValueChange={async (value) => { await setAiSettings({ qualityMode: value }); await refresh(); }} />
         </View>
         <View style={styles.notice}><Ionicons name="hourglass-outline" color={colors.orange} size={20} /><Text style={styles.noticeText}>Высокое качество примерно вдвое медленнее: сначала создаётся черновик, затем локальная модель проверяет и редактирует его.</Text></View>

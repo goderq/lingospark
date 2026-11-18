@@ -15,6 +15,8 @@ const writes = [];
 const events = new Map();
 const animations = [];
 const speechCalls = [];
+const tutorRequests = [];
+const tutorApi = { loadModel: async () => {}, loadTutorSessions: async () => [], loadTutorMemory: async () => ({ completedMissions: [] }), loadTutorFeedback: async () => [], getDailyTutorMission: () => ({ id: 'test-mission', title: 'Обсуди свой день', description: 'Скрытые подробности миссии' }), getTutorMissionProgress: () => ({ current: 0, target: 2, completed: false }), saveTutorSession: async () => {}, stopGeneration: async () => {}, completeTutorMessage: args => new Promise((resolve, reject) => { args.onStatus?.('thinking'); tutorRequests.push({ args, resolve, reject }); }) };
 let system = 'light', override = null, reduced = false;
 const emit = (name, value) => { for (const callback of events.get(name) || []) callback(value); };
 const subscribe = (name, callback) => { if (!events.has(name)) events.set(name, new Set()); events.get(name).add(callback); return { remove: () => events.get(name).delete(callback) }; };
@@ -47,6 +49,9 @@ function load(filename) {
   if (file.endsWith('/store/ProgressContext.js')) return progressApi;
   if (file.endsWith('/store/CloudSyncContext.js')) return cloudApi;
   if (file.endsWith('/store/AuthContext.js')) return authApi;
+  if (file.endsWith('/services/localAi.js')) return tutorApi;
+  if (file.endsWith('/services/offlineSpeech.js')) return { getReadySpeechModel: async () => null, cancelSpeechRecording: async () => {} };
+  if (/\/(?:VoiceCoachScreen|AICenterScreen|PronunciationLabScreen|SpeechModelsScreen|AIDirectorScreen)\.js$/.test(file)) return { default: () => null };
   if (file.endsWith('/utils/speech.js')) return { speak(text, options) { speechCalls.push({ text, options }); }, stopSpeech() {} };
   if (cache.has(file)) return cache.get(file).exports;
   const module = { exports: {} }; cache.set(file, module);
@@ -61,6 +66,7 @@ function load(filename) {
     if (name === 'expo-linear-gradient') return { LinearGradient: host('Gradient') };
     if (name === 'expo-status-bar') return { StatusBar: host('StatusBar') };
     if (name === 'expo-haptics') return { notificationAsync() {}, NotificationFeedbackType: {} };
+    if (name === 'expo-speech-recognition') return { useSpeechRecognitionEvent() {}, ExpoSpeechRecognitionModule: {} };
     if (name === 'expo-clipboard') return { setStringAsync: async () => {} };
     if (name === 'expo-notifications') return { setNotificationHandler() {} };
     if (name === 'expo-document-picker' || name === 'expo-sharing' || name === 'expo-audio') return {};
@@ -146,12 +152,28 @@ async function main() {
     }
     await act(async () => tree.unmount());
   }
+  let homeStarts = 0;
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Home, { onQuickSession: () => homeStarts++ }))); await flush(); });
+  const startButtons = tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel === 'Начать занятие');
+  assert.equal(startButtons.length, 1, 'Home must have one primary start');
+  await act(async () => startButtons[0].props.onPress());
+  assert.equal(homeStarts, 1);
+  await act(async () => tree.unmount());
   // Regression for the screenshot: pale secondary buttons must not use white
   // labels, and disabled buttons must remain legible without group opacity.
   const Journey = load('src/screens/LearningJourneyScreen.js').default;
   const UI = load('src/components/UI.js');
   const flatten = style => Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean).map(flatten)) : style || {};
   const namedButton = label => tree.root.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === label));
+  const Explanation = load('src/components/ExplanationCard.js').default;
+  const mistakenExercise = { id: 'feedback-order', type: 'translate', prompt: 'Переведи: Hello', answer: 'Привет', explanation: 'Hello — нейтральное приветствие.' };
+  const concreteFeedback = load('src/utils/errorFeedback.js').errorFeedback(mistakenExercise, 'Пока');
+  for (const showStatus of [true, false]) {
+    await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Explanation, { item: mistakenExercise, selected: 'Пока', correct: false, showStatus }))); await flush(); });
+    assert.equal(tree.root.findAllByType('Text').filter(node => node.props.children === concreteFeedback.text).length, 1, 'show the concrete mistake once, also when the parent owns the status header');
+    assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Допустимый ответ'));
+    await act(async () => tree.unmount());
+  }
   await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Journey, { topicId: 'greetings' }))); await flush(); });
   for (const mode of ['light', 'dark', 'pink']) {
     await act(async () => { controls.setMode(mode); await flush(); });
@@ -243,6 +265,45 @@ async function main() {
   await act(async () => tree.unmount());
   actions.saveWordSession = oldSave; actions.recordReview = oldReview;
   delete progress.wordPreferences;
+  // Actual chat UI: keyboard positions use the measured window origin. The
+  // composer has no accessory toolbar, input survives layout changes, and late
+  // stopped completions cannot replace the current conversation.
+  const Chat = load('src/screens/AITutorScreen.js').TutorChat;
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Chat, { model: { id: 'light', title: 'Лёгкий', color: '#6544DB' } })), { createNodeMock: element => element.type === 'View' ? { measureInWindow: callback => callback(0, 59, 390, 751) } : { scrollToEnd() {} } }); await flush(); });
+  const chatInput = () => tree.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === 'Сообщение Lingo');
+  const chatButton = label => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === label);
+  assert.equal(chatInput().props.inputAccessoryViewID, undefined);
+  await act(async () => chatInput().props.onChangeText('hi'));
+  await act(async () => emit('keyboardWillChangeFrame', { duration: 250, endCoordinates: { height: 320, screenY: 524 } }));
+  const chatRoot = () => tree.root.findAllByType('View').find(node => node.props.collapsable === false);
+  assert.equal(flatten(chatRoot().props.style).paddingBottom, 286);
+  assert.equal(chatInput().props.value, 'hi');
+  assert.ok(chatButton('Скрыть клавиатуру'));
+  await act(async () => emit('keyboardWillChangeFrame', { endCoordinates: { height: 320, screenY: 844 } }));
+  assert.equal(flatten(chatRoot().props.style).paddingBottom, 0, 'offscreen keyboard frame must restore the normal composer');
+  await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
+  assert.ok(chatButton('Остановить ответ'));
+  await act(async () => { tutorRequests.at(-1).resolve({ text: 'Hello! Would you like to talk about food or travel?' }); await flush(); });
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Hello! Would you like to talk about food or travel?'));
+  assert.ok(!tree.root.findAllByType('Text').some(node => ['Проверено по контексту', 'Опора на справочник'].includes(node.props.children)));
+  await act(async () => chatInput().props.onChangeText('what'));
+  await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
+  await act(async () => { tutorRequests.at(-1).resolve({ text: 'I mean: which topic do you prefer, food or travel?' }); await flush(); });
+  await act(async () => chatInput().props.onChangeText('stop this reply'));
+  await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
+  const stopped = tutorRequests.at(-1);
+  await act(async () => chatButton('Остановить ответ').props.onPress());
+  assert.equal(stopped.args.signal.aborted, true);
+  await act(async () => { stopped.resolve({ text: 'Late reply that must not be shown.' }); await flush(); });
+  assert.ok(!tree.root.findByType('FlatList').props.data.some(item => item.content === 'Late reply that must not be shown.'));
+  await act(async () => chatInput().props.onChangeText('please try'));
+  await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
+  await act(async () => { tutorRequests.at(-1).reject(new Error('Модель не смогла сформировать ответ')); await flush(); });
+  const userCount = tree.root.findByType('FlatList').props.data.filter(item => item.role === 'user').length;
+  await act(async () => { namedButton('Повторить ответ').props.onPress(); await flush(); });
+  assert.equal(tutorRequests.at(-1).args.messages.filter(item => item.role === 'user').length, userCount, 'retry must not insert the learner message twice');
+  await act(async () => { tutorRequests.at(-1).resolve({ text: 'Let’s try again. What did you enjoy today?' }); await flush(); });
+  await act(async () => tree.unmount());
   const Practice = load('src/screens/PracticeScreen.js').default;
   const savedExercise = { id: 'draft-question', type: 'translate', prompt: 'A saved exercise', answer: 'Hello' };
   progress.practiceDrafts = { 'common-practice': { version: 1, id: 'saved-attempt', mode: 'learn', deck: [savedExercise], index: 0, input: 'Hel', built: [], checked: false, responses: [], seed: 1 } };
@@ -272,6 +333,8 @@ async function main() {
   assert.equal(tree.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === 'Найти тему').props.value, 'Знакомство');
   const todayTab = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Сегодня');
   await act(async () => { todayTab.props.onPress(); await flush(); });
+  const allLessons = tree.root.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === 'Все занятия'));
+  await act(async () => { allLessons.props.onPress(); await flush(); });
   const practiceLink = tree.root.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === 'Практика'));
   await act(async () => { practiceLink.props.onPress(); await flush(); });
   const resumeOverlay = tree.root.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === 'Продолжить сохранённое занятие'));
@@ -287,6 +350,7 @@ async function main() {
   assert.equal(homeSelected(), true, 'a new application instance must start at Today');
   assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start must not automatically reopen the last exercise');
   await act(async () => tree.unmount());
-  console.log('Interface passed: persisted themes, cached styles, reduced motion, dictionary full catalogs/search/status, isolated row updates, spoken examples, new-word session/grading, background preserves tab/search/exercise/input, cold start opens Today. Native layout/keyboard still require iPhone checks.');
+  console.log('Interface passed: themes/motion, dictionary/search/status, word sessions, measured chat keyboard inset/input, chat stop/late reply/retry, simplified Home routes, background preserves work and cold start opens Today. Native model quality and keyboard movement still require iPhone checks.');
 }
-main().catch(cause => { console.error(cause); process.exitCode = 1; });
+const watchdog = setTimeout(() => { console.error('Interface test did not finish'); process.exitCode = 1; }, 20000);
+main().then(() => clearTimeout(watchdog), cause => { clearTimeout(watchdog); console.error(cause); process.exitCode = 1; });
