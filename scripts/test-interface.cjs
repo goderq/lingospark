@@ -37,9 +37,19 @@ const native = {
   Animated: { Value, View: host('AnimatedView'), timing: animate, spring: animate }, Easing: { out: value => value, cubic: value => value },
 };
 const progress = { name: 'Лео', onboarded: true, dailyGoal: 30, totalXP: 40, dailyXP: 10, streak: 2, completed: [], journeys: {}, retention: {}, reviewStats: {}, reviewQueue: {}, mistakes: [], settings: {}, stats: {}, activity: {} };
+const progressStore = { getSnapshot: () => ({ progress, ready: true }), subscribe: () => () => {} };
+let lastNotification = null;
+const notificationApi = {
+  DEFAULT_ACTION_IDENTIFIER: 'default',
+  setNotificationHandler() {},
+  getAllScheduledNotificationsAsync: async () => [],
+  getLastNotificationResponseAsync: async () => lastNotification,
+  clearLastNotificationResponseAsync: async () => { lastNotification = null; },
+  addNotificationResponseReceivedListener: callback => subscribe('notification', callback),
+};
 const actions = new Proxy({}, { get: (target, key) => target[key] || (target[key] = key === 'isUnlocked' ? () => true : () => {}) });
 const providers = ({ children }) => children;
-const progressApi = { useProgress: () => new Proxy({ progress }, { get: (target, key) => key in target ? target[key] : actions[key] }), useProgressSelector: selector => selector({ progress, ready: true }), useProgressActions: () => actions, ProgressProvider: providers };
+const progressApi = { useProgress: () => new Proxy({ progress }, { get: (target, key) => key in target ? target[key] : actions[key] }), useProgressSelector: selector => selector({ progress, ready: true }), useProgressStore: () => progressStore, useProgressActions: () => actions, ProgressProvider: providers };
 const cloudApi = { useCloudBootstrap: () => false, useCloudSync: () => ({ status: 'offline', conflict: null }), CloudSyncProvider: providers };
 const authApi = { useAuth: () => ({ ready: true, user: null, guestMode: true }), AuthProvider: providers };
 const cache = new Map();
@@ -52,7 +62,7 @@ function load(filename) {
   if (file.endsWith('/store/CloudSyncContext.js')) return cloudApi;
   if (file.endsWith('/store/AuthContext.js')) return authApi;
   if (file.endsWith('/services/localAi.js')) return tutorApi;
-  if (file.endsWith('/services/offlineSpeech.js')) return { getReadySpeechModel: async () => null, cancelSpeechRecording: async () => {} };
+  if (file.endsWith('/services/offlineSpeech.js')) return { getReadySpeechModel: async () => null, cancelSpeechRecording: async () => {}, resumeSpeechModelDownload: async () => {} };
   if (/\/(?:VoiceCoachScreen|AICenterScreen|PronunciationLabScreen|SpeechModelsScreen|AIDirectorScreen)\.js$/.test(file)) return { default: () => null };
   if (file.endsWith('/utils/speech.js')) return { speak(text, options) { speechCalls.push({ text, options }); }, stopSpeech() {} };
   if (cache.has(file)) return cache.get(file).exports;
@@ -70,7 +80,7 @@ function load(filename) {
     if (name === 'expo-haptics') return { notificationAsync() {}, NotificationFeedbackType: {} };
     if (name === 'expo-speech-recognition') return { useSpeechRecognitionEvent() {}, ExpoSpeechRecognitionModule: {} };
     if (name === 'expo-clipboard') return { setStringAsync: async () => {} };
-    if (name === 'expo-notifications') return { setNotificationHandler() {} };
+    if (name === 'expo-notifications') return notificationApi;
     if (name === 'expo-document-picker' || name === 'expo-sharing' || name === 'expo-audio') return {};
     if (name === 'expo-file-system/legacy') return { documentDirectory: '/documents/' };
     return require(name);
@@ -79,7 +89,7 @@ function load(filename) {
   return module.exports;
 }
 const theme = load('src/theme.js');
-Object.assign(tutorApi, { AI_MODELS: load('src/data/aiModels.js').AI_MODELS, getDownloadState: () => ({ status: 'idle', modelId: null, progress: 0 }), subscribeToDownload: () => () => {}, getFreeSpace: async () => 20000000000, downloadModel: async model => modelDownloads.push(model.id) });
+Object.assign(tutorApi, { AI_MODELS: load('src/data/aiModels.js').AI_MODELS, getDownloadState: () => ({ status: 'idle', modelId: null, progress: 0 }), subscribeToDownload: () => () => {}, getFreeSpace: async () => 20000000000, restorePendingModelDownload: async () => {}, inspectModels: async () => ({ light: { installed: true } }), getActiveModelId: async () => "light", unloadModel: async () => {}, downloadModel: async model => modelDownloads.push(model.id) });
 const { palettes, foregroundFor } = load('src/design/palettes.js');
 const luminance = hex => {
   const values = hex.slice(1).match(/../g).map(value => parseInt(value, 16) / 255).map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
@@ -480,7 +490,31 @@ async function main() {
   assert.equal(homeSelected(), true, 'a new application instance must start at Today');
   assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start must not automatically reopen the last exercise');
   await act(async () => tree.unmount());
-  console.log('Interface passed: model library/manual downloads/legacy/terms, themes, word sessions, chat keyboard inset/input, stop/retry, Home routes, background preserves work and cold start opens Today. Native model quality and keyboard movement still require iPhone checks.');
+  progress.settings = { reviewReminderEnabled: true, modelNotificationEnabled: true };
+  progress.reviewQueue = { practice: { dueAt: 0, exercise: savedExercise } };
+  lastNotification = {
+    actionIdentifier: 'default',
+    notification: { request: { identifier: 'lingospark-study-reminder', content: { data: { source: 'lingospark', kind: 'review', fireAt: Date.now() } } } },
+  };
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start by tapping a review notification opens the exercise directly');
+  assert.equal(lastNotification, null);
+  await act(async () => tree.unmount());
+
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  const tapModel = {
+    actionIdentifier: 'default',
+    notification: { request: { identifier: 'model-1', content: { data: { source: 'lingospark', kind: 'model', modelId: 'light' } } } },
+  };
+  await act(async () => { emit('notification', tapModel); await flush(); });
+  const focusedCard = tree.root.findAllByType('View').find(node => node.props.onLayout && node.findAllByType('Text').some(text => text.props.children === models.find(model => model.id === 'light').title));
+  assert.ok(focusedCard, 'a warm notification tap opens the chosen model card');
+  assert.ok(namedButton('Продолжить диалог'), 'opening a model notification leaves chat launch manual');
+  await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Сегодня').props.onPress());
+  await act(async () => { emit('notification', tapModel); await flush(); });
+  assert.equal(homeSelected(), true, 'a duplicate notification response must be ignored');
+  await act(async () => tree.unmount());
+  console.log('Interface passed: model library/manual downloads/legacy/terms, themes, word sessions, chat keyboard inset/input, stop/retry, Home routes, background preserves work, cold start opens Today, and notification taps open the review or model card. Native model quality and keyboard movement still require iPhone checks.');
 }
 const watchdog = setTimeout(() => { console.error('Interface test did not finish'); process.exitCode = 1; }, 20000);
 main().then(() => clearTimeout(watchdog), cause => { clearTimeout(watchdog); console.error(cause); process.exitCode = 1; });

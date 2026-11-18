@@ -19,6 +19,7 @@ import AuthScreen from "./src/screens/AuthScreen";
 import { colors , useTheme, createThemedStyles , ThemeProvider } from "./src/theme";
 import { lessons } from "./src/data/course";
 import {markStartup,beginScreenTransition} from './src/utils/performance';
+import useLearningNotifications from './src/components/useLearningNotifications';
 
 const CourseScreen = React.lazy(() => import("./src/screens/CourseScreen"));
 const AITutorScreen = React.lazy(() => import("./src/screens/AITutorScreen"));
@@ -152,6 +153,8 @@ function AppContent() {
   const [aiImmersive, setAiImmersive] = useState(false);
   const [worldImmersive, setWorldImmersive] = useState(false);
   const [aiPractice, setAiPractice] = useState(null);
+  const [modelNotice, setModelNotice] = useState(null);
+  useEffect(() => { if (tab !== 'ai') setModelNotice(null); }, [tab]);
   const [navigationReady, setNavigationReady] = useState(false);
   useEffect(()=>{if(ready&&authReady&&navigationReady&&(!user||!cloudRestoring))markStartup();},[ready,authReady,navigationReady,user,cloudRestoring]);
   const accountName = user?.user_metadata?.display_name?.trim() || "";
@@ -182,13 +185,36 @@ function AppContent() {
     if (destination.tab) setTab(destination.tab);
     setOverlay(destination.overlay);
   };
+  const notificationsReady = ready && navigationReady && authReady && !cloudRestoring;
+  useLearningNotifications({
+    ready: notificationsReady,
+    active: notificationsReady && !loadError && onboarded && !!(user || guestMode),
+    onOpen: notice => {
+      setAiImmersive(false);
+      setWorldImmersive(false);
+      if (notice.kind === 'model') {
+        setAiPractice(null);
+        setModelNotice(notice);
+        setOverlay(null);
+        setTab('ai');
+      } else {
+        setTab('home');
+        if (notice.kind === 'review') setOverlay({ type: 'unifiedReview', noticeKey: notice.key });
+        else if (notice.target.type === 'lesson') {
+          setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === notice.target.id), noticeKey: notice.key });
+        } else if (notice.target.type === 'journey') {
+          setOverlay({ type: 'journey', topicId: notice.target.id, stageId: notice.target.stageId, noticeKey: notice.key });
+        } else setOverlay({ type: 'quickSession', noticeKey: notice.key });
+      }
+    },
+  });
   if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
   if (!user && !guestMode) return <AuthScreen />;
   if (loadError && !cloudRestoring) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><RecoveryScreen error={loadError} /></ScreenFrame>;
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
-  if (practiceAlias(overlay?.type)) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><PracticeScreen key={overlay.type} {...practiceAlias(overlay.type)} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></ScreenFrame>;
+  if (practiceAlias(overlay?.type)) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><PracticeScreen key={overlay.noticeKey || overlay.type} {...practiceAlias(overlay.type)} autoStartReview={!!overlay.noticeKey} reviewLimit={overlay.noticeKey ? 5 : undefined} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></ScreenFrame>;
   if (overlay?.type === "account")
     return (
       <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
@@ -245,9 +271,9 @@ function AppContent() {
   if (overlay?.type === 'review')
     return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><View style={styles.overlayBack}><Pressable onPress={() => setOverlay(null)} style={styles.backButton}><Text style={styles.backText}>← Обучение</Text></Pressable><Pressable onPress={() => setOverlay({ type: 'vocabulary' })} style={styles.backButton}><Text style={styles.backText}>Словарь →</Text></Pressable></View><ReviewScreen /></ScreenFrame>;
   if (overlay?.type === 'courseTest') return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><CourseTestScreen topicId={overlay.topicId} onClose={() => setOverlay({ type: 'journey', topicId: overlay.topicId })} /></ScreenFrame>;
-  if (overlay?.type === 'quickSession') return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><QuickSessionScreen onClose={() => setOverlay(null)} onJourney={topicId => setOverlay({ type: 'journey', topicId })} onRetention={() => setOverlay({ type: 'retention' })} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
+  if (overlay?.type === 'quickSession') return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><QuickSessionScreen key={overlay.noticeKey} onClose={() => setOverlay(null)} onJourney={topicId => setOverlay({ type: 'journey', topicId })} onRetention={() => setOverlay({ type: 'retention' })} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
   if (overlay?.type === 'journey')
-    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><LearningJourneyScreen topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
+    return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><LearningJourneyScreen key={overlay.noticeKey} initialStageId={overlay.stageId} topicId={overlay.topicId || 'greetings'} onClose={() => setOverlay(null)} onTest={topicId => setOverlay({ type: 'courseTest', topicId })} onCourse={topicId => setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === topicId), returnTo: 'journey' })} onRetention={() => setOverlay({ type: 'retention' })} onWorld={() => navigate('world')} onAI={practice => { setAiPractice({ ...practice, requestId: Date.now() }); navigate('ai'); }} /></ScreenFrame>;
   if (overlay?.type === "lingoWorld")
     return (
       <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
@@ -258,6 +284,7 @@ function AppContent() {
     return (
       <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
         <LessonScreen
+          key={overlay.noticeKey}
           lesson={overlay.lesson}
           onClose={() => setOverlay(overlay.returnTo ? { type: overlay.returnTo, topicId: overlay.lesson.id } : null)}
         />
@@ -746,7 +773,7 @@ function AppContent() {
         {tab === 'world' && <LingoWorldScreen onClose={() => setTab('home')} onImmersiveChange={setWorldImmersive} />}
         {tab === "ai" && (
           <React.Suspense fallback={<LoadingScreen />}>
-            <AITutorScreen practice={aiPractice} onPracticeConsumed={() => setAiPractice(null)} onImmersiveChange={setAiImmersive} onNavigate={({ type, target }) => {
+            <AITutorScreen modelNotice={modelNotice} onModelNoticeConsumed={() => setModelNotice(null)} practice={aiPractice} onPracticeConsumed={() => setAiPractice(null)} onImmersiveChange={setAiImmersive} onNavigate={({ type, target }) => {
               setAiImmersive(false);
               if (type === "tab") {
                 setOverlay(null);

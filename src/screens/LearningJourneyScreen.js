@@ -14,12 +14,12 @@ import { ScreenEntrance } from '../components/Motion';
 import { getCoursePracticePhrases } from '../data/courseDialogues';
 import useScreenTiming from '../components/useScreenTiming';
 
-export default function LearningJourneyScreen({ topicId = 'greetings', onClose, onCourse, onTest, onRetention, onAI, onWorld }) {
+export default function LearningJourneyScreen({ topicId = 'greetings', initialStageId, onClose, onCourse, onTest, onRetention, onAI, onWorld }) {
   useTheme();
   useScreenTiming('journey_open');
   const { progress } = useProgress();
   const journey = getJourney(topicId);
-  const [active, setActive] = useState(null);
+  const [active, setActive] = useState(initialStageId || null);
   const [routeDetails, setRouteDetails] = useState(false);
   if (!journey) return <View style={s.content}><Text style={s.title}>Тема пока недоступна</Text><Button title="Назад" onPress={onClose} /></View>;
   if (!isJourneyUnlocked(progress, topicId)) return <View style={s.content}><Text style={s.title}>Сначала пройди предыдущий урок курса</Text><Button title="Назад" onPress={onClose} /></View>;

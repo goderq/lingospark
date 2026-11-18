@@ -6,6 +6,24 @@ const { AI_MODELS } = load(path.join(__dirname, '../src/data/aiModels'));
 
 module.exports = function mockLocalAi({ installed = true } = {}) {
   const storage = new Map(), files = new Map(), nativeCalls = [], outputs = [], loads = [], downloads = [], cache = new Map();
+  const scheduled = new Map();
+  let permissions = { granted: true };
+  let nextNotice = 0;
+  const notifications = {
+    IosAuthorizationStatus: { PROVISIONAL: 3, EPHEMERAL: 4 },
+    SchedulableTriggerInputTypes: { DATE: 'date', TIME_INTERVAL: 'timeInterval' },
+    DEFAULT_ACTION_IDENTIFIER: 'default',
+    setNotificationHandler() {},
+    getPermissionsAsync: async () => permissions,
+    getAllScheduledNotificationsAsync: async () => [...scheduled.values()],
+    cancelScheduledNotificationAsync: async identifier => scheduled.delete(identifier),
+    scheduleNotificationAsync: async request => {
+      const identifier = request.identifier || `notice-${++nextNotice}`;
+      scheduled.set(identifier, { ...request, identifier });
+      return identifier;
+    },
+  };
+  const setNotificationPermissions = value => { permissions = value; };
   const filePath = model => `/documents/lingospark-ai/${model.filename}`;
   if (installed) for (const model of AI_MODELS) files.set(filePath(model), { size: model.size, header: 'R0dVRg==' });
   const llama = { completion: async (options, onToken) => { nativeCalls.push(options); const text = outputs.shift(); assert.equal(typeof text, 'string', 'unexpected extra model request'); onToken?.({ token: text }); return { text }; }, stopCompletion: async () => {} };
@@ -32,6 +50,7 @@ module.exports = function mockLocalAi({ installed = true } = {}) {
     const requireMock = name => {
       if (name.startsWith('.')) return serviceLoad(path.resolve(path.dirname(file), name));
       if (name === '@react-native-async-storage/async-storage') return { getItem: async key => storage.get(key) || null, setItem: async (key, value) => storage.set(key, value), removeItem: async key => storage.delete(key) };
+      if (name === 'expo-notifications') return notifications;
       if (name === 'expo-file-system/legacy') return fileSystem;
       if (name === '@pocketpalai/llama.rn') return { initLlama: async options => { loads.push(options); return llama; }, releaseAllLlama: async () => {} };
       return require(name);
@@ -39,5 +58,5 @@ module.exports = function mockLocalAi({ installed = true } = {}) {
     new Function('require', 'module', 'exports', code)(requireMock, module, module.exports);
     return module.exports;
   }
-  return { serviceLoad, storage, files, nativeCalls, outputs, loads, downloads, filePath };
+  return { serviceLoad, storage, files, nativeCalls, outputs, loads, downloads, filePath, scheduled, setNotificationPermissions };
 };

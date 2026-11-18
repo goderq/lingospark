@@ -43,7 +43,7 @@ export function buildUnifiedReview(progress, words, lessons, now = Date.now(), l
     retentionDeck(lesson).forEach(item => add({ ...item, topic: lesson.title, reason: 'Отложенная проверка урока', retentionLessonId: lesson.id, retentionDueAt: progress.retention[lesson.id].dueAt }));
   }
   if (deck.length >= limit) return deck;
-  const byId = new Map(words.map(word => [word.id, word]));
+  const byId = words instanceof Map ? words : new Map(words.map(word => [word.id, word]));
   const hidden = new Set(progress.wordPreferences?.hidden);
   const queued = progress.reviewQueue || {};
   for (const entry of Object.values(queued).filter(entry => entry.dueAt <= now && entry.exercise && (!entry.exercise.wordId || canReviewWord(entry.exercise.wordId, byId, hidden))).sort((a, b) => a.dueAt - b.dueAt)) {

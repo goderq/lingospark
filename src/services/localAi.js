@@ -1,3 +1,4 @@
+import { notifyModelReady } from './learningNotifications';
 import { withNativeResource, registerResource, releaseNativeResource } from './nativeResources';
 import { budgetMessages, recentTranscript } from '../utils/contextBudget';
 import { now, recordTiming } from '../utils/performance';
@@ -367,6 +368,7 @@ async function transferModel(model, job, checkpoint) {
     await setActiveModelId(model.id);
     await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
     publishDownload({ status: 'completed', progress: 1, written: verification.bytes || model.size, total: model.size, error: '', canResume: false });
+    notifyModelReady(model).catch(() => {});
     return result.uri;
   } catch (error) {
     if (job.control) return null;
@@ -442,7 +444,10 @@ export async function restorePendingModelDownload() {
   if (activeDownload || downloadState.status !== 'idle') return;
   if (verification.verified) {
     await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
-    if (!activeDownload) publishDownload({ status: 'completed', modelId: model.id, progress: 1, total: model.size, written: verification.bytes, error: '', canResume: false });
+    if (!activeDownload && downloadState.status === 'idle') {
+      publishDownload({ status: 'completed', modelId: model.id, progress: 1, total: model.size, written: verification.bytes, error: '', canResume: false });
+      notifyModelReady(model).catch(() => {});
+    }
     return;
   }
   const written = checkpoint.resumeData ? checkpoint.written || 0 : 0;

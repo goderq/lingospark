@@ -1446,6 +1446,7 @@ export function useProgressSelector(selector, equal = shallowEqual) {
   };
   return useSyncExternalStore(store.subscribe, getSnapshot, getSnapshot);
 }
+export const useProgressStore = () => useContext(ProgressContext).store;
 export const useProgressActions = () => useContext(ProgressContext).actions;
 export function useProgress() {
   const state = useProgressSelector(snapshot => snapshot);

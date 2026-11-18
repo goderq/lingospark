@@ -15,7 +15,7 @@ import { ScreenEntrance } from '../components/Motion';
 
 const skillNames = { mixed: 'Все навыки', grammar: 'Грамматика', vocabulary: 'Выражения', listening: 'Слух', writing: 'Письмо' };
 
-export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, sessionKey, title, onComplete }) {
+export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, autoStartReview = false, sessionKey, title, onComplete }) {
   useTheme();
   useScreenTiming('practice_open');
   const { progress, savePracticeDraft, completePractice, clearPracticeDraft } = useProgress();
@@ -33,6 +33,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
   const [resultDetail, setResultDetail] = useState(null);
   const scroll = useRef(null);
   const completedRef = useRef(null);
+  const autoStarted = useRef(false);
   const current = session?.deck[session.index];
   const options = useMemo(() => current?.type === 'choice' ? balancedOptions(current.options, current.answer, session.index, session.seed) : current?.options || [], [current, session?.index, session?.seed]);
   const typed = current?.type === 'build' ? (session?.built || []).map(i => options[i]).join(' ') : session?.input || '';
@@ -56,6 +57,12 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
     } catch (cause) { setError(cause.message || 'Не удалось подготовить задания'); }
     finally { setBusy(false); }
   };
+  useEffect(() => {
+    if (!autoStartReview || !review || autoStarted.current) return;
+    autoStarted.current = true;
+    if (validatePracticeSession(saved)) setSession(saved);
+    else start();
+  }, [autoStartReview, review]);
   const check = () => {
     if (!session || session.checked || !typed.trim()) return;
     Keyboard.dismiss();

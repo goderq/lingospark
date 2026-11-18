@@ -1,9 +1,10 @@
 {
   "name": "lingospark-expo",
-  "version": "4.5.4",
+  "version": "4.5.5",
   "private": true,
   "main": "index.js",
   "scripts": {
+    "test:notifications": "node scripts/test-notifications.cjs",
     "test:interface": "node scripts/test-interface.cjs",
     "test:tutor-reply": "node scripts/test-tutor-reply.cjs",
     "test:ai-models": "node scripts/test-ai-models.cjs",

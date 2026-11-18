@@ -118,13 +118,15 @@ function formatSpace(bytes) {
     : `${Math.round(bytes / 1e6)} МБ`;
 }
 
-export default function AITutorScreen({ onImmersiveChange, onNavigate, practice, onPracticeConsumed }) {
+export default function AITutorScreen({ onImmersiveChange, onNavigate, practice, onPracticeConsumed, modelNotice, onModelNoticeConsumed }) {
   useTheme();
-  const [requestedPractice] = useState(practice);
+  const [requestedPractice, setRequestedPractice] = useState(practice);
   const [installed, setInstalled] = useState({});
   const [activeId, setActiveId] = useState(null);
   const [screen, setScreen] = useState("models");
   const [loading, setLoading] = useState(true);
+  const modelNoticeRef = useRef(modelNotice);
+  modelNoticeRef.current = modelNotice;
 
   const refresh = useCallback(async (openActive = false) => {
     const [state, storedId] = await Promise.all([inspectModels(), getActiveModelId()]);
@@ -132,7 +134,7 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate, practice,
     const currentDownload = getDownloadState();
     setInstalled(state);
     setActiveId(usableId);
-    if (usableId && openActive && !['downloading', 'paused', 'interrupted', 'disconnected', 'pausing', 'verifying'].includes(currentDownload.status)) setScreen("chat");
+    if (usableId && openActive && !modelNoticeRef.current && !['downloading', 'paused', 'interrupted', 'disconnected', 'pausing', 'verifying'].includes(currentDownload.status)) setScreen("chat");
     setLoading(false);
   }, []);
 
@@ -140,6 +142,13 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate, practice,
     restorePendingModelDownload().catch(() => {}).then(() => refresh(true)).catch(() => setLoading(false));
     resumeSpeechModelDownload().catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!modelNotice) return;
+    setRequestedPractice(null);
+    setScreen('models');
+    if (!loading) refresh().catch(() => {});
+  }, [modelNotice?.key, refresh]);
 
   useEffect(() => () => {
     onImmersiveChange?.(false);
@@ -207,20 +216,22 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate, practice,
     <ModelLibrary
       installed={installed}
       activeId={activeId}
+      modelNotice={modelNotice}
       onRefresh={refresh}
-      onCenter={() => setScreen("center")}
-      onPronunciation={() => setScreen("pronunciation")}
-      onDirector={() => setScreen("director")}
+      onCenter={() => { onModelNoticeConsumed?.(); setScreen("center"); }}
+      onPronunciation={() => { onModelNoticeConsumed?.(); setScreen("pronunciation"); }}
+      onDirector={() => { onModelNoticeConsumed?.(); setScreen("director"); }}
       onStart={async (model) => {
         await setActiveModelId(model.id);
         setActiveId(model.id);
+        onModelNoticeConsumed?.();
         setScreen("chat");
       }}
     />
   );
 }
 
-export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation, onDirector }) {
+export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter, onPronunciation, onDirector, modelNotice }) {
   const { reduceMotion } = useTheme();
   const [download, setDownload] = useState(getDownloadState());
   const [freeSpace, setFreeSpace] = useState(null);
@@ -228,6 +239,9 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
   const [showLegacy, setShowLegacy] = useState(false);
   const [licenseModel, setLicenseModel] = useState(null);
   const cancelledRef = useRef(false);
+  const modelList = useRef(null);
+  const focusedNotice = useRef(null);
+  const focusId = modelNotice?.modelId;
 
   useEffect(() => {
     getFreeSpace().then(setFreeSpace);
@@ -293,6 +307,8 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
 
   return (
     <ScrollView
+      key={modelNotice?.key}
+      ref={modelList}
       style={styles.page}
       contentContainerStyle={styles.modelContent}
       showsVerticalScrollIndicator={false}
@@ -346,7 +362,7 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
 
       <Text style={styles.smallMuted}>Начни с Llama 1B. Gemma 1B — альтернативный вариант, Llama 3B требует больше памяти. Скачивание запускается только по нажатию.</Text>
       <Pressable accessibilityRole="button" accessibilityState={{ expanded: showLegacy }} onPress={() => setShowLegacy(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>{showLegacy ? 'Скрыть неустановленные Qwen' : 'Показать прежние модели Qwen'}</Text></Pressable>
-      {AI_MODELS.filter(model => !model.legacy || showLegacy || installed[model.id]?.installed || activeId === model.id || download.modelId === model.id).map((model) => {
+      {AI_MODELS.filter(model => !model.legacy || showLegacy || focusId === model.id || installed[model.id]?.installed || activeId === model.id || download.modelId === model.id).map((model) => {
         const accent = model.tier === 'light' ? colors.mint : model.tier === 'advanced' ? colors.orange : colors.purple;
         const isInstalled = installed[model.id]?.installed;
         const isDownloading = download.status === "downloading" && download.modelId === model.id;
@@ -357,9 +373,14 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
         return (
           <View
             key={model.id}
+            onLayout={focusId === model.id ? ({ nativeEvent: { layout } }) => {
+              if (!modelList.current || focusedNotice.current === modelNotice.key) return;
+              focusedNotice.current = modelNotice.key;
+              modelList.current.scrollTo({ y: Math.max(0, layout.y - 12), animated: false });
+            } : undefined}
             style={[
               styles.modelCard,
-              (activeId === model.id || isDownloading) && { borderColor: accent },
+              (activeId === model.id || isDownloading || focusId === model.id) && { borderColor: accent },
             ]}
           >
             <View style={styles.modelTop}>

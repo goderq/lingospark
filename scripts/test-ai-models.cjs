@@ -36,8 +36,10 @@ assert.ok(modelCompletionOptions(LEGACY_AI_MODELS[0], original).stop.includes('<
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 async function main() {
   const fixture = require('./mock-local-ai.cjs')({ installed: false });
-  const { downloads, files, filePath, storage } = fixture;
+  const { downloads, files, filePath, storage, scheduled } = fixture;
   const ai = fixture.serviceLoad('src/services/localAi.js');
+  const notices = fixture.serviceLoad('src/services/learningNotifications.js');
+  notices.setModelNoticesEnabled(true);
   await ai.setActiveModelId('light');
   const old = LEGACY_AI_MODELS[0];
   files.set(filePath(old), { size: old.size, header: 'R0dVRg==' });
@@ -54,17 +56,22 @@ async function main() {
     await assert.rejects(ai.downloadModel(old), /Другая операция/);
     job.finish(model.size); await download;
     assert.ok((await ai.verifyModelFile(model)).verified);
+    const notice = [...scheduled.values()].at(-1);
+    assert.equal(notice.trigger, null);
+    assert.equal(notice.content.data.modelId, model.id);
     assert.equal(await ai.getActiveModelId(), model.id);
     assert.ok(files.has(filePath(old)), 'new downloads must not replace old Qwen files');
   }
   assert.equal((await ai.loadTutorSessions())[0].modelId, 'light', 'history must keep its original model ID');
   const model = PRIMARY_AI_MODELS[0];
+  const noticeCount = scheduled.size;
   for (const [bytes, status, header] of [[model.size - 1, 200, 'R0dVRg=='], [model.size, 200, 'SFRNTA=='], [100, 403, 'SFRNTA==']]) {
     const activeBefore = await ai.getActiveModelId();
     const attempt = ai.downloadModel(model); await flush(); downloads.at(-1).finish(bytes, status, header);
     await assert.rejects(attempt);
     assert.equal(await ai.getActiveModelId(), activeBefore, 'failed download must not select an invalid model');
     assert.equal(ai.getDownloadState().status, 'error');
+    assert.equal(scheduled.size, noticeCount, 'an invalid file must never notify');
   }
   const attempt = ai.downloadModel(model).catch(error => error); await flush();
   const paused = downloads.at(-1); paused.progress(100000, model.size);

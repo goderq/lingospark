@@ -21,7 +21,8 @@ import { expandExplanation } from "../utils/explanations";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
-import * as Notifications from "expo-notifications";
+import { requestLearningNotifications, sendTestNotification } from '../services/learningNotifications';
+import { notificationPreferences } from '../utils/notificationPlans';
 import { Base64 } from "js-base64";
 import {
   RecordingPresets,
@@ -41,15 +42,6 @@ import { colors , useTheme, createThemedStyles } from "../theme";
 import AppearancePicker from '../components/AppearancePicker';
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
 
 function Header({ title, onClose }) {
   useTheme();
@@ -232,8 +224,6 @@ export function SettingsScreen({ onClose }) {
     reduceMotion: false,
     haptics: true,
     voiceFeedback: false,
-    remindersEnabled: false,
-    reminderHour: 19,
     quickActions: ["dictation", "dialogues", "review", "mistakes"],
     ...progress.settings,
   };
@@ -242,51 +232,25 @@ export function SettingsScreen({ onClose }) {
       language: settings.accent,
       rate: settings.speechRate,
     });
-  const configureReminder = async (enabled, hour = settings.reminderHour) => {
+  const notifications = notificationPreferences(settings);
+  const allowNotifications = async () => {
+    if (await requestLearningNotifications()) return true;
+    Alert.alert("Уведомления выключены", "Разреши уведомления для LingoSpark в настройках устройства.");
+    return false;
+  };
+  const setNotificationOption = async (key, enabled) => {
     try {
-      if (enabled) {
-        const permission = await Notifications.requestPermissionsAsync();
-        if (permission.status !== "granted") {
-          Alert.alert("Уведомления выключены", "Разрешите уведомления для LingoSpark в настройках iPhone.");
-          updateSettings({ remindersEnabled: false });
-          return;
-        }
-      }
-      await Notifications.cancelAllScheduledNotificationsAsync();
-      if (enabled) {
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "Пора немного английского ✨",
-            body: "Твой персональный план уже готов — достаточно 15 минут.",
-            sound: "default",
-          },
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.DAILY,
-            hour,
-            minute: 0,
-          },
-        });
-      }
-      updateSettings({ remindersEnabled: enabled, reminderHour: hour });
+      if (!enabled || await allowNotifications()) updateSettings({ [key]: enabled });
     } catch {
-      Alert.alert("Не удалось настроить", "Проверьте разрешение уведомлений в настройках iPhone.");
+      Alert.alert("Не удалось изменить настройку уведомлений");
     }
   };
   const testReminder = async () => {
-    const permission = await Notifications.requestPermissionsAsync();
-    if (permission.status !== "granted") return;
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "LingoSpark работает 🔔",
-        body: "Напоминания будут приходить даже без интернета.",
-        sound: "default",
-      },
-      trigger: {
-        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
-        seconds: 2,
-      },
-    });
-    Alert.alert("Проверяем", "Тестовое уведомление появится через пару секунд.");
+    try {
+      if (await allowNotifications()) await sendTestNotification();
+    } catch {
+      Alert.alert("Не удалось отправить тестовое уведомление");
+    }
   };
   return (
     <View style={s.container}>
@@ -297,12 +261,25 @@ export function SettingsScreen({ onClose }) {
         <Text style={s.sectionTitle}>Напоминания</Text>
         <View style={s.card}>
           <SettingRow
-            title="Ежедневное занятие"
-            detail="Локальное уведомление работает без сервера и интернета"
-            value={settings.remindersEnabled}
-            onChange={(value) => configureReminder(value)}
+            title="Пора повторить"
+            detail="Когда подошёл срок повторения слов, фраз или урока"
+            value={notifications.review}
+            onChange={enabled => setNotificationOption('reviewReminderEnabled', enabled)}
           />
-          <Text style={s.label}>Время напоминания</Text>
+          <SettingRow
+            title="Продолжить занятие"
+            detail="Если остался сохранённый шаг и сегодня ещё не занимался"
+            value={notifications.resume}
+            onChange={enabled => setNotificationOption('resumeReminderEnabled', enabled)}
+          />
+          <SettingRow
+            title="Модель скачана"
+            detail="Когда локальная ИИ-модель проверена и готова к запуску"
+            value={notifications.model}
+            onChange={enabled => setNotificationOption('modelNotificationEnabled', enabled)}
+          />
+          <Text style={s.label}>Время учебного напоминания</Text>
+          <Text style={s.cardText}>До одного напоминания в день. Если уже занимался, следующее придёт в другой день.</Text>
           <View style={s.choices}>
             {[
               [9, "09:00"],
@@ -312,8 +289,8 @@ export function SettingsScreen({ onClose }) {
             ].map(([value, label]) => (
               <Pressable
                 key={value}
-                onPress={() => configureReminder(settings.remindersEnabled, value)}
-                style={[s.choice, settings.reminderHour === value && s.choiceActive]}
+                onPress={() => updateSettings({ reminderHour: value })}
+                style={[s.choice, notifications.hour === value && s.choiceActive]}
               >
                 <Text style={s.choiceText}>{label}</Text>
               </Pressable>
@@ -462,6 +439,7 @@ function SettingRow({ title, detail, value, onChange }) {
         <Text style={s.cardText}>{detail}</Text>
       </View>
       <Switch
+        accessibilityLabel={title}
         value={value}
         onValueChange={onChange}
         trackColor={{ false: colors.cardLight, true: colors.purple }}
