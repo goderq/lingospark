@@ -1,5 +1,5 @@
-export const themeModes = ['system', 'light', 'dark'];
-export const resolveScheme = (mode, system) => mode === 'light' || mode === 'dark' ? mode : system === 'dark' ? 'dark' : 'light';
+export const themeModes = ['system', 'light', 'dark', 'pink'];
+export const resolveScheme = (mode, system) => ['light', 'dark', 'pink'].includes(mode) ? mode : system === 'dark' ? 'dark' : 'light';
 export function foregroundFor(background) {
   let hex = String(background || '').replace('#', '');
   if (hex.length === 3) hex = [...hex].map(value => value + value).join('');
@@ -12,4 +12,8 @@ export function foregroundFor(background) {
 export const palettes = {
   light: { background: '#F5F6FB', card: '#FFFFFF', cardLight: '#ECEEF7', text: '#19213A', white: '#19213A', textMuted: '#606A81', border: '#DDE2EF', purple: '#6544DB', mint: '#067363', orange: '#A65308', pink: '#BE315F', onAccent: '#FFFFFF', accentSoft: '#EDE7FF', successSoft: '#E1F4EE', warningSoft: '#FFF0DF', dangerSoft: '#FCE7EF', scrim: 'rgba(16,23,43,0.44)', track: '#E0E4F0', blue: '#2563B8', shadow: '#243458', accentFill: '#6845DE' },
   dark: { background: '#0D1120', card: '#181F32', cardLight: '#242E45', text: '#F3F5FC', white: '#F3F5FC', textMuted: '#A7B2C9', border: '#303B54', purple: '#AB91FF', mint: '#55D9BF', orange: '#FFBA71', pink: '#FF91B1', onAccent: '#FFFFFF', accentSoft: '#30264F', successSoft: '#173F3B', warningSoft: '#453021', dangerSoft: '#47273C', scrim: 'rgba(0,0,0,0.6)', track: '#303B54', blue: '#89B8FF', shadow: '#000000', accentFill: '#6845DE' },
+  pink: { background: '#FFF5F9', card: '#FFFFFF', cardLight: '#F7E2EC', text: '#3A1930', white: '#3A1930', textMuted: '#765568', border: '#E4BECE', purple: '#AD2058', mint: '#067363', orange: '#9D4D0A', pink: '#AD2058', onAccent: '#FFFFFF', accentSoft: '#FCE1EC', successSoft: '#E1F4EE', warningSoft: '#FFF0DF', dangerSoft: '#FCE1EC', scrim: 'rgba(50,17,37,0.45)', track: '#EBD0DD', blue: '#345A9E', shadow: '#652B46', accentFill: '#B52260' },
 };
+Object.assign(palettes.light, { buttonBorder: '#848EA8', disabledBackground: '#ECEEF7', disabledText: '#606A81', heroStart: '#6845DE', heroEnd: '#463094', heroMuted: '#E8E0FF' });
+Object.assign(palettes.dark, { buttonBorder: '#7788A8', disabledBackground: '#242E45', disabledText: '#A7B2C9', heroStart: '#6845DE', heroEnd: '#463094', heroMuted: '#E8E0FF' });
+Object.assign(palettes.pink, { buttonBorder: '#A85A7B', disabledBackground: '#F7E2EC', disabledText: '#765568', heroStart: '#B52260', heroEnd: '#7E214C', heroMuted: '#FFE4EE' });

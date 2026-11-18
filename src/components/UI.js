@@ -1,17 +1,18 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, useTheme, createThemedStyles } from '../theme';
 import { MotionPressable } from './Motion';
 import { foregroundFor } from '../design/palettes';
 
-export function PrimaryButton({ title, onPress, color = colors.purple, disabled = false, icon }) {
+export function PrimaryButton({ title, onPress, color = colors.purple, disabled = false, icon, variant = 'primary', accessibilityHint }) {
   useTheme();
-  const surface = [colors.card, colors.cardLight, colors.background].includes(color);
-  const fill = color === colors.purple ? colors.accentFill : color;
-  const foreground = surface ? colors.text : foregroundFor(fill);
-  return <MotionPressable accessibilityRole="button" accessibilityState={{ disabled }} disabled={disabled} onPress={onPress} style={[styles.button, { backgroundColor: fill, opacity: disabled ? 0.45 : 1, borderWidth: surface ? 1 : 0, borderColor: colors.border }]}>
-    {icon && <Ionicons name={icon} size={20} color={foreground} />}
+  const surface = variant === 'secondary' || [colors.card, colors.cardLight, colors.background].includes(color);
+  const fill = disabled ? colors.disabledBackground : surface ? colors.card : color === colors.purple ? colors.accentFill : color;
+  const foreground = disabled ? colors.disabledText : surface ? colors.text : foregroundFor(fill);
+  const glyph = disabled ? 'lock-closed-outline' : icon;
+  return <MotionPressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ disabled }} accessibilityHint={accessibilityHint} disabled={disabled} onPress={onPress} style={[styles.button, { backgroundColor: fill, borderWidth: 1.5, borderColor: disabled || surface ? colors.buttonBorder : fill }]}>
+    {glyph && <Ionicons name={glyph} size={19} color={foreground} />}
     <Text style={[styles.buttonText, { color: foreground }]}>{title}</Text>
   </MotionPressable>;
 }
@@ -26,7 +27,7 @@ export function ProgressBar({ value, color = colors.purple, height = 8 }) {
   useEffect(() => {
     progress.stopAnimation();
     if (reduceMotion) { progress.setValue(bounded); return; }
-    const animation = Animated.timing(progress, { toValue: bounded, duration: 300, useNativeDriver: true });
+    const animation = Animated.timing(progress, { toValue: bounded, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true });
     animation.start(); return () => animation.stop();
   }, [bounded, reduceMotion]);
   return <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(bounded * 100) }} style={[styles.track, { height }]}><Animated.View style={[styles.fill, { backgroundColor: color, transformOrigin: 'left center', transform: [{ scaleX: progress }] }]} /></View>;

@@ -48,7 +48,7 @@ export function ThemeProvider({ children }) {
     return () => { mounted = false; appearance.remove(); motion.remove(); };
   }, []);
   const scheme = resolveScheme(mode, system);
-  useEffect(() => { Appearance.setColorScheme(mode === 'system' ? 'unspecified' : mode); }, [mode]);
+  useEffect(() => { Appearance.setColorScheme(mode === 'system' ? 'unspecified' : mode === 'pink' ? 'light' : mode); }, [mode]);
   activeScheme = scheme;
   const persist = (nextMode, nextMotion) => { const snapshot = { mode: nextMode, reduceMotion: nextMotion }; preferences.current = snapshot; writes.current = writes.current.catch(() => {}).then(() => AsyncStorage.setItem(KEY, JSON.stringify(snapshot))); writes.current.catch(() => {}); };
   const value = useMemo(() => ({ mode, scheme, reduceMotion: systemMotion || userMotion, userReduceMotion: userMotion,

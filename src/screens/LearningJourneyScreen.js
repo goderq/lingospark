@@ -9,6 +9,7 @@ import { speak, stopSpeech } from '../utils/speech';
 import { useProgress } from '../store/ProgressContext';
 import { colors , useTheme, createThemedStyles } from '../theme';
 import ExplanationCard from '../components/ExplanationCard';
+import { PrimaryButton } from '../components/UI';
 import { ScreenEntrance } from '../components/Motion';
 import { getCoursePracticePhrases } from '../data/courseDialogues';
 import useScreenTiming from '../components/useScreenTiming';
@@ -43,6 +44,7 @@ export default function LearningJourneyScreen({ topicId = 'greetings', onClose, 
       <Text style={s.stepTitle}>Проверь тему без подсказок</Text>
       <Text style={s.muted}>После пяти учебных этапов пройди самопроверку. От 80% — тема пройдена и открыт следующий курс. Закрепление памяти проверяется отдельно после перерыва.</Text>
       <Button disabled={done < journey.stages.length && !courseDone} title={courseDone ? 'Повторить самопроверку' : 'Самопроверка темы'} onPress={() => onTest(topicId)} />
+      {done < journey.stages.length && !courseDone && <Text style={s.muted}>Для самопроверки заверши все этапы темы: сейчас {done} из {journey.stages.length}.</Text>}
       <Button title={progress.lessonDraft?.lessonId === topicId ? 'Продолжить сохранённую практику' : 'Дополнительная практика с разбором'} onPress={() => onCourse(topicId)} secondary />
       <Button title="Проверки памяти и расписание" onPress={onRetention} secondary />
       <Text style={s.stepTitle}>Примени в разговоре</Text>
@@ -138,13 +140,12 @@ export function JourneyStage({ journey, stage, onClose, onDone, onComplete }) {
 function Header({ title, onClose }) {
   useTheme(); return <View style={s.header}><Pressable accessibilityLabel="Назад" onPress={onClose} style={s.back}><Ionicons name="chevron-back" size={25} color={colors.text} /></Pressable><Text style={s.stepTitle}>{title}</Text></View>; }
 function Button({ title, onPress, secondary, disabled }) {
-  useTheme(); return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress} style={[s.button, secondary && s.secondary, disabled && { opacity: 0.4 }]}><Text style={s.buttonText}>{title}</Text></Pressable>; }
+  return <PrimaryButton title={title} onPress={onPress} variant={secondary ? 'secondary' : 'primary'} disabled={disabled} />; }
 const s = createThemedStyles(() => ({
   root: { flex: 1, backgroundColor: colors.background }, content: { padding: 20, paddingBottom: 45, gap: 18 },
   header: { padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12 }, back: { minHeight: 48, minWidth: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: colors.card },
   title: { fontSize: 25, fontWeight: '800', color: colors.text }, stepTitle: { fontSize: 19, fontWeight: '800', color: colors.text, flexShrink: 1 }, label: { color: colors.purple, fontWeight: '800', fontSize: 13 },
   body: { color: colors.text, fontSize: 17, lineHeight: 26 }, muted: { color: colors.textMuted, fontSize: 15, lineHeight: 23 }, example: { color: colors.mint, fontSize: 19, lineHeight: 28 },
   card: { backgroundColor: colors.card, borderRadius: 20, borderWidth: 1, borderColor: colors.border, padding: 18, gap: 12 }, selected: { borderColor: colors.purple },
-  button: { backgroundColor: colors.accentFill, borderRadius: 16, padding: 17, minHeight: 52, alignItems: 'center' }, secondary: { backgroundColor: colors.cardLight }, buttonText: { color: colors.onAccent, fontSize: 16, fontWeight: '700', textAlign: 'center' },
   input: { backgroundColor: colors.card, borderRadius: 16, color: colors.text, padding: 20, fontSize: 19, minHeight: 65 }, tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, minHeight: 50 }, tile: { backgroundColor: colors.cardLight, padding: 14, borderRadius: 13 },
 }));

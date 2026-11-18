@@ -79,6 +79,8 @@ const contrast = (a, b) => (Math.max(luminance(a), luminance(b)) + 0.05) / (Math
 for (const [mode, palette] of Object.entries(palettes)) {
   for (const background of ['background', 'card', 'cardLight']) for (const foreground of ['text', 'textMuted']) assert.ok(contrast(palette[foreground], palette[background]) >= 4.5, `${mode}: ${foreground}/${background}`);
   for (const [foreground, background] of [['purple', 'accentSoft'], ['mint', 'successSoft'], ['orange', 'warningSoft'], ['pink', 'dangerSoft'], ['onAccent', 'accentFill']]) assert.ok(contrast(palette[foreground], palette[background]) >= 4.5, `${mode}: ${foreground}/${background}`);
+  assert.ok(contrast(palette.disabledText, palette.disabledBackground) >= 4.5, `${mode}: disabled button label`);
+  assert.ok(contrast(palette.buttonBorder, palette.card) >= 3, `${mode}: secondary button boundary`);
 }
 for (const color of ['#6845DE', '#FF9F43', '#2ED3B7', '#FFFFFF', '#000000', '#7C5CFC', '#36B8D9', '#D15BE3']) assert.ok(contrast(foregroundFor(color), color) >= 4.5, `custom button ${color}`);
 const { ScreenEntrance } = load('src/components/Motion.js');
@@ -103,6 +105,12 @@ async function main() {
   assert.equal(tree.root.findByType('TextInput').props.value, 'Keep this answer'); assert.equal(mounted, 1, 'theme changes must not remount the input');
   await act(async () => { controls.setMode('light'); await flush(); });
   assert.equal(styles.text, light, 'style objects must be cached per palette'); assert.equal(factories, 2);
+  await act(async () => { controls.setMode('pink'); await flush(); });
+  assert.equal(controls.scheme, 'pink'); assert.equal(override, 'light', 'pink mode must use light native controls');
+  assert.equal(styles.text.color, palettes.pink.text); assert.equal(factories, 3);
+  assert.equal(tree.root.findByType('TextInput').props.value, 'Keep this answer'); assert.equal(mounted, 1);
+  await act(async () => { system = 'dark'; emit('appearance', { colorScheme: 'dark' }); });
+  assert.equal(controls.scheme, 'pink', 'explicit pink mode must not follow system changes');
   await act(async () => { controls.setMode('system'); await flush(); system = 'dark'; emit('appearance', { colorScheme: system }); });
   assert.equal(controls.scheme, 'dark');
   await act(async () => { controls.setMode('light'); await flush(); system = 'dark'; emit('appearance', { colorScheme: 'dark' }); });
@@ -129,7 +137,7 @@ async function main() {
     const props = Object.fromEntries(['onJourney', 'onLearningHub', 'onSearch', 'onBookmarks', 'onQuickSession', 'onTenses', 'onNavigate', 'onSettings', 'onAccount', 'onRetention', 'onReview', 'onAdaptive'].map(key => [key, callbacks[key]]));
     await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Component, props))); await flush(); });
     assert.ok(tree.toJSON(), Component.name);
-    for (const mode of ['light', 'dark']) {
+    for (const mode of ['light', 'dark', 'pink']) {
       await act(async () => { controls.setMode(mode); await flush(); });
       assert.equal(controls.scheme, mode);
       const color = tree.root.findAllByType('TextInput').find(node => node.props.testID === 'theme-probe').props.style.color;
@@ -137,6 +145,39 @@ async function main() {
     }
     await act(async () => tree.unmount());
   }
+  // Regression for the screenshot: pale secondary buttons must not use white
+  // labels, and disabled buttons must remain legible without group opacity.
+  const Journey = load('src/screens/LearningJourneyScreen.js').default;
+  const UI = load('src/components/UI.js');
+  const flatten = style => Array.isArray(style) ? Object.assign({}, ...style.filter(Boolean).map(flatten)) : style || {};
+  const namedButton = label => tree.root.findAllByType('Pressable').find(node => node.findAllByType('Text').some(text => text.props.children === label));
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Journey, { topicId: 'greetings' }))); await flush(); });
+  for (const mode of ['light', 'dark', 'pink']) {
+    await act(async () => { controls.setMode(mode); await flush(); });
+    for (const label of ['Проверки памяти и расписание', 'Открыть «Английскую жизнь»', 'Самопроверка темы']) {
+      const button = namedButton(label), surface = flatten(button.props.style);
+      const ink = flatten(button.findAllByType('Text').find(text => text.props.children === label).props.style).color;
+      assert.ok(contrast(ink, surface.backgroundColor) >= 4.5, `${mode}: ${label} label`);
+      assert.equal(surface.opacity, undefined, 'disabled buttons must not fade the entire control');
+      assert.ok(surface.borderWidth >= 1);
+      if (label === 'Самопроверка темы') { assert.equal(button.props.disabled, true); assert.equal(button.props.accessibilityState.disabled, true); assert.ok(button.findAllByType('Icon').some(icon => icon.props.name === 'lock-closed-outline')); }
+      else { assert.equal(button.props.disabled, false); assert.ok(contrast(surface.borderColor, surface.backgroundColor) >= 3); }
+    }
+  }
+  await act(async () => tree.unmount());
+  storage.set('@lingospark/appearance-v1', JSON.stringify({ mode: 'pink', reduceMotion: false }));
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(UI.PrimaryButton, { title: 'Motion check', onPress() {} }))); await flush(); });
+  assert.equal(controls.scheme, 'pink', 'pink choice must survive a new provider instance');
+  const motionButton = namedButton('Motion check');
+  animations.length = 0;
+  await act(async () => { motionButton.props.onPressIn({}); motionButton.props.onPressOut({}); });
+  assert.ok(animations.some(options => options.duration === 90 && options.useNativeDriver));
+  assert.ok(animations.some(options => options.stiffness === 340 && options.overshootClamping && options.useNativeDriver));
+  await act(async () => controls.setReduceMotion(true));
+  animations.length = 0;
+  await act(async () => { motionButton.props.onPressIn({}); motionButton.props.onPressOut({}); });
+  assert.equal(animations.length, 0, 'button feedback must honor reduced motion');
+  await act(async () => tree.unmount());
   // Saved answers stay available, but do not reopen an exercise automatically.
   const Practice = load('src/screens/PracticeScreen.js').default;
   const savedExercise = { id: 'draft-question', type: 'translate', prompt: 'A saved exercise', answer: 'Hello' };
