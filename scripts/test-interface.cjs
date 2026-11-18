@@ -378,6 +378,25 @@ async function main() {
   await act(async () => namedButton('Начать новое собеседование').props.onPress());
   assert.ok(containsText('шаг 1 из 3'));
   await act(async () => tree.unmount());
+  const { greetingJourney } = load('src/data/learningJourney.js');
+  const coursePractice = { ...greetingJourney.ai, topicId: greetingJourney.id, goal: greetingJourney.goal, requestId: 'test-goal' };
+  await act(async () => {
+    tree = Renderer.create(React.createElement(theme.ThemeProvider, null,
+      React.createElement(Chat, { model: { id: 'light', title: 'Лёгкий', color: '#6544DB' }, practice: coursePractice })));
+    await flush();
+  });
+  const goalToggle = chatButton('Раскрыть цель урока');
+  assert.equal(goalToggle.props.accessibilityState.expanded, false);
+  assert.equal(namedButton('Нужен намёк'), undefined);
+  await act(async () => goalToggle.props.onPress());
+  await act(async () => namedButton('Нужен намёк').props.onPress());
+  await act(async () => chatInput().props.onChangeText('My name is Anna'));
+  await act(async () => chatButton('Свернуть цель урока').props.onPress());
+  assert.equal(namedButton('Покажи начало фразы'), undefined);
+  assert.equal(chatInput().props.value, 'My name is Anna');
+  await act(async () => chatButton('Раскрыть цель урока').props.onPress());
+  assert.ok(namedButton('Покажи начало фразы'), 'collapsing the goal must preserve hint progress');
+  await act(async () => tree.unmount());
   const Practice = load('src/screens/PracticeScreen.js').default;
   const savedExercise = { id: 'draft-question', type: 'translate', prompt: 'A saved exercise', answer: 'Hello' };
   progress.practiceDrafts = { 'common-practice': { version: 1, id: 'saved-attempt', mode: 'learn', deck: [savedExercise], index: 0, input: 'Hel', built: [], checked: false, responses: [], seed: 1 } };

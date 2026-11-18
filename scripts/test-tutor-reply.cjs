@@ -34,9 +34,9 @@ async function main() {
   const ai = serviceLoad('src/services/localAi.js');
   for (const model of ai.AI_MODELS) for (const level of ['A1', 'A2', 'B1', 'B2', 'C1']) {
     const tokens = [], stages = [];
-    outputs.push('Привет! Как дела?', 'Hello! Would you like to talk about food or travel?');
+    outputs.push('Привет! Как дела?', 'Would you like to talk about food or travel?');
     const result = await ai.completeTutorMessage({ model, level, topic: 'Свободный разговор', messages: [{ id: 'welcome-1', role: 'assistant', content: 'Привет! Я преподаватель.' }, { role: 'user', content: 'hi' }], onToken: text => tokens.push(text), onStatus: status => stages.push(status) });
-    assert.equal(result.text, 'Hello! Would you like to talk about food or travel?');
+    assert.equal(result.text, 'Would you like to talk about food or travel?');
     assert.deepEqual(tokens, [result.text], 'unvalidated draft must never be streamed to the screen');
     assert.deepEqual(stages, ['thinking', 'checking', 'rewriting']);
     const generation = nativeCalls.at(-2);
@@ -50,6 +50,23 @@ async function main() {
   outputs.push('Hi! How are you?', 'I mean: how do you feel today?');
   const clarified = await ai.completeTutorMessage({ model: ai.AI_MODELS[0], level: 'A2', topic: 'Свободный разговор', messages });
   assert.equal(clarified.text, 'I mean: how do you feel today?');
+  const gemma = ai.AI_MODELS.find(model => model.family === 'gemma');
+  const { greetingJourney } = load(path.join(__dirname, '../src/data/learningJourney'));
+  const opening = { role: 'assistant', content: "Hi! My name is Sam. Can you tell me your name?" };
+  const course = { model: gemma, level: 'A1', topic: greetingJourney.ai.topic, courseContext: greetingJourney.ai.instruction };
+  outputs.push('Hello!', 'What should I call you?');
+  assert.equal((await ai.completeTutorMessage({ ...course, messages: [opening, { role: 'user', content: 'привет' }] })).text, 'What should I call you?');
+  const introduction = [opening, { role: 'user', content: 'hi my name anna' }];
+  assert.ok(reply.findTutorReplyProblems({ messages: introduction, reply: 'May I ask your name?' }).includes('asks for the learner name already given'));
+  assert.deepEqual(reply.findTutorReplyProblems({ messages: introduction, reply: 'Nice to meet you, Anna! This is my friend Mia.' }), []);
+  outputs.push('Hi Anna! My name is Sam. What is your name?', 'Nice to meet you, Anna. This is my friend Mia. Do you know her?');
+  const continued = await ai.completeTutorMessage({ ...course, messages: introduction });
+  assert.match(continued.text, /my friend Mia/);
+  for (const call of nativeCalls.slice(-2)) {
+    assert.match(call.messages[0].content, /The learner already gave their name/);
+    assert.match(call.messages[0].content, /friend Mia/);
+  }
+  assert.ok(!reply.findTutorReplyProblems({ messages: introduction, reply: 'What is your friend’s name?' }).includes('asks for the learner name already given'));
   const source = 'Okay! What do you think about the weather?';
   const wrongTranslation = source + '\nThe translation is: ' + source;
   const translation = 'Хорошо! Что ты думаешь о погоде?';

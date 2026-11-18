@@ -1,3 +1,5 @@
+import { asksLearnerName, dialogueContinuity, greetingRestart } from './conversationCoach.js';
+
 const lastUser = messages => [...messages].reverse().find(item => item.role === 'user');
 const normalize = text => String(text || '').normalize('NFKC').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, ' ').trim();
 export function tutorReplyLanguage(messages) {
@@ -32,6 +34,11 @@ export function findTutorReplyProblems({ reply, messages, dialogueMode = 'conver
   const prior = messages.filter(item => item.role === 'assistant' && item.content?.trim() && (!String(item.id || '').startsWith('welcome') || !/[а-яё]/i.test(item.content))).slice(-4);
   const user = lastUser(messages);
   const repeatRequested = /^(?:(?:can|could|would) you\s+)?(?:please\s+)?(?:repeat\b|say (?:that|it) again\b)|^(?:пожалуйста[, ]*)?повтори/i.test(user?.content?.trim() || '');
+  if (language === 'english' && user?.kind !== 'command' && !repeatRequested) {
+    const continuity = dialogueContinuity(messages);
+    if (continuity.learnerName && asksLearnerName.test(text)) problems.push('asks for the learner name already given');
+    if (greetingRestart(text, continuity)) problems.push('restarts the greeting instead of continuing the dialogue');
+  }
   const tokens = new Set(normalized.split(' ').filter(Boolean));
   const questions = text.match(/[^.!?\n]*\?/g) || [];
   if (!repeatRequested && prior.some(item => {

@@ -434,9 +434,13 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   const [coursePractice, setCoursePractice] = useState(null);
   const [toolsPanel, setToolsPanel] = useState(null);
   const [lessonHelp, setLessonHelp] = useState(0);
+  const [courseGoalOpen, setCourseGoalOpen] = useState(false);
   const [goalSummaryOpen, setGoalSummaryOpen] = useState(false);
-  useEffect(() => { setGoalSummaryOpen(false); }, [coursePractice?.topicId, coursePractice?.requestId]);
-  useEffect(() => { setLessonHelp(0); }, [coursePractice?.topicId, coursePractice?.requestId]);
+  useEffect(() => {
+    setCourseGoalOpen(false);
+    setGoalSummaryOpen(false);
+    setLessonHelp(0);
+  }, [coursePractice?.topicId, coursePractice?.requestId]);
   const [dialogueMode, setDialogueMode] = useState("conversation");
   const [interviewHint, setInterviewHint] = useState(null);
   const [interviewSummary, setInterviewSummary] = useState(false);
@@ -953,21 +957,28 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         </ToolSheet>}
       </View>
 
-      {!keyboardVisible && !!courseTutorContext(coursePractice, level, topic) && <ScrollView style={{ maxHeight: 240, flexGrow: 0 }} contentContainerStyle={{ padding: 16, backgroundColor: colors.card, gap: 9 }}>
-        <Text style={{ color: colors.mint, fontWeight: '800' }}>Цель: {coursePractice.goal || topic}</Text>
-        <Text style={{ color: colors.textMuted, lineHeight: 21 }}>Помощь открывается по шагам; разговор не засчитывает прохождение курса.</Text>
-        {dialogueTurns >= 2 && <Pressable onPress={() => setGoalSummaryOpen(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{goalSummaryOpen ? 'Свернуть итог по цели' : 'Посмотреть итог по цели'}</Text></Pressable>}
-        {dialogueTurns >= 2 && goalSummaryOpen && <>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Что получилось применить</Text>
-          {dialogueEvidence.map(item => <Text key={item.prompt} style={{ color: item.matched ? colors.mint : colors.textMuted, lineHeight: 22 }}>{item.matched ? '✓ Есть совпадение с образцом' : '○ Пока нет совпадения с образцом'}: {item.prompt}</Text>)}
-          <Text style={{ color: colors.textMuted, fontSize: 12 }}>Проверяются только подготовленные формулировки в твоих репликах. Другой правильный ответ может не совпасть; это не оценка качества всего диалога.</Text>
-          <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !!coursePractice.goalReached }} onPress={() => setCoursePractice(value => ({ ...value, goalReached: !value.goalReached }))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{coursePractice.goalReached ? '✓ По моей оценке, цель разговора достигнута' : 'Отметить: я смог добиться цели разговора'}</Text></Pressable>
-          {!!coursePractice.phrases?.length && <Text style={{ color: colors.text, lineHeight: 23 }}>Полезные выражения: {coursePractice.phrases.map(item => item.english).join(' · ')}</Text>}
-        </>}
-        <Pressable onPress={() => setLessonHelp(value => Math.min(3, value + 1))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontWeight: '700' }}>{lessonHelp === 0 ? 'Нужен намёк' : lessonHelp === 1 ? 'Покажи начало фразы' : 'Покажи пример'}</Text></Pressable>
-        {lessonHelp > 0 && <Text style={{ color: colors.text, lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
-        {lessonHelp >= 3 && !!coursePractice.phrases?.[0] && <Pressable onPress={() => addReviewPhrase({ ...coursePractice.phrases[0], topic })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>Добавить эту фразу в повторение</Text></Pressable>}
-      </ScrollView>}
+      {!keyboardVisible && !!courseTutorContext(coursePractice, level, topic) && <View style={styles.courseGoal}>
+        <Pressable accessibilityRole="button" accessibilityLabel={courseGoalOpen ? 'Свернуть цель урока' : 'Раскрыть цель урока'} accessibilityState={{ expanded: courseGoalOpen }} onPress={() => setCourseGoalOpen(open => !open)} style={styles.courseGoalToggle}>
+          <Ionicons name="flag-outline" size={17} color={colors.mint} />
+          <Text style={styles.courseGoalTitle} numberOfLines={1}>Цель: {coursePractice.goal || topic}</Text>
+          <Ionicons name={courseGoalOpen ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textMuted} />
+        </Pressable>
+        {courseGoalOpen && <ScrollView style={{ maxHeight: 190, flexGrow: 0 }} contentContainerStyle={styles.courseGoalDetails}>
+          <Text style={styles.courseGoalTitle}>{coursePractice.goal || topic}</Text>
+          <Text style={{ color: colors.textMuted, lineHeight: 21 }}>Помощь открывается по шагам; разговор не засчитывает прохождение курса.</Text>
+          {dialogueTurns >= 2 && <Pressable onPress={() => setGoalSummaryOpen(value => !value)} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{goalSummaryOpen ? 'Свернуть итог по цели' : 'Посмотреть итог по цели'}</Text></Pressable>}
+          {dialogueTurns >= 2 && goalSummaryOpen && <>
+            <Text style={{ color: colors.text, fontWeight: '700' }}>Что получилось применить</Text>
+            {dialogueEvidence.map(item => <Text key={item.prompt} style={{ color: item.matched ? colors.mint : colors.textMuted, lineHeight: 22 }}>{item.matched ? '✓ Есть совпадение с образцом' : '○ Пока нет совпадения с образцом'}: {item.prompt}</Text>)}
+            <Text style={{ color: colors.textMuted, fontSize: 12 }}>Проверяются только подготовленные формулировки в твоих репликах. Другой правильный ответ может не совпасть; это не оценка качества всего диалога.</Text>
+            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: !!coursePractice.goalReached }} onPress={() => setCoursePractice(value => ({ ...value, goalReached: !value.goalReached }))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>{coursePractice.goalReached ? '✓ По моей оценке, цель разговора достигнута' : 'Отметить: я смог добиться цели разговора'}</Text></Pressable>
+            {!!coursePractice.phrases?.length && <Text style={{ color: colors.text, lineHeight: 23 }}>Полезные выражения: {coursePractice.phrases.map(item => item.english).join(' · ')}</Text>}
+          </>}
+          <Pressable onPress={() => setLessonHelp(value => Math.min(3, value + 1))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.purple, fontWeight: '700' }}>{lessonHelp === 0 ? 'Нужен намёк' : lessonHelp === 1 ? 'Покажи начало фразы' : 'Покажи пример'}</Text></Pressable>
+          {lessonHelp > 0 && <Text style={{ color: colors.text, lineHeight: 23 }}>{lessonHelp === 1 ? 'Ответь на один вопрос собеседника. Используй выражения изученной темы.' : lessonHelp === 2 ? `${coursePractice.phrases?.[0]?.english?.split(' ').slice(0, 3).join(' ') || 'Попробуй короткую фразу'}…` : coursePractice.phrases?.[0]?.english || 'Открой примеры в учебной теме.'}</Text>}
+          {lessonHelp >= 3 && !!coursePractice.phrases?.[0] && <Pressable onPress={() => addReviewPhrase({ ...coursePractice.phrases[0], topic })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ color: colors.mint }}>Добавить эту фразу в повторение</Text></Pressable>}
+        </ScrollView>}
+      </View>}
 
       {!modelReady && !error ? (
         <View style={styles.loadingModel}>
@@ -1410,6 +1421,10 @@ const styles = createThemedStyles(() => ({
   settingsChoice: { minHeight: 44, minWidth: 44, paddingHorizontal: 12, borderRadius: 13, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.cardLight, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   settingsChoiceActive: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
   settingsChoiceText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  courseGoal: { backgroundColor: colors.card, borderBottomWidth: 1, borderColor: colors.border },
+  courseGoalToggle: { minHeight: 44, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  courseGoalTitle: { flexShrink: 1, flexGrow: 1, color: colors.mint, fontSize: 13, fontWeight: '800' },
+  courseGoalDetails: { paddingHorizontal: 16, paddingBottom: 10, gap: 8 },
   loadingModel: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 36, gap: 12 },
   modelLoadingTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
   messages: { flex: 1 },
