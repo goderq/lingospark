@@ -1,14 +1,15 @@
 import PracticeScreen from './PracticeScreen';
 import { sampleExamQuestions } from '../utils/examDeck';
 import { evaluateExercise } from '../utils/answer';
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useDeferredValue, useMemo, useState } from "react";
 import useScreenTiming from '../components/useScreenTiming';
-import ContentReportButton from '../components/ContentReportButton';
-import WordMeanings from '../components/WordMeanings';
+import DictionaryWordRow from '../components/DictionaryWordRow';
+import { normalizeWordQuery, searchDictionary, wordLearningState, wordStateLabels } from '../utils/wordDictionary';
 import {now,recordTiming} from '../utils/performance';
 import {
   Alert,
   FlatList,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -27,10 +28,10 @@ import {
   useAudioRecorderState,
 } from "expo-audio";
 import { lessons, phrases } from "../data/course";
-import { wordBank, wordBankSize, wordLevels, wordsByLevel } from "../data/wordBank";
+import { wordBank, wordBankSize, wordLevels, extendedWordBank, extendedWordBankSize, wordsByLevel, extendedWordsByLevel } from "../data/wordBank";
 import { tenseModules } from "../data/advancedCourse";
 import { grammarQuestions, placementQuestions } from "../data/practice";
-import { useProgress } from "../store/ProgressContext";
+import { useProgress, useProgressActions, useProgressSelector } from "../store/ProgressContext";
 import { colors , useTheme, createThemedStyles } from "../theme";
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
@@ -197,12 +198,8 @@ export function PlanScreen({ onClose, onNavigate, onLesson }) {
 export function VocabularyScreen({ onClose }) {
   useTheme();
   useScreenTiming('dictionary_open');
-  const {
-    progress,
-    addCustomWord,
-    removeCustomWord,
-    toggleWordPreference,
-  } = useProgress();
+  const progress = useProgressSelector(({ progress: value }) => ({ customWords: value.customWords, wordPreferences: value.wordPreferences, reviewStats: value.reviewStats, settings: value.settings, lessonDraft: value.lessonDraft }));
+  const { addCustomWord, removeCustomWord, toggleWordPreference } = useProgressActions();
   const [english, setEnglish] = useState("");
   const [russian, setRussian] = useState("");
   const [example, setExample] = useState("");
@@ -211,7 +208,7 @@ export function VocabularyScreen({ onClose }) {
   const [level, setLevel] = useState("Все");
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
-  const [visibleCount,setVisibleCount]=useState(100);
+  const [catalog, setCatalog] = useState('core');
   const preferences = useMemo(
     () => ({
       favorites: [],
@@ -224,8 +221,8 @@ export function VocabularyScreen({ onClose }) {
   );
   const stats = progress.reviewStats || {};
   const deferredQuery = useDeferredValue(query);
-  const normalized = deferredQuery.trim().toLocaleLowerCase("ru");
-  useEffect(()=>setVisibleCount(100),[normalized,level,filter]);
+  const normalized = normalizeWordQuery(deferredQuery);
+  const today = new Date().toISOString().slice(0, 10);
   const favoriteIds = useMemo(
     () => new Set(preferences.favorites),
     [preferences.favorites],
@@ -246,8 +243,7 @@ export function VocabularyScreen({ onClose }) {
     setExample("");
     setAdding(false);
   };
-  const result = useMemo(() => {
-    const started=now();
+  const candidates = useMemo(() => {
     const custom = (progress.customWords || []).map((word) => ({
       ...word,
       level: "Мои",
@@ -255,106 +251,50 @@ export function VocabularyScreen({ onClose }) {
       frequency: 0,
       emoji: "✍️",
     }));
+    const byLevel = catalog === 'core' ? wordsByLevel : extendedWordsByLevel;
     const baseWords = level === "Все"
-      ? wordBank
+      ? catalog === 'core' ? wordBank : extendedWordBank
       : level === "Мои"
         ? []
-        : wordsByLevel[level] || [];
+        : byLevel[level] || [];
     let words = level === "Мои" ? custom : level === "Все" ? [...custom, ...baseWords] : baseWords;
     if (hiddenIds.size) words = words.filter((word) => !hiddenIds.has(word.id));
     if (filter === "favorites")
       words = words.filter((word) => favoriteIds.has(word.id));
     if (filter === "hard")
       words = words.filter((word) => hardIds.has(word.id));
-    if (filter === "learning") words = words.filter((word) => stats[word.id]);
-    if (normalized)
-      words = words
-        .filter((word) => {
-          const customTranslation = preferences.customTranslations[word.id];
-          return word.searchText?.includes(normalized) ||
-            customTranslation?.toLocaleLowerCase('ru').includes(normalized) ||
-            (!word.searchText && `${word.english} ${word.russian}`.toLocaleLowerCase('ru').includes(normalized));
-        })
-        .sort((a, b) => {
-          const aStarts = a.english.toLowerCase().startsWith(normalized) ? 0 : 1;
-          const bStarts = b.english.toLowerCase().startsWith(normalized) ? 0 : 1;
-          return aStarts - bStarts || (a.frequency || 99999) - (b.frequency || 99999);
-        });
-    recordTiming('dictionary_filter',now()-started);
-    return { count: words.length, items: words };
+    if (wordStateLabels[filter]) words = words.filter(word => wordLearningState(stats[word.id], today) === filter);
+    return words;
   }, [
     progress.customWords,
-    preferences.customTranslations,
     stats,
-    normalized,
+    today,
+    catalog,
     level,
     filter,
     hiddenIds,
     favoriteIds,
     hardIds,
   ]);
-  const displayedWords=useMemo(()=>result.items.slice(0,visibleCount),[result.items,visibleCount]);
+  const result = useMemo(() => {
+    const started = now();
+    const items = searchDictionary(candidates, normalized, preferences.customTranslations);
+    recordTiming('dictionary_filter', now() - started);
+    return { count: items.length, items };
+  }, [candidates, normalized, preferences.customTranslations]);
   const renderWord = useCallback(({ item: word }) => {
     const favorite = favoriteIds.has(word.id);
     const hard = hardIds.has(word.id);
     const opened = expanded === word.id;
     const displayedRussian =
       preferences.customTranslations[word.id] || word.russian;
-    return (
-      <Pressable onPress={() => setExpanded(opened ? null : word.id)} style={s.wordRow}>
-        <Pressable
-          onPress={() => speak(word.english, { language: progress.settings?.accent || "en-US", rate: progress.settings?.speechRate || 0.78 })}
-          style={s.sound}
-        >
-          <Ionicons name="volume-high" size={20} color={colors.purple} />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <View style={s.wordTitleRow}>
-            <Text style={s.wordEnglish}>{word.english}</Text>
-            <Text style={s.wordLevel}>{word.level}</Text>
-          </View>
-          <Text style={s.wordRussian}>{displayedRussian}</Text>
-          {opened && (
-            <>
-              {!!word.transcription && <Text style={s.wordTranscription}>{word.transcription}</Text>}
-              {!!word.partOfSpeech && <Text style={s.wordPart}>{word.partOfSpeech}</Text>}
-              <WordMeanings key={word.id} word={word} />
-              {!!word.example && <Text style={s.wordExample}>{word.example}</Text>}
-              {!!word.exampleRu && <Text style={s.wordExampleRu}>{word.exampleRu}</Text>}
-              <ContentReportButton item={{id:word.id,type:'translate',prompt:word.english,answer:word.fullTranslation || displayedRussian}} context={{topic:'Словарь'}}/>
-              <Text style={s.wordStatus}>
-                {stats[word.id]
-                  ? `Изучается · верно ${stats[word.id].correct || 0} из ${stats[word.id].total || 0}`
-                  : "Ещё не изучалось"}
-              </Text>
-            </>
-          )}
-        </View>
-        {!word.id.startsWith("custom-") && (
-          <View style={s.wordActions}>
-            <Pressable onPress={() => toggleWordPreference("favorites", word.id)}>
-              <Ionicons name={favorite ? "star" : "star-outline"} size={20} color={favorite ? colors.orange : colors.textMuted} />
-            </Pressable>
-            <Pressable onPress={() => toggleWordPreference("hard", word.id)}>
-              <Ionicons name={hard ? "alert-circle" : "alert-circle-outline"} size={20} color={hard ? colors.pink : colors.textMuted} />
-            </Pressable>
-          </View>
-        )}
-        {word.id.startsWith("custom-") && (
-          <Pressable onPress={() => removeCustomWord(word.id)}>
-            <Ionicons name="trash-outline" size={20} color={colors.pink} />
-          </Pressable>
-        )}
-      </Pressable>
-    );
-  }, [expanded, favoriteIds, hardIds, preferences.customTranslations, progress.settings?.accent, progress.settings?.speechRate, stats, toggleWordPreference, removeCustomWord]);
+    return <DictionaryWordRow word={word} opened={opened} favorite={favorite} hard={hard} translation={displayedRussian} state={wordLearningState(stats[word.id], today)} accent={progress.settings?.accent || 'en-US'} rate={progress.settings?.speechRate || 0.78} setExpanded={setExpanded} togglePreference={toggleWordPreference} removeWord={removeCustomWord} />;
+  }, [expanded, favoriteIds, hardIds, preferences.customTranslations, progress.settings?.accent, progress.settings?.speechRate, stats, today, toggleWordPreference, removeCustomWord]);
   return (
     <View style={s.container}>
       <Header title="Словарь" onClose={onClose} />
       <FlatList
-        data={displayedWords}
-        onEndReached={()=>setVisibleCount((count)=>Math.min(count+100,result.count))}
-        onEndReachedThreshold={0.5}
+        data={result.items}
         keyExtractor={(item) => item.id}
         renderItem={renderWord}
         keyboardShouldPersistTaps="handled"
@@ -364,13 +304,13 @@ export function VocabularyScreen({ onClose }) {
         maxToRenderPerBatch={10}
         updateCellsBatchingPeriod={40}
         windowSize={5}
-        removeClippedSubviews
+        removeClippedSubviews={Platform.OS === 'android'}
         ListHeaderComponent={
           <>
             <View style={s.row}>
               <View style={{ flex: 1 }}>
                 <Text style={s.bigTitle}>Офлайн-словарь</Text>
-                <Text style={s.subtitleLeft}>{wordBankSize.toLocaleString("ru-RU")} базовых слов + свои записи</Text>
+                <Text style={s.subtitleLeft}>{extendedWordBankSize.toLocaleString("ru-RU")} слов · перевод, значения и примеры</Text>
               </View>
               <Pressable onPress={() => setAdding(!adding)} style={s.add}>
                 <Ionicons name={adding ? "close" : "add"} size={26} color={colors.text} />
@@ -389,21 +329,25 @@ export function VocabularyScreen({ onClose }) {
               <TextInput value={query} onChangeText={setQuery} placeholder="English или русский перевод" placeholderTextColor={colors.textMuted} autoCapitalize="none" autoCorrect={false} style={s.dictionaryInput} />
               {!!query && <Pressable onPress={() => setQuery("")}><Ionicons name="close-circle" size={20} color={colors.textMuted} /></Pressable>}
             </View>
+            <View style={[s.dictionaryChips, { flexDirection: 'row', flexWrap: 'wrap' }]}>
+              { [['core', `Основные · ${wordBankSize.toLocaleString('ru-RU')}`], ['extended', `Вся база · ${extendedWordBankSize.toLocaleString('ru-RU')}`]].map(([id, title]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: catalog === id }} onPress={() => setCatalog(id)} style={[s.dictionaryChip, catalog === id && s.dictionaryChipActive]}><Text style={[s.dictionaryChipText, catalog === id && { color: colors.purple }]}>{title}</Text></Pressable>) }
+            </View>
+            <Text style={s.dictionaryHint}>Нажми на слово, чтобы открыть значения и доступные примеры. Уровни — ориентир для обучения.</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.dictionaryChips}>
               {["Все", ...wordLevels, "Мои"].map((item) => (
-                <Pressable key={item} onPress={() => setLevel(item)} style={[s.dictionaryChip, level === item && s.dictionaryChipActive]}>
-                  <Text style={s.dictionaryChipText}>{item}</Text>
+                <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: level === item }} onPress={() => setLevel(item)} style={[s.dictionaryChip, level === item && s.dictionaryChipActive]}>
+                  <Text style={[s.dictionaryChipText, level === item && { color: colors.purple }]}>{item}</Text>
                 </Pressable>
               ))}
             </ScrollView>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.dictionaryChips}>
-              {[["all", "Все слова"], ["favorites", "★ Избранные"], ["hard", "Сложные"], ["learning", "Изучаются"]].map(([id, title]) => (
-                <Pressable key={id} onPress={() => setFilter(id)} style={[s.dictionaryChip, filter === id && s.dictionaryChipActive]}>
-                  <Text style={s.dictionaryChipText}>{title}</Text>
+              {[["all", "Все слова"], ["new", "Новые"], ["learning", "Учу"], ["due", "Пора повторить"], ["learned", "Освоено"], ["favorites", "★ Избранные"], ["hard", "Сложные"]].map(([id, title]) => (
+                <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: filter === id }} onPress={() => setFilter(id)} style={[s.dictionaryChip, filter === id && s.dictionaryChipActive]}>
+                  <Text style={[s.dictionaryChipText, filter === id && { color: colors.purple }]}>{title}</Text>
                 </Pressable>
               ))}
             </ScrollView>
-            <Text style={s.dictionaryCount}>НАЙДЕНО: {result.count} · ЗАГРУЖЕНО: {Math.min(visibleCount,result.count)}</Text>
+            <Text style={s.dictionaryCount}>{query !== deferredQuery ? 'ПОИСК…' : `НАЙДЕНО: ${result.count.toLocaleString('ru-RU')}`}</Text>
           </>
         }
         ListEmptyComponent={<Text style={s.emptyDictionary}>Ничего не найдено. Попробуйте другой запрос или фильтр.</Text>}
@@ -765,9 +709,10 @@ const s = createThemedStyles(() => ({
   },
   dictionaryInput: { flex: 1, color: colors.text, fontSize: 15, paddingVertical: 14 },
   dictionaryChips: { gap: 7, paddingBottom: 9, paddingRight: 20 },
-  dictionaryChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 13, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  dictionaryChipActive: { backgroundColor: "rgba(124,92,252,.20)", borderColor: colors.purple },
-  dictionaryChipText: { color: colors.text, fontSize: 11, fontWeight: "800" },
+  dictionaryChip: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 13, paddingVertical: 9, borderRadius: 13, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.buttonBorder },
+  dictionaryChipActive: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
+  dictionaryChipText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  dictionaryHint: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 12 },
   dictionaryCount: { color: colors.textMuted, fontSize: 9, fontWeight: "900", letterSpacing: 1, marginVertical: 9 },
   emptyDictionary: { color: colors.textMuted, textAlign: "center", lineHeight: 21, padding: 30 },
   sound: {

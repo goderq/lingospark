@@ -1,8 +1,9 @@
 import { readWordSession } from '../utils/wordSession';
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import WordMeanings from '../components/WordMeanings';
+import WordContext from '../components/WordContext';
+import { wordAmountLabel, wordLearningState, wordStateLabels } from '../utils/wordDictionary';
 import { wordLearningDetails } from '../data/wordLearningData';
-import { wordEstablished } from '../utils/wordSchedule';
 import { sampleWithoutReplacement } from '../utils/sampling';
 import {
   Keyboard,
@@ -34,8 +35,9 @@ import {
 } from "../data/wordBank";
 import { wordThemes } from "../data/wordThemes";
 import { colors , useTheme, createThemedStyles } from "../theme";
+import { foregroundFor } from '../design/palettes';
 import { PrimaryButton, ProgressBar } from "../components/UI";
-import { useProgress } from "../store/ProgressContext";
+import { useProgressActions, useProgressSelector } from "../store/ProgressContext";
 import { evaluateExercise } from "../utils/answer";
 import { balancedOptions, shuffleOptions } from "../utils/shuffle";
 import {distinctDistractors} from '../utils/contentQuality';
@@ -63,16 +65,16 @@ const takeRandom = sampleWithoutReplacement;
 export default function ReviewScreen() {
   useTheme();
   useScreenTiming('words_open');
+  const progress = useProgressSelector(({ progress: value }) => ({ reviewStats: value.reviewStats, settings: value.settings, wordPreferences: value.wordPreferences, wordSessionDraft: value.wordSessionDraft }));
   const {
-    progress,
     recordReview,
     saveWordSession,
     clearWordSession,
     toggleWordPreference,
     hideWord,
     updateWordTranslation,
-  } = useProgress();
-  const draft = useRef(readWordSession(progress.wordSessionDraft)).current;
+  } = useProgressActions();
+  const [draft] = useState(() => readWordSession(progress.wordSessionDraft));
   const [sessionId, setSessionId] = useState(draft.sessionId || `words-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const [optionSeed, setOptionSeed] = useState(() => draft.optionSeed ?? Math.floor(Math.random() * 2147483647));
   const [level, setLevel] = useState(draft.level ?? "A1");
@@ -97,7 +99,7 @@ export default function ReviewScreen() {
   const [translationDraft, setTranslationDraft] = useState(draft.translationDraft ?? "");
 
 
-  const serializedWordSession = JSON.stringify({ version: 1, sessionId, optionSeed, level, catalogMode, theme, statusFilter, mode, amount, directionMode, deck, index, phase, answer, checked, correct, grade, score, letterTiles, usedLetters, editingTranslation, translationDraft });
+  const serializedWordSession = useMemo(() => deck ? JSON.stringify({ version: 1, sessionId, optionSeed, level, catalogMode, theme, statusFilter, mode, amount, directionMode, deck, index, phase, answer, checked, correct, grade, score, letterTiles, usedLetters, editingTranslation, translationDraft }) : null, [sessionId, optionSeed, level, catalogMode, theme, statusFilter, mode, amount, directionMode, deck, index, phase, answer, checked, correct, grade, score, letterTiles, usedLetters, editingTranslation, translationDraft]);
   useEffect(() => { if (deck && !finished) saveWordSession(JSON.parse(serializedWordSession)); if (finished) clearWordSession(); }, [serializedWordSession, finished, saveWordSession, clearWordSession]);
   const today = new Date().toISOString().slice(0, 10);
   const stats = progress.reviewStats || {};
@@ -131,28 +133,27 @@ export default function ReviewScreen() {
   const knownAtLevel = useMemo(
     () =>
       level === "Все"
-        ? studiedIds.size
+        ? activeWordBank.reduce((total, word) => total + (studiedIds.has(word.id) ? 1 : 0), 0)
         : activeWordsByLevel[level].reduce(
             (total, word) => total + (studiedIds.has(word.id) ? 1 : 0),
             0,
           ),
-    [level, studiedIds, activeWordsByLevel],
+    [level, studiedIds, activeWordsByLevel, activeWordBank],
   );
   const levelCount =
     level === "Все" ? activeWordBankSize : activeCountsByLevel[level];
 
   const summary = useMemo(
     () =>
-      Object.values(stats).reduce(
-        (result, item) => {
-          if (wordEstablished(item)) result.learned += 1;
-          else result.learning += 1;
-          if (item.dueDate <= today) result.due += 1;
+      activeWordBank.reduce(
+        (result, word) => {
+          if (hiddenIds.has(word.id)) return result;
+          result[wordLearningState(stats[word.id], today)] += 1;
           return result;
         },
-        { learning: 0, learned: 0, due: 0 },
+        { new: 0, learning: 0, learned: 0, due: 0 },
       ),
-    [stats, today],
+    [stats, today, activeWordBank, hiddenIds],
   );
   const selectedTheme = useMemo(
     () => wordThemes.find((item) => item.id === theme),
@@ -172,11 +173,7 @@ export default function ReviewScreen() {
     () =>
       basePool.filter((word) => {
         const wordStat = stats[word.id];
-        if (statusFilter === "new") return !wordStat;
-        if (statusFilter === "learning")
-          return wordStat && !wordEstablished(wordStat);
-        if (statusFilter === "due") return wordStat?.dueDate <= today;
-        if (statusFilter === "learned") return wordEstablished(wordStat);
+        if (wordStateLabels[statusFilter]) return wordLearningState(wordStat, today) === statusFilter;
         if (statusFilter === "hard") return hardIds.has(word.id);
         if (statusFilter === "favorites") return favoriteIds.has(word.id);
         return true;
@@ -303,7 +300,7 @@ export default function ReviewScreen() {
         </Pressable>
 
         <View style={styles.statsGrid}>
-          <MiniStat value={Math.max(0, activeWordBankSize - studiedIds.size)} label="новых" color={colors.purple} />
+          <MiniStat value={summary.new} label="новых" color={colors.purple} />
           <MiniStat value={summary.learning} label="изучаются" color={colors.orange} />
           <MiniStat value={summary.learned} label="выучено" color={colors.mint} />
           <MiniStat value={summary.due} label="пора повторить" color={colors.pink} />
@@ -322,21 +319,21 @@ export default function ReviewScreen() {
                 styles.level,
                 level === item && {
                   backgroundColor:
-                    item === "Все" ? colors.purple : levelColors[item],
+                    item === "Все" ? colors.accentFill : levelColors[item],
                   borderColor:
                     item === "Все" ? colors.purple : levelColors[item],
                 },
               ]}
             >
               <Text
-                style={[styles.levelName, level === item && { color: colors.text }]}
+                style={[styles.levelName, level === item && { color: foregroundFor(item === 'Все' ? colors.accentFill : levelColors[item]) }]}
               >
                 {item}
               </Text>
               <Text
                 style={[
                   styles.levelCount,
-                  level === item && { color: colors.textMuted },
+                  level === item && { color: foregroundFor(item === 'Все' ? colors.accentFill : levelColors[item]) },
                 ]}
               >
                 {item === "Все" ? activeWordBankSize : activeCountsByLevel[item]}
@@ -466,7 +463,7 @@ export default function ReviewScreen() {
         </View></>}
 
         <PrimaryButton
-          title={selectedPool.length ? `Начать · ${Math.min(amount, selectedPool.length)} слов` : "В этой категории пока нет слов"}
+          title={selectedPool.length ? `Начать · ${wordAmountLabel(Math.min(amount, selectedPool.length))}` : "В этой категории пока нет слов"}
           icon="sparkles"
           onPress={() => startSession()}
           disabled={!selectedPool.length}
@@ -530,13 +527,7 @@ export default function ReviewScreen() {
   const favorite = preferences.favorites.includes(card.id);
   const hard = preferences.hard.includes(card.id);
   const currentStat = stats[card.id];
-  const statusText = !currentStat
-    ? "Новое слово"
-    : wordEstablished(currentStat)
-      ? "Закреплено в повторении"
-      : currentStat.dueDate <= today
-        ? "Пора повторить"
-        : `Повтор через ${currentStat.interval || 1} дн.`;
+  const statusText = wordStateLabels[wordLearningState(currentStat, today)];
 
   const check = (submittedAnswer = answer) => {
     Keyboard.dismiss();
@@ -645,7 +636,7 @@ export default function ReviewScreen() {
           </Text>
         </View>
         <Text style={styles.sessionMeta}>
-          СЛОВО {index + 1} ИЗ {deck.length} · ЧАСТОТНОСТЬ #{card.frequency}
+          СЛОВО {index + 1} ИЗ {deck.length} · {card.frequency ? `ЧАСТОТНОСТЬ #${card.frequency}` : 'ПОЛЕЗНАЯ ЛЕКСИКА'}
         </Text>
         <View style={styles.wordToolbar}>
           <View style={styles.statusChip}><Text style={styles.statusChipText}>{statusText}</Text></View>
@@ -673,8 +664,7 @@ export default function ReviewScreen() {
               <View style={styles.divider} />
               <Text style={styles.russianWord}>{activeCard.russian}</Text>
               <WordMeanings key={activeCard.id} word={activeCard} />
-              {!!activeCard.example && <Text style={styles.wordExample}>{activeCard.example}</Text>}
-              {!!activeCard.exampleRu && <Text style={styles.wordExampleRu}>{activeCard.exampleRu}</Text>}
+              <WordContext key={`example-${activeCard.id}`} word={activeCard} accent={progress.settings?.accent || 'en-US'} rate={progress.settings?.speechRate || 0.78} />
               <Pressable onPress={speak} style={styles.speakButton}>
                 <Ionicons name="volume-high" size={21} color={colors.text} />
                 <Text style={styles.speakText}>Послушать</Text>
@@ -906,7 +896,7 @@ const styles = createThemedStyles(() => ({
     borderColor: colors.border,
   },
   catalogOptionActive: {
-    backgroundColor: "rgba(124,92,252,.16)",
+    backgroundColor: colors.accentSoft,
     borderColor: colors.purple,
   },
   catalogTitle: { color: colors.textMuted, fontSize: 13, fontWeight: "900" },
@@ -976,7 +966,7 @@ const styles = createThemedStyles(() => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  themeActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,.12)" },
+  themeActive: { borderColor: colors.purple, backgroundColor: colors.accentSoft },
   themeEmoji: { fontSize: 27 },
   themeTitle: { color: colors.text, fontWeight: "800", fontSize: 12, marginTop: 8 },
   themeCount: { color: colors.textMuted, fontSize: 9, marginTop: 4 },
@@ -1002,7 +992,7 @@ const styles = createThemedStyles(() => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  modeActive: { borderColor: colors.purple, backgroundColor: "rgba(124,92,252,.11)" },
+  modeActive: { borderColor: colors.purple, backgroundColor: colors.accentSoft },
   modeTitle: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 8 },
   modeText: { color: colors.textMuted, fontSize: 9, lineHeight: 13, marginTop: 3 },
   progressCard: {
@@ -1043,7 +1033,7 @@ const styles = createThemedStyles(() => ({
   },
   directionActive: {
     borderColor: colors.purple,
-    backgroundColor: "rgba(124,92,252,.10)",
+    backgroundColor: colors.accentSoft,
   },
   source: {
     color: colors.textMuted,
@@ -1077,7 +1067,7 @@ const styles = createThemedStyles(() => ({
     height: 37,
     borderRadius: 13,
     justifyContent: "center",
-    backgroundColor: "rgba(124,92,252,.12)",
+    backgroundColor: colors.accentSoft,
   },
   statusChipText: { color: colors.purple, fontSize: 10, fontWeight: "900" },
   toolButton: {
@@ -1248,7 +1238,7 @@ const styles = createThemedStyles(() => ({
   },
   letterAnswerText: { color: colors.text, fontSize: 22, fontWeight: "900", letterSpacing: 2 },
   letters: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 7, marginVertical: 14 },
-  letter: { minWidth: 43, height: 45, paddingHorizontal: 11, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(124,92,252,.20)", borderWidth: 1, borderColor: colors.purple },
+  letter: { minWidth: 43, height: 45, paddingHorizontal: 11, borderRadius: 13, alignItems: "center", justifyContent: "center", backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: colors.purple },
   letterUsed: { opacity: 0.18 },
   letterText: { color: colors.text, fontSize: 18, fontWeight: "900" },
   feedback: {

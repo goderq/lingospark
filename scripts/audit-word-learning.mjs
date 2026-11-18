@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { curatedExampleCount, wordLearningDetails } from "../src/data/wordLearningData.js";
+import { wordExpansion } from '../src/data/wordExpansion.js';
 
-const bank = JSON.parse(await readFile(new URL("../src/data/wordBank.json", import.meta.url), "utf8"));
+const bank = [...JSON.parse(await readFile(new URL("../src/data/wordBank.json", import.meta.url), "utf8")), ...wordExpansion.map(word => [word.english, word.translation])];
 assert.ok(curatedExampleCount >= 50, `only ${curatedExampleCount} curated examples`);
 
 for (const [english, translation] of bank) {

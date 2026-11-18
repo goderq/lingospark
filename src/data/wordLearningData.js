@@ -1,3 +1,5 @@
+import { wordExpansion } from './wordExpansion.js';
+const expansionDetails = new Map(wordExpansion.map(word => [word.english, word]));
 const common = {
   the: ["артикль", "The book is on the table.", "Книга лежит на столе."],
   of: ["предлог", "Would you like a cup of tea?", "Хотите чашку чая?"],
@@ -89,6 +91,8 @@ const functionWords = {
 };
 
 export function wordLearningDetails(english, translation = "") {
+  const extra = expansionDetails.get(english);
+  if (extra) return { partOfSpeech: extra.partOfSpeech, example: extra.example, exampleRu: extra.exampleRu, curated: true };
   const curated = common[english];
   if (curated) return { partOfSpeech: curated[0], example: curated[1], exampleRu: curated[2], curated: true };
   if (functionWords.article.has(english)) return { partOfSpeech: "артикль" };
@@ -101,4 +105,4 @@ export function wordLearningDetails(english, translation = "") {
   return { partOfSpeech: "Часть речи зависит от значения", partOfSpeechInferred: true };
 }
 
-export const curatedExampleCount = Object.keys(common).length;
+export const curatedExampleCount = Object.keys(common).length + wordExpansion.length;

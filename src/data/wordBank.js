@@ -1,6 +1,8 @@
 import compactWordBank from "./wordBank.json";
 import { wordLearningDetails } from "./wordLearningData";
 import { wordCandidates } from '../utils/sampling';
+import { wordExpansion } from './wordExpansion';
+import { normalizeWordQuery } from '../utils/wordDictionary';
 
 export const wordLevels = ["A1", "A2", "B1", "B2", "C1"];
 
@@ -20,9 +22,13 @@ const emojiForLevel = {
   C1: "💎",
 };
 
-export const extendedWordBank = compactWordBank.map(
+const existingEnglish = new Set(compactWordBank.map(([english]) => english));
+const additions = wordExpansion.filter(word => !existingEnglish.has(word.english));
+const expansionByEnglish = new Map(additions.map(word => [word.english, word]));
+export const extendedWordBank = [...compactWordBank, ...additions.map(word => [word.english, word.translation, '', `extra-${word.english}`])].map(
   ([english, translation, transcription, stableIndex], index) => {
-    const level = levelForIndex(index);
+    const extra = expansionByEnglish.get(english);
+    const level = extra?.level || levelForIndex(index);
     const variants = translation
       .split(/[;,]/)
       .map((value) => value.replace(/\([^)]*\)/g, "").trim())
@@ -30,16 +36,18 @@ export const extendedWordBank = compactWordBank.map(
     const fullTranslation = variants.slice(0, 3).join("; ");
     const learning = wordLearningDetails(english, fullTranslation);
     return {
-      id: `bank-${stableIndex ?? index}`,
+      id: extra ? stableIndex : `bank-${stableIndex ?? index}`,
       english,
       russian: variants[0] || translation,
       translations: variants.slice(1, 3),
       fullTranslation,
       searchText: `${english} ${translation} ${transcription || ""}`.toLocaleLowerCase("ru"),
+      searchNormalized: normalizeWordQuery(`${english} ${translation}`),
       transcription,
       level,
       emoji: emojiForLevel[level],
-      frequency: index + 1,
+      frequency: extra ? null : index + 1,
+      curatedAddition: !!extra,
       ...learning,
     };
   },
@@ -61,6 +69,7 @@ const coreCounts = Object.fromEntries(wordLevels.map((level) => [level, 0]));
 // a smaller frequency-first set without names, adult vocabulary and one-letter
 // corpus fragments. This keeps random sessions useful instead of merely large.
 export const wordBank = extendedWordBank.filter((word) => {
+  if (word.curatedAddition) return true;
   if (excludedEnglish.has(word.english) || excludedRussian.test(word.fullTranslation)) return false;
   if (word.english.length === 1 && !["a", "i"].includes(word.english)) return false;
   if (coreCounts[word.level] >= coreLimits[word.level]) return false;

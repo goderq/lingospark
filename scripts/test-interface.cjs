@@ -14,6 +14,7 @@ const storage = new Map();
 const writes = [];
 const events = new Map();
 const animations = [];
+const speechCalls = [];
 let system = 'light', override = null, reduced = false;
 const emit = (name, value) => { for (const callback of events.get(name) || []) callback(value); };
 const subscribe = (name, callback) => { if (!events.has(name)) events.set(name, new Set()); events.get(name).add(callback); return { remove: () => events.get(name).delete(callback) }; };
@@ -32,7 +33,7 @@ const native = {
   Animated: { Value, View: host('AnimatedView'), timing: animate, spring: animate }, Easing: { out: value => value, cubic: value => value },
 };
 const progress = { name: 'Лео', onboarded: true, dailyGoal: 30, totalXP: 40, dailyXP: 10, streak: 2, completed: [], journeys: {}, retention: {}, reviewStats: {}, reviewQueue: {}, mistakes: [], settings: {}, stats: {}, activity: {} };
-const actions = new Proxy({}, { get: (_, key) => key === 'isUnlocked' ? () => true : () => {} });
+const actions = new Proxy({}, { get: (target, key) => target[key] || (target[key] = key === 'isUnlocked' ? () => true : () => {}) });
 const providers = ({ children }) => children;
 const progressApi = { useProgress: () => new Proxy({ progress }, { get: (target, key) => key in target ? target[key] : actions[key] }), useProgressSelector: selector => selector({ progress, ready: true }), useProgressActions: () => actions, ProgressProvider: providers };
 const cloudApi = { useCloudBootstrap: () => false, useCloudSync: () => ({ status: 'offline', conflict: null }), CloudSyncProvider: providers };
@@ -46,7 +47,7 @@ function load(filename) {
   if (file.endsWith('/store/ProgressContext.js')) return progressApi;
   if (file.endsWith('/store/CloudSyncContext.js')) return cloudApi;
   if (file.endsWith('/store/AuthContext.js')) return authApi;
-  if (file.endsWith('/utils/speech.js')) return { speak() {}, stopSpeech() {} };
+  if (file.endsWith('/utils/speech.js')) return { speak(text, options) { speechCalls.push({ text, options }); }, stopSpeech() {} };
   if (cache.has(file)) return cache.get(file).exports;
   const module = { exports: {} }; cache.set(file, module);
   if (file.endsWith('.json')) { module.exports = JSON.parse(fs.readFileSync(file, 'utf8')); return module.exports; }
@@ -179,6 +180,69 @@ async function main() {
   assert.equal(animations.length, 0, 'button feedback must honor reduced motion');
   await act(async () => tree.unmount());
   // Saved answers stay available, but do not reopen an exercise automatically.
+  const Dictionary = load('src/screens/AdvancedScreens.js').VocabularyScreen;
+  const Row = load('src/components/DictionaryWordRow.js').default;
+  const OriginalRow = Row.type, rowRenders = new Map();
+  Row.type = props => { rowRenders.set(props.word.id, (rowRenders.get(props.word.id) || 0) + 1); return React.createElement(OriginalRow, props); };
+  const bank = load('src/data/wordBank.js');
+  const createDictionary = () => React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Dictionary, { onClose() {} }));
+  await act(async () => { tree = Renderer.create(createDictionary()); await flush(); });
+  assert.equal(tree.root.findByType('FlatList').props.data.length, bank.wordBankSize, 'FlatList must receive the entire core catalog, without the 100-word cap');
+  const beforeExpand = new Map(rowRenders);
+  const firstRow = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel?.startsWith('the, '));
+  await act(async () => firstRow.props.onPress());
+  for (const [id, count] of beforeExpand) if (id !== 'bank-0') assert.equal(rowRenders.get(id), count, 'expanding one word must not rerender unaffected cards');
+  assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === 'The book is on the table.'));
+  await act(async () => namedButton('Пример в разговоре').props.onPress());
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'The book is on the table.'));
+  await act(async () => namedButton('Послушать пример').props.onPress());
+  assert.equal(speechCalls.at(-1).text, 'The book is on the table.');
+  const searchInput = () => tree.root.findAllByType('TextInput').find(node => node.props.placeholder === 'English или русский перевод');
+  await act(async () => { searchInput().props.onChangeText('щетка'); await flush(); });
+  assert.equal(tree.root.findByType('FlatList').props.data[0].english, 'toothbrush');
+  await act(async () => { searchInput().props.onChangeText(''); await flush(); });
+  await act(async () => namedButton(`Вся база · ${bank.extendedWordBankSize.toLocaleString('ru-RU')}`).props.onPress());
+  assert.equal(tree.root.findByType('FlatList').props.data.length, bank.extendedWordBankSize);
+  for (const mode of ['light', 'dark', 'pink']) {
+    await act(async () => { controls.setMode(mode); await flush(); });
+    assert.equal(searchInput().props.value, '');
+    assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Новое'));
+  }
+  await act(async () => tree.unmount());
+  const today = new Date().toISOString().slice(0, 10);
+  progress.reviewStats = { 'extra-backpack': { dueDate: today, interval: 14, successfulDays: 3 } };
+  await act(async () => { tree = Renderer.create(createDictionary()); await flush(); });
+  await act(async () => namedButton('Пора повторить').props.onPress());
+  assert.deepEqual(tree.root.findByType('FlatList').props.data.map(word => word.english), ['backpack']);
+  await act(async () => namedButton('Освоено').props.onPress());
+  assert.equal(tree.root.findByType('FlatList').props.data.length, 0, 'due words must not also appear in mastered filter');
+  await act(async () => tree.unmount());
+  progress.reviewStats = {};
+  const Review = load('src/screens/ReviewScreen.js').default;
+  progress.wordPreferences = { favorites: ['extra-backpack'] };
+  const savedWords = [], reviewedWords = [];
+  const oldSave = actions.saveWordSession, oldReview = actions.recordReview;
+  actions.saveWordSession = draft => savedWords.push(draft);
+  actions.recordReview = (...args) => reviewedWords.push(args);
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Review))); await flush(); });
+  await act(async () => namedButton('Избранные').props.onPress());
+  await act(async () => namedButton('Начать · 1 слово').props.onPress());
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'backpack'));
+  assert.equal(savedWords.at(-1).deck[0].id, 'extra-backpack');
+  assert.ok(load('src/utils/wordSession.js').readWordSession(savedWords.at(-1)).deck, 'new words must produce restorable sessions');
+  for (const mode of ['light', 'dark', 'pink']) {
+    await act(async () => { controls.setMode(mode); await flush(); });
+    assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'рюкзак'));
+  }
+  await act(async () => namedButton('Запомнил — проверить').props.onPress());
+  await act(async () => tree.root.findAllByType('TextInput').find(node => node.props.placeholder === 'Перевод на русском…').props.onChangeText('рюкзак'));
+  await act(async () => namedButton('Проверить перевод').props.onPress());
+  assert.equal(reviewedWords.length, 1);
+  assert.equal(reviewedWords[0][0].id, 'extra-backpack');
+  assert.equal(reviewedWords[0][1], true, 'new word translation must be accepted');
+  await act(async () => tree.unmount());
+  actions.saveWordSession = oldSave; actions.recordReview = oldReview;
+  delete progress.wordPreferences;
   const Practice = load('src/screens/PracticeScreen.js').default;
   const savedExercise = { id: 'draft-question', type: 'translate', prompt: 'A saved exercise', answer: 'Hello' };
   progress.practiceDrafts = { 'common-practice': { version: 1, id: 'saved-attempt', mode: 'learn', deck: [savedExercise], index: 0, input: 'Hel', built: [], checked: false, responses: [], seed: 1 } };
@@ -223,6 +287,6 @@ async function main() {
   assert.equal(homeSelected(), true, 'a new application instance must start at Today');
   assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start must not automatically reopen the last exercise');
   await act(async () => tree.unmount());
-  console.log('Interface passed: persisted themes, no input remount, cached styles, reduced motion, core screens, background preserves tab/search/exercise/input, cold start opens Today. Native layout/keyboard still require iPhone checks.');
+  console.log('Interface passed: persisted themes, cached styles, reduced motion, dictionary full catalogs/search/status, isolated row updates, spoken examples, new-word session/grading, background preserves tab/search/exercise/input, cold start opens Today. Native layout/keyboard still require iPhone checks.');
 }
 main().catch(cause => { console.error(cause); process.exitCode = 1; });
