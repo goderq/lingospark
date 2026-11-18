@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { courseTutorContext } from '../utils/learningJourney';
 import { courseDialogueEvidence, learnerTurns } from '../utils/conversationCoach';
 import { interviewContext, interviewProgress, interviewReview } from '../utils/interview';
+import { tutorPracticeFor } from '../utils/tutorPractice';
 import ToolSheet from '../components/ToolSheet';
 import useKeyboardDock from '../components/useKeyboardDock';
 import {
@@ -56,6 +57,8 @@ import {
   loadTutorFeedback,
   loadTutorSessions,
   markTutorMissionCompleted,
+  pauseActiveModelDownload,
+  restorePendingModelDownload,
   resumePendingModelDownload,
   saveTutorSession,
   saveTutorFeedback,
@@ -129,14 +132,13 @@ export default function AITutorScreen({ onImmersiveChange, onNavigate, practice,
     const currentDownload = getDownloadState();
     setInstalled(state);
     setActiveId(usableId);
-    if (usableId && openActive && currentDownload.status !== "downloading") setScreen("chat");
+    if (usableId && openActive && !['downloading', 'paused', 'interrupted', 'disconnected', 'pausing', 'verifying'].includes(currentDownload.status)) setScreen("chat");
     setLoading(false);
   }, []);
 
   useEffect(() => {
-    resumePendingModelDownload().catch(() => {});
+    restorePendingModelDownload().catch(() => {}).then(() => refresh(true)).catch(() => setLoading(false));
     resumeSpeechModelDownload().catch(() => {});
-    refresh(true).catch(() => setLoading(false));
   }, []);
 
   useEffect(() => () => {
@@ -235,32 +237,40 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
     subscribeToDownload((state) => {
       setDownload(state);
       if (state.status === "completed") onRefresh();
-      if (state.status === "error") setError(state.error);
     }),
   [onRefresh]);
 
   const install = async (model) => {
     cancelledRef.current = false;
     setError("");
-    if (Number.isFinite(freeSpace) && freeSpace < model.size * 1.25) {
-      setError(`Для загрузки нужно около ${formatSpace(model.size * 1.25)} свободного места с запасом.`);
+    const resuming = download.modelId === model.id && download.canResume;
+    const remaining = model.size - (resuming ? Math.min(download.written, model.size) : 0);
+    const required = remaining + model.size * 0.25;
+    const available = await getFreeSpace();
+    setFreeSpace(available);
+    if (Number.isFinite(available) && available < required) {
+      setError(`Для загрузки нужно около ${formatSpace(required)} свободного места с запасом.`);
       return;
     }
     try {
-      await downloadModel(model);
+      if (resuming) await resumePendingModelDownload();
+      else await downloadModel(model);
       await onRefresh();
     } catch (downloadError) {
-      if (!cancelledRef.current && getDownloadState().status !== "paused") {
+      if (!cancelledRef.current && !['paused', 'interrupted', 'disconnected', 'error'].includes(getDownloadState().status)) {
         setError(downloadError?.message || "Не удалось скачать модель. Проверьте интернет и свободное место.");
       }
-    } finally {
     }
   };
 
   const cancel = async () => {
     cancelledRef.current = true;
-    await cancelModelDownload();
-    await onRefresh();
+    try {
+      await cancelModelDownload();
+      await onRefresh();
+    } catch {
+      setError('Не удалось отменить загрузку. Попробуй ещё раз.');
+    }
   };
 
   const remove = (model) => {
@@ -340,7 +350,10 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
         const accent = model.tier === 'light' ? colors.mint : model.tier === 'advanced' ? colors.orange : colors.purple;
         const isInstalled = installed[model.id]?.installed;
         const isDownloading = download.status === "downloading" && download.modelId === model.id;
-        const blocked = download.status === "downloading" && !isDownloading;
+        const busy = ['downloading', 'pausing', 'verifying', 'cancelling'].includes(download.status);
+        const isBusyHere = busy && download.modelId === model.id;
+        const isInterrupted = ['paused', 'disconnected', 'interrupted', 'error'].includes(download.status) && download.modelId === model.id;
+        const blocked = (busy && !isBusyHere) || (download.canResume && download.modelId !== model.id);
         return (
           <View
             key={model.id}
@@ -371,17 +384,31 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
               <Pressable accessibilityRole={model.family === 'llama' ? 'button' : 'link'} accessibilityLabel={`Условия ${model.shortTitle || model.title}`} onPress={() => model.family === 'llama' ? setLicenseModel(model) : Linking.openURL(model.licenseUrl).catch(() => setError('Не удалось открыть условия модели.'))} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>{model.license}</Text></Pressable>
             </View>
 
-            {isDownloading ? (
+            {isBusyHere ? (
               <View style={styles.downloadBox}>
                 <View style={styles.downloadLabels}>
-                  <Text style={styles.downloadText}>Загрузка {Math.round(download.progress * 100)}%</Text>
+                  <Text style={styles.downloadText}>{isDownloading ? `Загрузка ${Math.round(download.progress * 100)}%` : ({ pausing: 'Сохраняю точку продолжения…', verifying: 'Проверяю файл…', cancelling: 'Отменяю загрузку…' })[download.status]}</Text>
                   <Text style={styles.smallMuted}>{formatSpace(download.written)} из {model.sizeLabel}</Text>
                 </View>
                 <ProgressBar value={download.progress} color={accent} height={8} />
-                <Text style={styles.backgroundHint}>Можно перейти в другой раздел — загрузка продолжится</Text>
-                <Pressable onPress={cancel} style={styles.cancelButton}>
+                <Text style={styles.backgroundHint}>На iPhone загрузку в фоне выполняет iOS.</Text>
+                {!!download.error && <Text style={styles.smallMuted}>{download.error}</Text>}
+                {isDownloading && <Pressable onPress={pauseActiveModelDownload} style={styles.cancelButton}>
+                  <Text style={styles.speakText}>Пауза</Text>
+                </Pressable>}
+                {isDownloading && <Pressable onPress={cancel} style={styles.cancelButton}>
                   <Text style={styles.cancelText}>Отменить загрузку</Text>
+                </Pressable>}
+              </View>
+            ) : isInterrupted && !isInstalled ? (
+              <View style={styles.downloadBox}>
+                <Text style={styles.downloadText}>{({ paused: 'На паузе', disconnected: 'Связь потеряна', interrupted: 'Загрузка прервана', error: 'Ошибка загрузки' })[download.status]}</Text>
+                {!!download.error && <Text style={styles.smallMuted}>{download.error}</Text>}
+                <Text style={styles.smallMuted}>{download.canResume ? `Сохранена точка продолжения · ${formatSpace(download.written)}` : 'Новая попытка начнётся с начала.'}</Text>
+                <Pressable onPress={() => install(model)} style={styles.installButton}>
+                  <Text style={[styles.installText, { color: accent }]}>{download.canResume ? 'Продолжить загрузку' : 'Скачать заново'}</Text>
                 </Pressable>
+                <Pressable onPress={cancel} style={styles.cancelButton}><Text style={styles.cancelText}>Отменить загрузку</Text></Pressable>
               </View>
             ) : isInstalled ? (
               <View style={styles.installedActions}>
@@ -424,14 +451,20 @@ export function ModelLibrary({ installed, activeId, onRefresh, onStart, onCenter
   );
 }
 
+const tabDrafts = new Map();
+
 export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, practice, onPracticeConsumed }) {
   useTheme();
   const keyboard = useKeyboardDock();
   const progress = useProgressSelector(({ progress: value }) => ({ notebook: value.notebook, customWords: value.customWords, mistakes: value.mistakes }));
   const { toggleNotebook, addCustomWord, addReviewPhrase } = useProgressActions();
-  const [level, setLevel] = useState("A2");
-  const [topic, setTopic] = useState(TOPICS[0]);
-  const [coursePractice, setCoursePractice] = useState(null);
+  const [restoredDraft] = useState(() => {
+    const draft = tabDrafts.get(model.id);
+    return practice?.requestId && practice.requestId !== draft?.coursePractice?.requestId ? null : draft;
+  });
+  const [level, setLevel] = useState(restoredDraft?.level || "A2");
+  const [topic, setTopic] = useState(restoredDraft?.topic || TOPICS[0]);
+  const [coursePractice, setCoursePractice] = useState(restoredDraft?.coursePractice || null);
   const [toolsPanel, setToolsPanel] = useState(null);
   const [lessonHelp, setLessonHelp] = useState(0);
   const [courseGoalOpen, setCourseGoalOpen] = useState(false);
@@ -441,12 +474,12 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
     setGoalSummaryOpen(false);
     setLessonHelp(0);
   }, [coursePractice?.topicId, coursePractice?.requestId]);
-  const [dialogueMode, setDialogueMode] = useState("conversation");
+  const [dialogueMode, setDialogueMode] = useState(restoredDraft?.dialogueMode || "conversation");
   const [interviewHint, setInterviewHint] = useState(null);
   const [interviewSummary, setInterviewSummary] = useState(false);
   const [mission, setMission] = useState(null);
   const [missionOpen, setMissionOpen] = useState(false);
-  const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
+  const [messages, setMessages] = useState(() => restoredDraft?.messages || [welcomeFor("A2", TOPICS[0])]);
   const interview = useMemo(() => dialogueMode === 'interview' ? interviewProgress(messages) : null, [dialogueMode, messages]);
   const interviewEnded = !!interview && (!interview.next || messages.length >= 56);
   const review = useMemo(() => interview && (interviewSummary || interviewEnded) ? interviewReview(messages) : null, [interview, interviewSummary, interviewEnded, messages]);
@@ -455,13 +488,29 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   const evidenceKey = learnerTurns(messages).map(item => item.content).join('\u0000');
   const dialogueEvidence = useMemo(() => coursePractice?.topicId ? courseDialogueEvidence(coursePractice.topicId, messages) : [], [coursePractice?.topicId, evidenceKey]);
   const dialogueTurns = useMemo(() => learnerTurns(messages).length, [messages]);
-  const [sessionId, setSessionId] = useState(`ai-${Date.now()}`);
+  const [sessionId, setSessionId] = useState(() => restoredDraft?.sessionId || `ai-${Date.now()}`);
   const [sessions, setSessions] = useState([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [analysisOpen, setAnalysisOpen] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [input, setInput] = useState("");
+  const [input, updateInput] = useState(restoredDraft?.text || '');
+  const [practiceOpenFor, setPracticeOpenFor] = useState(null);
+  const [practiceSavedFor, setPracticeSavedFor] = useState(null);
+  const lastLearner = learnerTurns(messages).at(-1);
+  const followUp = useMemo(() => tutorPracticeFor(lastLearner?.content), [lastLearner?.content]);
+  const followUpExercises = useMemo(() => followUp ? [followUp.exercise] : [], [followUp]);
+  const rememberDraft = (text, draftMessages = messages) => {
+    if (text.trim()) tabDrafts.set(model.id, { text, sessionId, level, topic, dialogueMode, coursePractice, messages: draftMessages.filter(item => item.id !== 'streaming') });
+    else tabDrafts.delete(model.id);
+  };
+  const setInput = text => {
+    rememberDraft(text);
+    updateInput(text);
+  };
+  useEffect(() => {
+    if (input.trim()) rememberDraft(input);
+  }, [input, sessionId, level, topic, dialogueMode, coursePractice, messages]);
   const [modelReady, setModelReady] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [generating, setGenerating] = useState(false);
@@ -521,7 +570,9 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       setSessions(modelSessions);
       const requestedId = practice?.requestId ? `ai-course-${model.id}-${practice.requestId}` : null;
       const recent = requestedId ? modelSessions.find(item => item.id === requestedId) : null;
-      if (recent) {
+      if (restoredDraft && (!requestedId || restoredDraft.sessionId === requestedId)) {
+        setAnalysis(modelSessions.find(item => item.id === restoredDraft.sessionId)?.analysis || null);
+      } else if (recent) {
         setSessionId(recent.id);
         setLevel(recent.level || "A2");
         setTopic(recent.topic || TOPICS[0]);
@@ -729,7 +780,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       if (request.signal.aborted) return;
       setMessages((current) => current.filter((item) => item.id !== "streaming"));
       setError(generationError?.message || "Не удалось получить ответ");
-      setRetryRequest({ text, options });
+      setRetryRequest({ text, options, messageId: nextMessages.at(-1)?.id });
     } finally {
       if (requestRef.current === request) requestRef.current = null;
       setGenerating(false);
@@ -737,6 +788,16 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   };
 
   const send = () => submitMessage(input);
+
+  const editFailedReply = () => {
+    if (!retryRequest?.messageId || retryRequest.options.kind === 'command' || requestRef.current) return;
+    const revised = messages.filter(item => item.id !== retryRequest.messageId);
+    setMessages(revised);
+    updateInput(retryRequest.text);
+    rememberDraft(retryRequest.text, revised);
+    setRetryRequest(null);
+    setError('');
+  };
 
   const runResponseAction = (message, action) => {
     const content = String(message.content || '');
@@ -1092,7 +1153,21 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
               </View>
             </View>
           ); }}
-          ListFooterComponent={interview ? (
+          ListFooterComponent={<>
+          {!interview && !!followUp && !generating && !retryRequest && <View style={styles.exerciseCard}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: practiceOpenFor === lastLearner.id }} onPress={() => setPracticeOpenFor(current => current === lastLearner.id ? null : lastLearner.id)} style={styles.routeLink}>
+              <Text style={styles.speakText}>{practiceOpenFor === lastLearner.id ? 'Свернуть закрепление' : 'Закрепить на новой фразе'}</Text>
+            </Pressable>
+            {practiceOpenFor === lastLearner.id && <>
+              <Text style={styles.smallMuted}>{followUp.explanation}</Text>
+              <MiniLesson exercises={followUpExercises} />
+              <Pressable accessibilityRole="button" disabled={practiceSavedFor === lastLearner.id} onPress={() => {
+                addReviewPhrase(followUp.review);
+                setPracticeSavedFor(lastLearner.id);
+              }} style={styles.routeLink}><Text style={styles.speakText}>{practiceSavedFor === lastLearner.id ? 'Добавлено на завтра' : 'Повторить завтра'}</Text></Pressable>
+            </>}
+          </View>}
+          {interview ? (
             <View style={{ gap: 12, paddingTop: 12 }}>
               {!interviewEnded && !generating && !retryRequest && <>
                 <View style={styles.exerciseCard}>
@@ -1140,6 +1215,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </Pressable>
           ) : null}
+          </>}
         />
       )}
 
@@ -1148,6 +1224,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
           <Ionicons name="alert-circle" color={colors.orange} size={18} />
           <Text style={styles.chatErrorText}>{error}</Text>
           {!!retryRequest && <Pressable accessibilityRole="button" onPress={() => submitMessage(retryRequest.text, { ...retryRequest.options, retry: true })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>Повторить ответ</Text></Pressable>}
+          {!!retryRequest && retryRequest.options.kind !== 'command' && <Pressable accessibilityRole="button" onPress={editFailedReply} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>Изменить реплику</Text></Pressable>}
         </View>
       ) : null}
 

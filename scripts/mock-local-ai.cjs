@@ -10,15 +10,15 @@ module.exports = function mockLocalAi({ installed = true } = {}) {
   if (installed) for (const model of AI_MODELS) files.set(filePath(model), { size: model.size, header: 'R0dVRg==' });
   const llama = { completion: async (options, onToken) => { nativeCalls.push(options); const text = outputs.shift(); assert.equal(typeof text, 'string', 'unexpected extra model request'); onToken?.({ token: text }); return { text }; }, stopCompletion: async () => {} };
   const fileSystem = {
-    documentDirectory: '/documents/', EncodingType: { Base64: 'base64' },
+    documentDirectory: '/documents/', EncodingType: { Base64: 'base64' }, FileSystemSessionType: { BACKGROUND: 0 },
     getInfoAsync: async uri => uri.endsWith('/') ? { exists: true } : files.has(uri) ? { exists: true, ...files.get(uri) } : { exists: false },
     readAsStringAsync: async uri => { if (!files.has(uri)) throw Error('missing file'); return files.get(uri).header; },
     deleteAsync: async uri => files.delete(uri), makeDirectoryAsync: async () => {}, getFreeDiskStorageAsync: async () => 20000000000,
     createDownloadResumable: (url, destination, options, onProgress, resumeData) => {
-      const job = { url, destination, resumeData, progress: (written, total) => { files.set(destination, { size: written, header: 'R0dVRg==' }); onProgress({ totalBytesWritten: written, totalBytesExpectedToWrite: total }); } };
-      const promise = new Promise((resolve, reject) => { job.finish = (size, status = 200, header = 'R0dVRg==') => { files.set(destination, { size, header }); resolve({ uri: destination, status }); }; job.fail = reject; });
+      const job = { url, destination, options, resumeData, progress: (written, total) => { files.set(destination, { size: written, header: 'R0dVRg==' }); onProgress({ totalBytesWritten: written, totalBytesExpectedToWrite: total }); } };
+      const promise = new Promise((resolve, reject) => { job.finish = (size, status = 200, header = 'R0dVRg==') => { files.set(destination, { size, header }); resolve({ uri: destination, status }); }; job.fail = reject; job.cancel = () => resolve(null); });
       downloads.push(job);
-      return { downloadAsync: () => promise, pauseAsync: async () => ({ resumeData: 'native-resume-data' }) };
+      return { downloadAsync: () => promise, pauseAsync: async () => { job.cancel(); return { resumeData: 'native-resume-data' }; }, cancelAsync: async () => job.cancel() };
     },
   };
   function serviceLoad(filename) {

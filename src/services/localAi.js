@@ -314,144 +314,176 @@ export async function getFreeSpace() {
   }
 }
 
-async function runDownload(model, resumeData = null) {
-  await ensureModelDirectory();
-  if (activeDownload) {
-    if (activeDownload.modelId === model.id) return activeDownload.promise;
-    throw new Error("Другая модель уже загружается");
-  }
-  const destination = modelPath(model);
-  const existing = await FileSystem.getInfoAsync(destination);
-  if (!resumeData && existing.exists) await FileSystem.deleteAsync(destination, { idempotent: true });
+const saveDownloadCheckpoint = checkpoint => AsyncStorage.setItem(DOWNLOAD_RESUME_KEY, JSON.stringify(checkpoint));
 
-  publishDownload({
-    status: "downloading",
-    modelId: model.id,
-    progress: resumeData && existing.exists ? Math.min(0.99, (existing.size || 0) / model.size) : 0,
-    written: resumeData && existing.exists ? existing.size || 0 : 0,
-    total: model.size,
-    error: "",
-  });
-  let lastProgressPublish = 0;
-  let lastProgressAt = 0;
-  const task = FileSystem.createDownloadResumable(
-    model.url,
-    destination,
-    {},
-    ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
-      const total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : model.size;
-      const progress = Math.min(1, totalBytesWritten / total);
-      const now = Date.now();
-      if (progress < 1 && progress - lastProgressPublish < 0.005 && now - lastProgressAt < 150) return;
-      lastProgressPublish = progress;
-      lastProgressAt = now;
-      publishDownload({
-        written: totalBytesWritten,
-        total,
-        progress,
-      });
-    },
-    resumeData || undefined,
-  );
-  const promise = (async () => {
-    try {
-      const result = await task.downloadAsync();
-      if (result?.status && ![200, 206].includes(result.status)) throw new Error(`Источник не отдал файл модели (HTTP ${result.status}). Попробуй скачать позже.`);
-      if (!result?.uri) throw new Error("Файл модели не был сохранён");
-      const verification = await verifyModelFile(model);
-      if (!verification.verified) {
-        await FileSystem.deleteAsync(destination, { idempotent: true });
-        throw new Error(verification.reason || "Модель загрузилась не полностью. Попробуйте ещё раз.");
-      }
-      await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
-      await setActiveModelId(model.id);
-      publishDownload({
-        status: "completed",
-        modelId: model.id,
-        progress: 1,
-        written: verification.bytes || model.size,
-        total: model.size,
-        error: "",
-      });
-      return result.uri;
-    } catch (error) {
-      if (downloadState.status !== "cancelled" && downloadState.status !== "paused") {
-        publishDownload({
-          status: "error",
-          error: error?.message || "Не удалось скачать модель",
-        });
-      }
-      throw error;
-    } finally {
-      if (activeDownload?.promise === promise) activeDownload = null;
-    }
-  })();
-  activeDownload = { task, destination, modelId: model.id, promise };
-  return promise;
-}
-
-export async function downloadModel(model) {
-  await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
-  return runDownload(model);
-}
-
-export async function pauseActiveModelDownload() {
-  if (!activeDownload || downloadState.status !== "downloading") return false;
-  const current = activeDownload;
+async function readDownloadCheckpoint() {
+  const saved = await AsyncStorage.getItem(DOWNLOAD_RESUME_KEY);
+  if (!saved) return null;
   try {
-    const paused = await current.task.pauseAsync();
-    if (!paused?.resumeData) return false;
-    await AsyncStorage.setItem(DOWNLOAD_RESUME_KEY, JSON.stringify({
-      modelId: current.modelId,
-      resumeData: paused.resumeData,
-      written: downloadState.written,
-      total: downloadState.total,
-    }));
-    publishDownload({ status: "paused", error: "" });
-    return true;
+    const checkpoint = JSON.parse(saved);
+    const model = AI_MODELS.find(item => item.id === checkpoint?.modelId);
+    return model ? { model, checkpoint } : null;
   } catch {
-    return false;
-  }
-}
-
-export async function resumePendingModelDownload() {
-  if (activeDownload && downloadState.status === "downloading") return activeDownload.promise;
-  try {
-    const saved = JSON.parse((await AsyncStorage.getItem(DOWNLOAD_RESUME_KEY)) || "null");
-    const model = AI_MODELS.find((item) => item.id === saved?.modelId);
-    if (!model || !saved.resumeData) return null;
-    activeDownload = null;
-    publishDownload({
-      status: "paused",
-      modelId: model.id,
-      written: saved.written || 0,
-      total: saved.total || model.size,
-      progress: Math.min(0.99, (saved.written || 0) / (saved.total || model.size)),
-      error: "",
-    });
-    return runDownload(model, saved.resumeData);
-  } catch {
-    await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
     return null;
   }
 }
 
-export async function cancelModelDownload() {
-  if (!activeDownload) return;
-  const current = activeDownload;
-  activeDownload = null;
-  publishDownload({
-    status: "cancelled",
-    modelId: current.modelId,
-    progress: 0,
-    written: 0,
-    error: "",
-  });
+async function transferModel(model, job, checkpoint) {
+  const { destination } = job;
   try {
-    await current.task.pauseAsync();
-  } catch {}
-  await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
-  await FileSystem.deleteAsync(current.destination, { idempotent: true });
+    await ensureModelDirectory();
+    if (!checkpoint.resumeData) {
+      await FileSystem.deleteAsync(destination, { idempotent: true });
+    }
+    await saveDownloadCheckpoint({ ...checkpoint, modelId: model.id });
+    if (job.control === 'cancel') return null;
+    let lastProgressAt = 0;
+    job.task = FileSystem.createDownloadResumable(
+      model.url,
+      destination,
+      { sessionType: FileSystem.FileSystemSessionType.BACKGROUND },
+      ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+        if (activeDownload !== job || job.control) return;
+        const total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : model.size;
+        const progress = Math.min(0.99, totalBytesWritten / total);
+        const time = Date.now();
+        if (time - lastProgressAt < 150 && progress - downloadState.progress < 0.005) return;
+        lastProgressAt = time;
+        publishDownload({ written: totalBytesWritten, total, progress });
+      },
+      checkpoint.resumeData || undefined,
+    );
+    const result = await job.task.downloadAsync();
+    if (!result && job.control) return null;
+    if (result?.status && ![200, 206].includes(result.status)) throw new Error(`Источник вернул HTTP ${result.status}.`);
+    if (!result?.uri) throw new Error('Файл модели не получен.');
+    publishDownload({ status: 'verifying' });
+    const verification = await verifyModelFile(model);
+    if (!verification.verified) {
+      await FileSystem.deleteAsync(destination, { idempotent: true });
+      await saveDownloadCheckpoint({ modelId: model.id });
+      throw new Error(verification.reason || 'Файл модели не прошёл проверку.');
+    }
+    await setActiveModelId(model.id);
+    await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
+    publishDownload({ status: 'completed', progress: 1, written: verification.bytes || model.size, total: model.size, error: '', canResume: false });
+    return result.uri;
+  } catch (error) {
+    if (job.control) return null;
+    const detail = error?.message || '';
+    const network = /NSURLErrorDomain Code=-(?:1001|1003|1004|1005|1006|1009|1018|1020)|network|offline|internet connection|not connected/i.test(detail);
+    const canResume = network && !!checkpoint.resumeData;
+    if (checkpoint.resumeData && !canResume) await saveDownloadCheckpoint({ modelId: model.id }).catch(() => {});
+    publishDownload({
+      status: network ? 'disconnected' : 'error',
+      error: network ? 'Связь потеряна. Проверь подключение и повтори загрузку.' : detail || 'Не удалось скачать модель.',
+      canResume,
+      ...(!canResume && { written: 0, progress: 0 }),
+    });
+    throw error;
+  } finally {
+    job.settled = true;
+    if (activeDownload === job && !job.control) activeDownload = null;
+  }
+}
+
+function startModelDownload(model, checkpoint = {}) {
+  if (activeDownload) {
+    if (activeDownload.modelId === model.id && !activeDownload.control) return activeDownload.promise;
+    return Promise.reject(new Error('Другая операция с загрузкой ещё выполняется.'));
+  }
+  const job = { destination: modelPath(model), modelId: model.id, task: null, control: null };
+  activeDownload = job;
+  const written = checkpoint.resumeData ? checkpoint.written || 0 : 0;
+  publishDownload({ status: 'downloading', modelId: model.id, progress: Math.min(0.99, written / model.size), written, total: model.size, error: '', canResume: false });
+  job.promise = transferModel(model, job, checkpoint);
+  return job.promise;
+}
+
+export function downloadModel(model) {
+  return startModelDownload(model);
+}
+
+export async function pauseActiveModelDownload() {
+  const job = activeDownload;
+  if (!job?.task || job.control || downloadState.status !== 'downloading') return false;
+  job.control = 'pause';
+  publishDownload({ status: 'pausing' });
+  try {
+    const paused = await job.task.pauseAsync();
+    await job.promise;
+    if (downloadState.status === 'completed') return false;
+    const resumeData = paused?.resumeData;
+    const written = resumeData ? downloadState.written : 0;
+    await saveDownloadCheckpoint({ modelId: job.modelId, resumeData, written, total: downloadState.total });
+    publishDownload({ status: resumeData ? 'paused' : 'interrupted', canResume: !!resumeData, written, progress: written / downloadState.total, error: '' });
+    return !!resumeData;
+  } catch {
+    if (!job.settled) {
+      job.control = null;
+      if (downloadState.status === 'pausing') publishDownload({ status: 'downloading', error: 'Не удалось поставить загрузку на паузу.' });
+      return false;
+    }
+    if (downloadState.status !== 'completed') {
+      publishDownload({ status: 'interrupted', canResume: false, written: 0, progress: 0, error: 'Точка продолжения не сохранилась.' });
+    }
+    return false;
+  } finally {
+    if (activeDownload === job && job.settled) activeDownload = null;
+  }
+}
+
+export async function restorePendingModelDownload() {
+  if (activeDownload || downloadState.status !== 'idle') return;
+  const saved = await readDownloadCheckpoint();
+  if (!saved || activeDownload) return;
+  const { model, checkpoint } = saved;
+  const verification = await verifyModelFile(model);
+  if (activeDownload || downloadState.status !== 'idle') return;
+  if (verification.verified) {
+    await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
+    if (!activeDownload) publishDownload({ status: 'completed', modelId: model.id, progress: 1, total: model.size, written: verification.bytes, error: '', canResume: false });
+    return;
+  }
+  const written = checkpoint.resumeData ? checkpoint.written || 0 : 0;
+  publishDownload({
+    status: checkpoint.resumeData ? 'paused' : 'interrupted',
+    modelId: model.id, total: model.size, written, progress: Math.min(0.99, written / model.size),
+    error: '', canResume: !!checkpoint.resumeData,
+  });
+}
+
+export async function resumePendingModelDownload() {
+  const saved = await readDownloadCheckpoint();
+  if (!saved?.checkpoint.resumeData) return null;
+  return startModelDownload(saved.model, saved.checkpoint);
+}
+
+export async function cancelModelDownload() {
+  let job = activeDownload;
+  if (job?.control || downloadState.status === 'verifying') return;
+  if (!job) {
+    const saved = await readDownloadCheckpoint();
+    if (activeDownload || !saved) return;
+    job = { modelId: saved.model.id, destination: modelPath(saved.model) };
+    activeDownload = job;
+  }
+  job.control = 'cancel';
+  publishDownload({ status: 'cancelling' });
+  try {
+    await job.task?.cancelAsync();
+    await job.promise?.catch(() => {});
+    if (downloadState.status === 'completed') return;
+    await AsyncStorage.removeItem(DOWNLOAD_RESUME_KEY);
+    await FileSystem.deleteAsync(job.destination, { idempotent: true });
+    publishDownload({ status: 'cancelled', modelId: job.modelId, progress: 0, written: 0, error: '', canResume: false });
+  } catch (error) {
+    job.control = null;
+    publishDownload({ status: job.promise && !job.settled ? 'downloading' : 'error', error: error?.message || 'Не удалось отменить загрузку.' });
+    throw error;
+  } finally {
+    if (activeDownload === job && (!job.promise || job.settled)) activeDownload = null;
+  }
 }
 
 async function readTutorSessions() {

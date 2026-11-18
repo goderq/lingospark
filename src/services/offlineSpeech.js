@@ -67,7 +67,7 @@ async function runDownload(model, resumeData = null) {
   publish({ status: "downloading", modelId: model.id, progress: resumeData && existing.exists ? Math.min(0.99, (existing.size || 0) / model.size) : 0, written: resumeData && existing.exists ? existing.size || 0 : 0, total: model.size, error: "" });
   let lastProgressPublish = 0;
   let lastProgressAt = 0;
-  const task = FileSystem.createDownloadResumable(model.url, destination, {}, ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
+  const task = FileSystem.createDownloadResumable(model.url, destination, { sessionType: FileSystem.FileSystemSessionType.BACKGROUND }, ({ totalBytesWritten, totalBytesExpectedToWrite }) => {
     const total = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite : model.size;
     const progress = Math.min(1, totalBytesWritten / total);
     const now = Date.now();

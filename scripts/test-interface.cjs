@@ -340,6 +340,19 @@ async function main() {
   await act(async () => { namedButton('Повторить ответ').props.onPress(); await flush(); });
   assert.equal(tutorRequests.at(-1).args.messages.filter(item => item.role === 'user').length, userCount, 'retry must not insert the learner message twice');
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'Let’s try again. What did you enjoy today?' }); await flush(); });
+  await act(async () => chatInput().props.onChangeText('My name Ana'));
+  await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
+  await act(async () => { tutorRequests.at(-1).reject(new Error('Ошибка ответа')); await flush(); });
+  await act(async () => namedButton('Изменить реплику').props.onPress());
+  assert.equal(chatInput().props.value, 'My name Ana');
+  assert.ok(!tree.root.findByType('FlatList').props.data.some(item => item.content === 'My name Ana'));
+  await act(async () => chatInput().props.onChangeText('My name Anna'));
+  await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
+  await act(async () => { tutorRequests.at(-1).resolve({ text: 'Nice to meet you, Anna.' }); await flush(); });
+  await act(async () => namedButton('Закрепить на новой фразе').props.onPress());
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'My name is Nina.'));
+  await act(async () => namedButton('Повторить завтра').props.onPress());
+  assert.ok(namedButton('Добавлено на завтра'));
   assert.equal(namedButton('A2'), undefined, 'level controls must not take space in the chat');
   await act(async () => chatButton('Инструменты разговора').props.onPress());
   await act(async () => namedButton('Настройки диалога').props.onPress());
@@ -412,6 +425,14 @@ async function main() {
   assert.equal(chatInput().props.value, 'My name is Anna');
   await act(async () => chatButton('Раскрыть цель урока').props.onPress());
   assert.ok(namedButton('Покажи начало фразы'), 'collapsing the goal must preserve hint progress');
+  await act(async () => tree.unmount());
+  await act(async () => {
+    tree = Renderer.create(React.createElement(theme.ThemeProvider, null,
+      React.createElement(Chat, { model: { id: 'light', title: 'Лёгкий', color: '#6544DB' } })));
+    await flush();
+  });
+  assert.equal(chatInput().props.value, 'My name is Anna', 'draft survives leaving the chat tab');
+  assert.equal(tree.root.findByType('FlatList').props.data[0].content, coursePractice.opening, 'restored draft stays in its original conversation');
   await act(async () => tree.unmount());
   const Practice = load('src/screens/PracticeScreen.js').default;
   const savedExercise = { id: 'draft-question', type: 'translate', prompt: 'A saved exercise', answer: 'Hello' };
