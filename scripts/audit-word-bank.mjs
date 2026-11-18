@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { wordOverrides } from "./word-overrides.mjs";
+import { wordOverrides, wordTranscriptionOverrides } from "./word-overrides.mjs";
 
 const bank = JSON.parse(await readFile(new URL("../src/data/wordBank.json", import.meta.url), "utf8"));
 const errors = [];
@@ -14,7 +14,7 @@ for (const [index, [english, translation, transcription, stableId]] of bank.entr
   if (stableIds.has(stableId)) errors.push(`${english}: duplicate stable id ${stableId}`);
   stableIds.add(stableId);
   if (!/[а-яё]/i.test(translation)) errors.push(`${english}: no Russian text`);
-  if (/[|<>{}=]/.test(translation) || /[a-z]{2,}/i.test(translation))
+  if (/[|<>{}=]/.test(translation) || /[a-z]/i.test(translation))
     errors.push(`${english}: contaminated translation: ${translation}`);
   if (translation.length > 720) errors.push(`${english}: translation too long`);
   if (translation.split(";").length > 3)
@@ -26,6 +26,9 @@ for (const [english, expected] of Object.entries(wordOverrides)) {
   if (!entry) errors.push(`required word is missing: ${english}`);
   else if (!entry[1].startsWith(expected.split(";")[0]))
     errors.push(`${english}: expected ${expected}, received ${entry[1]}`);
+}
+for (const [english, expected] of Object.entries(wordTranscriptionOverrides)) {
+  if (bank.find(([word]) => word === english)?.[2] !== expected) errors.push(`${english}: expected IPA ${expected}`);
 }
 if (bank.length < 8000) errors.push(`dictionary is too small: ${bank.length}`);
 if (errors.length) {

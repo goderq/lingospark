@@ -4,7 +4,7 @@ import { evaluateExercise } from '../utils/answer';
 import React, { useCallback, useDeferredValue, useMemo, useState } from "react";
 import useScreenTiming from '../components/useScreenTiming';
 import DictionaryWordRow from '../components/DictionaryWordRow';
-import { normalizeWordQuery, searchDictionary, wordLearningState, wordStateLabels } from '../utils/wordDictionary';
+import { dictionaryWithoutDuplicates, normalizeWordQuery, searchDictionary, wordLearningState, wordStateLabels } from '../utils/wordDictionary';
 import {now,recordTiming} from '../utils/performance';
 import {
   Alert,
@@ -208,7 +208,7 @@ export function VocabularyScreen({ onClose }) {
   const [level, setLevel] = useState("Все");
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
-  const [catalog, setCatalog] = useState('core');
+  const [catalog, setCatalog] = useState('extended');
   const preferences = useMemo(
     () => ({
       favorites: [],
@@ -257,7 +257,7 @@ export function VocabularyScreen({ onClose }) {
       : level === "Мои"
         ? []
         : byLevel[level] || [];
-    let words = level === "Мои" ? custom : level === "Все" ? [...custom, ...baseWords] : baseWords;
+    let words = level === "Мои" ? custom : level === "Все" && custom.length ? [...custom, ...baseWords] : baseWords;
     if (hiddenIds.size) words = words.filter((word) => !hiddenIds.has(word.id));
     if (filter === "favorites")
       words = words.filter((word) => favoriteIds.has(word.id));
@@ -278,10 +278,13 @@ export function VocabularyScreen({ onClose }) {
   ]);
   const result = useMemo(() => {
     const started = now();
-    const items = searchDictionary(candidates, normalized, preferences.customTranslations);
+    const matches = searchDictionary(candidates, normalized, preferences.customTranslations);
+    const items = progress.customWords?.length && (level === 'Все' || level === 'Мои')
+      ? dictionaryWithoutDuplicates(matches)
+      : matches;
     recordTiming('dictionary_filter', now() - started);
     return { count: items.length, items };
-  }, [candidates, normalized, preferences.customTranslations]);
+  }, [candidates, normalized, preferences.customTranslations, progress.customWords, level]);
   const renderWord = useCallback(({ item: word }) => {
     const favorite = favoriteIds.has(word.id);
     const hard = hardIds.has(word.id);
@@ -330,7 +333,7 @@ export function VocabularyScreen({ onClose }) {
               {!!query && <Pressable onPress={() => setQuery("")}><Ionicons name="close-circle" size={20} color={colors.textMuted} /></Pressable>}
             </View>
             <View style={[s.dictionaryChips, { flexDirection: 'row', flexWrap: 'wrap' }]}>
-              { [['core', `Основные · ${wordBankSize.toLocaleString('ru-RU')}`], ['extended', `Вся база · ${extendedWordBankSize.toLocaleString('ru-RU')}`]].map(([id, title]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: catalog === id }} onPress={() => setCatalog(id)} style={[s.dictionaryChip, catalog === id && s.dictionaryChipActive]}><Text style={[s.dictionaryChipText, catalog === id && { color: colors.purple }]}>{title}</Text></Pressable>) }
+              { [['extended', `Вся база · ${extendedWordBankSize.toLocaleString('ru-RU')}`], ['core', `Основные · ${wordBankSize.toLocaleString('ru-RU')}`]].map(([id, title]) => <Pressable key={id} accessibilityRole="button" accessibilityState={{ selected: catalog === id }} onPress={() => setCatalog(id)} style={[s.dictionaryChip, catalog === id && s.dictionaryChipActive]}><Text style={[s.dictionaryChipText, catalog === id && { color: colors.purple }]}>{title}</Text></Pressable>) }
             </View>
             <Text style={s.dictionaryHint}>Нажми на слово, чтобы открыть значения и доступные примеры. Уровни — ориентир для обучения.</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.dictionaryChips}>

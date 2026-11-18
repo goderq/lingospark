@@ -1,6 +1,16 @@
 import { wordEstablished } from './wordSchedule.js';
 
 export const normalizeWordQuery = value => String(value || '').normalize('NFKC').toLocaleLowerCase('ru').replace(/ё/g, 'е').trim().replace(/\s+/g, ' ');
+export function dictionaryWithoutDuplicates(words) {
+  const seen = new Set();
+  return words.filter(word => {
+    const key = normalizeWordQuery(word.english).replace(/’/g, "'");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 export function wordLearningState(stats, today = new Date().toISOString().slice(0, 10)) {
   if (!stats) return 'new';
   if (stats.dueDate && stats.dueDate <= today) return 'due';
@@ -23,7 +33,8 @@ export function searchDictionary(words, query, customTranslations = {}) {
     const search = word.searchNormalized ?? normalizeWordQuery(`${word.english} ${word.fullTranslation || word.russian}`);
     if (!search.includes(key) && (!custom || !normalizeWordQuery(custom).includes(key))) continue;
     const english = word.english.toLowerCase();
-    const rank = english === key ? 0 : english.startsWith(key) ? 1 : normalizeWordQuery(custom || word.russian).startsWith(key) ? 2 : 3;
+    const russian = custom ? normalizeWordQuery(custom) : word.russianSearch ?? normalizeWordQuery(word.russian);
+    const rank = english === key ? 0 : english.startsWith(key) ? 1 : russian.startsWith(key) ? 2 : 3;
     ranked.push({ word, rank });
   }
   ranked.sort((a, b) => a.rank - b.rank || (a.word.frequency || 99999) - (b.word.frequency || 99999));

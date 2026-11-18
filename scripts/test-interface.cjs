@@ -222,7 +222,7 @@ async function main() {
   const bank = load('src/data/wordBank.js');
   const createDictionary = () => React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Dictionary, { onClose() {} }));
   await act(async () => { tree = Renderer.create(createDictionary()); await flush(); });
-  assert.equal(tree.root.findByType('FlatList').props.data.length, bank.wordBankSize, 'FlatList must receive the entire core catalog, without the 100-word cap');
+  assert.equal(tree.root.findByType('FlatList').props.data.length, bank.extendedWordBankSize, 'the dictionary must open in full-catalog mode without capping FlatList');
   const beforeExpand = new Map(rowRenders);
   const firstRow = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel?.startsWith('the, '));
   await act(async () => firstRow.props.onPress());
@@ -236,7 +236,12 @@ async function main() {
   await act(async () => { searchInput().props.onChangeText('щетка'); await flush(); });
   assert.equal(tree.root.findByType('FlatList').props.data[0].english, 'toothbrush');
   await act(async () => { searchInput().props.onChangeText(''); await flush(); });
+  await act(async () => namedButton(`Основные · ${bank.wordBankSize.toLocaleString('ru-RU')}`).props.onPress());
+  assert.equal(tree.root.findByType('FlatList').props.data.length, bank.wordBankSize);
   await act(async () => namedButton(`Вся база · ${bank.extendedWordBankSize.toLocaleString('ru-RU')}`).props.onPress());
+  await act(async () => { searchInput().props.onChangeText('lullaby'); await flush(); });
+  assert.equal(tree.root.findByType('FlatList').props.data[0].id, 'dictionary-lullaby');
+  await act(async () => { searchInput().props.onChangeText(''); await flush(); });
   assert.equal(tree.root.findByType('FlatList').props.data.length, bank.extendedWordBankSize);
   for (const mode of ['light', 'dark', 'pink']) {
     await act(async () => { controls.setMode(mode); await flush(); });

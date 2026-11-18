@@ -1,4 +1,5 @@
 import compactWordBank from "./wordBank.json";
+import wordSupplement from "./wordSupplement.json";
 import { wordLearningDetails } from "./wordLearningData";
 import { wordCandidates } from '../utils/sampling';
 import { wordExpansion } from './wordExpansion';
@@ -25,7 +26,7 @@ const emojiForLevel = {
 const existingEnglish = new Set(compactWordBank.map(([english]) => english));
 const additions = wordExpansion.filter(word => !existingEnglish.has(word.english));
 const expansionByEnglish = new Map(additions.map(word => [word.english, word]));
-export const extendedWordBank = [...compactWordBank, ...additions.map(word => [word.english, word.translation, '', `extra-${word.english}`])].map(
+const baseCatalog = [...compactWordBank, ...additions.map(word => [word.english, word.translation, '', `extra-${word.english}`])].map(
   ([english, translation, transcription, stableIndex], index) => {
     const extra = expansionByEnglish.get(english);
     const level = extra?.level || levelForIndex(index);
@@ -43,6 +44,7 @@ export const extendedWordBank = [...compactWordBank, ...additions.map(word => [w
       fullTranslation,
       searchText: `${english} ${translation} ${transcription || ""}`.toLocaleLowerCase("ru"),
       searchNormalized: normalizeWordQuery(`${english} ${translation}`),
+      russianSearch: normalizeWordQuery(variants[0] || translation),
       transcription,
       level,
       emoji: emojiForLevel[level],
@@ -52,6 +54,26 @@ export const extendedWordBank = [...compactWordBank, ...additions.map(word => [w
     };
   },
 );
+
+const supplementParts = { n: 'существительное', v: 'глагол', adj: 'прилагательное', adv: 'наречие', interj: 'междометие' };
+const extraCatalog = wordSupplement.map(([english, russian, part], index) => {
+  const level = index < 500 ? 'B1' : index < 2100 ? 'B2' : 'C1';
+  return {
+    id: `dictionary-${english}`,
+    english,
+    russian,
+    fullTranslation: russian,
+    translations: [],
+    searchNormalized: normalizeWordQuery(`${english} ${russian}`),
+    russianSearch: normalizeWordQuery(russian),
+    transcription: '',
+    level,
+    emoji: emojiForLevel[level],
+    frequency: null,
+    partOfSpeech: supplementParts[part],
+  };
+});
+export const extendedWordBank = [...baseCatalog, ...extraCatalog];
 
 const coreLimits = { A1: 700, A2: 950, B1: 1250, B2: 900, C1: 550 };
 const excludedEnglish = new Set([
@@ -68,7 +90,7 @@ const coreCounts = Object.fromEntries(wordLevels.map((level) => [level, 0]));
 // The full offline dictionary remains available, while everyday learning uses
 // a smaller frequency-first set without names, adult vocabulary and one-letter
 // corpus fragments. This keeps random sessions useful instead of merely large.
-export const wordBank = extendedWordBank.filter((word) => {
+export const wordBank = baseCatalog.filter((word) => {
   if (word.curatedAddition) return true;
   if (excludedEnglish.has(word.english) || excludedRussian.test(word.fullTranslation)) return false;
   if (word.english.length === 1 && !["a", "i"].includes(word.english)) return false;

@@ -117,7 +117,7 @@ export default function ReviewScreen() {
   const activeWordBank = catalogMode === "core" ? wordBank : extendedWordBank;
   const activeWordsByLevel = catalogMode === "core" ? wordsByLevel : extendedWordsByLevel;
   const activeCountsByLevel = catalogMode === "core" ? wordCountsByLevel : extendedWordCountsByLevel;
-  const activeWordBankSize = catalogMode === "core" ? wordBankSize : extendedWordBankSize;
+  const activeWordBankSize = activeWordBank.length;
   const favoriteIds = useMemo(
     () => new Set(preferences.favorites),
     [preferences.favorites],
@@ -262,7 +262,7 @@ export default function ReviewScreen() {
           <Text style={styles.heroEmoji}>📚</Text>
           <Text style={styles.setupTitle}>Слова в контексте</Text>
           <Text style={styles.setupSubtitle}>
-            {activeWordBankSize.toLocaleString("ru-RU")} слов работают без интернета
+            {extendedWordBankSize.toLocaleString("ru-RU")} слов в офлайн-словаре
           </Text>
         </View>
 

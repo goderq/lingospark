@@ -51,7 +51,7 @@ export const wordOverrides = {
   being: "существо; бытие; являющийся", found: "найденный; нашёл; основывать",
   sports: "спорт; спортивные занятия", following: "следующий; последующий",
   per: "за; на; в расчёте на", account: "аккаунт; счёт; учётная запись",
-  times: "разы; времена; умножить", john: "Джон", y: "игрек; буква Y",
+  times: "разы; времена; умножить", john: "Джон", y: "игрек",
   still: "всё ещё; неподвижный; тихий", save: "сохранять; спасать; кроме",
   teen: "подросток; подростковый", register: "регистрировать; регистрация; реестр",
   human: "человек; человеческий", second: "второй; секунда",
@@ -113,4 +113,8 @@ export const preferredPartsOfSpeech = {
   more: ["adv", "determiner"], about: ["preposition", "adv"],
   all: ["determiner", "pronoun", "adv"], that: ["determiner", "pronoun", "conjunction"],
   this: ["determiner", "pronoun"],
+};
+
+export const wordTranscriptionOverrides = {
+  and: '/ænd/', to: '/tuː/', this: '/ðɪs/', with: '/wɪð/', you: '/juː/', as: '/æz/', y: '/waɪ/',
 };

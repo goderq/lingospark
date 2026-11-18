@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { wordOverrides, preferredPartsOfSpeech } from "./word-overrides.mjs";
+import { wordOverrides, preferredPartsOfSpeech, wordTranscriptionOverrides } from "./word-overrides.mjs";
 
 const FREEDICT_VERSION = "2025.11.23";
 const FREEDICT_URL = `https://download.freedict.org/dictionaries/eng-rus/${FREEDICT_VERSION}/freedict-eng-rus-${FREEDICT_VERSION}.src.tar.xz`;
@@ -153,7 +153,7 @@ for (const [sourceIndex, sourceEntry] of existing.entries()) {
   result.push([
     english,
     selectedTranslations.join("; "),
-    transcription,
+    wordTranscriptionOverrides[english] || transcription,
     stableIndex,
   ]);
 }
