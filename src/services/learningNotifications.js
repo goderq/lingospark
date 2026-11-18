@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { AI_MODELS } from '../data/aiModels';
 import { localDay, planStudyReminder } from '../utils/notificationPlans';
+import { hasReviewWordCandidates } from '../utils/unifiedReview';
+import { includeCustomReviewWords, loadReviewWordIndex } from '../utils/reviewWords';
 
 const SOURCE = 'lingospark';
 const STUDY_ID = 'lingospark-study-reminder';
@@ -72,9 +74,9 @@ export function syncStudyNotification({ progress, preferences, lessons }) {
     const allowed = (preferences.review || preferences.resume) && isAllowed(await Notifications.getPermissionsAsync());
     let next = null;
     if (allowed) {
-      const hasWordHistory = Object.keys(progress.reviewStats || {}).length || progress.mistakes?.length || Object.keys(progress.reviewQueue || {}).length;
-      const words = preferences.review && hasWordHistory ? (await import('../data/wordBank')).extendedWordBank : [];
-      next = planStudyReminder({ progress, preferences, words: [...words, ...(progress.customWords || [])], lessons, now, lastDay: record.lastDay });
+      const index = preferences.review && hasReviewWordCandidates(progress) ? await loadReviewWordIndex() : new Map();
+      const words = includeCustomReviewWords(index, progress.customWords);
+      next = planStudyReminder({ progress, preferences, words, lessons, now, lastDay: record.lastDay });
     }
     if (revision !== scheduleRevision) return;
 

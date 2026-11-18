@@ -31,7 +31,7 @@ export default function ExplanationCard({
   showStatus = true,
 }) {
   useTheme();
-  const { recordExercise,reportContentIssue } = useProgressActions();
+  const { recordExercise, reportContentIssue, addConstructionReview } = useProgressActions();
   const [reportOpen,setReportOpen]=useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [mistakeOpen, setMistakeOpen] = useState(false);
@@ -225,6 +225,7 @@ export default function ExplanationCard({
                 disabled={answered}
                 onPress={() => {
                   setPracticeSelected(option);
+                  if (relevantReinforcement.construction) addConstructionReview(relevantReinforcement.construction);
                   if (relevantReinforcement.isNew) {
                     recordExercise(relevantReinforcement, right, {
                       selected: option,
@@ -252,6 +253,9 @@ export default function ExplanationCard({
                 ? "Верно — правило закреплено."
                 : `Ответ: ${relevantReinforcement.answer}. Сравни его со своим вариантом и попробуй объяснить отличие.`}
             </Text>
+          )}
+          {!!practiceSelected && !!relevantReinforcement.construction && (
+            <Text style={styles.muted}>Диалог с этой конструкцией добавлен в очередь повторения.</Text>
           )}
           {!!practiceSelected && !!relevantReinforcement.explanation && (
             <Text style={styles.muted}>{relevantReinforcement.explanation}</Text>

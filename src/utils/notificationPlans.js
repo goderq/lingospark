@@ -1,6 +1,5 @@
-import { readQuickSession } from './learningContinuation.js';
-import { readJourneyDraft, stageAvailable } from './learningJourney.js';
-import { readLessonSession } from './lessonSession.js';
+import { savedStudyTargets } from './learningContinuation.js';
+export { savedStudyTargets } from './learningContinuation.js';
 import { buildUnifiedReview } from './unifiedReview.js';
 
 export function notificationPreferences(settings) {
@@ -11,21 +10,6 @@ export function notificationPreferences(settings) {
     model: modelNotificationEnabled === true,
     hour: Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 19,
   };
-}
-
-export function savedStudyTargets(progress, lessons) {
-  const targets = [];
-  const quick = readQuickSession(progress.quickSession, progress);
-  if (quick && quick.step < 3) targets.push({ type: 'quickSession', id: quick.id });
-  const lesson = lessons.find(item => item.id === progress.lessonDraft?.lessonId);
-  if (lesson && readLessonSession(lesson, progress.lessonDraft).lessonId) targets.push({ type: 'lesson', id: lesson.id });
-  for (const [topicId, entry] of Object.entries(progress.journeys || {})) {
-    const draft = entry?.draft;
-    if (draft && stageAvailable(progress, topicId, draft.stageId) && readJourneyDraft(topicId, draft.stageId, draft).attemptId) {
-      targets.push({ type: 'journey', id: topicId, stageId: draft.stageId });
-    }
-  }
-  return targets;
 }
 
 export const localDay = time => {
@@ -50,7 +34,7 @@ export function planStudyReminder({ progress, preferences, words, lessons, now, 
     if (date.getTime() <= now || day === lastDay || (day === today && studiedToday)) continue;
     candidates.push(date.getTime());
   }
-  const wordsById = new Map(words.map(word => [word.id, word]));
+  const wordsById = words instanceof Map ? words : new Map(words.map(word => [word.id, word]));
   const dueAt = time => preferences.review && buildUnifiedReview(progress, wordsById, lessons, time, 1).length > 0;
   if (target) {
     const fireAt = candidates[0];

@@ -185,6 +185,15 @@ function AppContent() {
     if (destination.tab) setTab(destination.tab);
     setOverlay(destination.overlay);
   };
+  const openStudyTarget = (target, noticeKey) => {
+    if (target.type === 'learn') { navigate('learn'); return; }
+    if (target.type === 'lesson') {
+      const lesson = lessons.find(item => item.id === target.id);
+      if (lesson) setOverlay({ type: 'lesson', lesson, noticeKey });
+      return;
+    }
+    setOverlay({ type: target.type, topicId: target.id, stageId: target.stageId, noticeKey, shortReview: target.type === 'unifiedReview' });
+  };
   const notificationsReady = ready && navigationReady && authReady && !cloudRestoring;
   useLearningNotifications({
     ready: notificationsReady,
@@ -199,12 +208,7 @@ function AppContent() {
         setTab('ai');
       } else {
         setTab('home');
-        if (notice.kind === 'review') setOverlay({ type: 'unifiedReview', noticeKey: notice.key });
-        else if (notice.target.type === 'lesson') {
-          setOverlay({ type: 'lesson', lesson: lessons.find(item => item.id === notice.target.id), noticeKey: notice.key });
-        } else if (notice.target.type === 'journey') {
-          setOverlay({ type: 'journey', topicId: notice.target.id, stageId: notice.target.stageId, noticeKey: notice.key });
-        } else setOverlay({ type: 'quickSession', noticeKey: notice.key });
+        openStudyTarget(notice.kind === 'review' ? { type: 'unifiedReview' } : notice.target, notice.key);
       }
     },
   });
@@ -214,7 +218,7 @@ function AppContent() {
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
-  if (practiceAlias(overlay?.type)) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><PracticeScreen key={overlay.noticeKey || overlay.type} {...practiceAlias(overlay.type)} autoStartReview={!!overlay.noticeKey} reviewLimit={overlay.noticeKey ? 5 : undefined} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></ScreenFrame>;
+  if (practiceAlias(overlay?.type)) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><PracticeScreen key={overlay.noticeKey || overlay.type} {...practiceAlias(overlay.type)} autoStartReview={!!overlay.shortReview} reviewLimit={overlay.shortReview ? 5 : undefined} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></ScreenFrame>;
   if (overlay?.type === "account")
     return (
       <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}>
@@ -735,6 +739,7 @@ function AppContent() {
             onJourney={(topicId = 'greetings') => setOverlay({ type: 'journey', topicId })}
             onAccount={() => setOverlay({ type: 'account' })}
             onSyncDetails={() => setOverlay({ type: 'diagnostics' })}
+            onStartStudy={openStudyTarget}
             onQuickSession={() => setOverlay({ type: 'quickSession' })}
             onLearning={() => navigate('learn')}
             onPhrases={() => setOverlay({ type: "phrases" })}

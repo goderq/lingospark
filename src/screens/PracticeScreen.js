@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { lessons } from '../data/course';
 import { buildPracticeDeck } from '../data/practiceCatalog';
-import { buildUnifiedReview, validatePracticeSession } from '../utils/unifiedReview';
+import { buildUnifiedReview, hasReviewWordCandidates, validatePracticeSession } from '../utils/unifiedReview';
+import { includeCustomReviewWords, loadReviewWordIndex } from '../utils/reviewWords';
 import { evaluateExercise } from '../utils/answer';
 import { balancedOptions } from '../utils/shuffle';
 import { speak, stopSpeech } from '../utils/speech';
@@ -47,8 +48,9 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
     try {
       let deck;
       if (review) {
-        const { extendedWordBank } = await import('../data/wordBank');
-        deck = buildUnifiedReview(progress, [...extendedWordBank, ...(progress.customWords || [])], lessons, Date.now(), reviewLimit);
+        const now = Date.now();
+        const index = hasReviewWordCandidates(progress, now) ? await loadReviewWordIndex() : new Map();
+        deck = buildUnifiedReview(progress, includeCustomReviewWords(index, progress.customWords), lessons, now, reviewLimit);
       } else deck = presetDeck || buildPracticeDeck({ level, skill, topicId, size });
       deck = deck.map(item => ({ ...item, type: item.type || (item.options ? 'choice' : 'translate') }));
       if (!deck.length) { setError(review ? 'На сегодня очередь пуста. Новые задания появятся после занятий и нужного перерыва.' : 'Для этого сочетания пока нет заданий. Выбери другую тему или навык.'); return; }

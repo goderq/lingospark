@@ -154,7 +154,7 @@ async function main() {
   const Settings = load('src/screens/ExpansionScreens.js').SettingsScreen;
   const callbacks = new Proxy({}, { get: () => () => {} });
   for (const Component of [Home, Learning, Profile, Settings]) {
-    const props = Object.fromEntries(['onJourney', 'onLearningHub', 'onSearch', 'onBookmarks', 'onQuickSession', 'onTenses', 'onNavigate', 'onSettings', 'onAccount', 'onRetention', 'onReview', 'onAdaptive'].map(key => [key, callbacks[key]]));
+    const props = Object.fromEntries(['onJourney', 'onLearningHub', 'onSearch', 'onBookmarks', 'onQuickSession', 'onStartStudy', 'onTenses', 'onNavigate', 'onSettings', 'onAccount', 'onRetention', 'onReview', 'onAdaptive'].map(key => [key, callbacks[key]]));
     await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Probe), React.createElement(Component, props))); await flush(); });
     assert.ok(tree.toJSON(), Component.name);
     for (const mode of ['light', 'dark', 'pink']) {
@@ -166,8 +166,8 @@ async function main() {
     await act(async () => tree.unmount());
   }
   let homeStarts = 0;
-  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Home, { onQuickSession: () => homeStarts++ }))); await flush(); });
-  const startButtons = tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel === 'Начать занятие');
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(Home, { onStartStudy: target => { assert.equal(target.type, 'journey'); homeStarts++; } }))); await flush(); });
+  const startButtons = tree.root.findAllByType('Pressable').filter(node => node.props.accessibilityLabel === 'Начать следующий этап');
   assert.equal(startButtons.length, 1, 'Home must have one primary start');
   await act(async () => startButtons[0].props.onPress());
   assert.equal(homeStarts, 1);
@@ -499,6 +499,13 @@ async function main() {
   await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
   assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'a cold start by tapping a review notification opens the exercise directly');
   assert.equal(lastNotification, null);
+  await act(async () => tree.unmount());
+
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  const reviewHero = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Начать повторение');
+  assert.ok(reviewHero, 'Today recommends due exercises without opening the dictionary');
+  await act(async () => { reviewHero.props.onPress(); await flush(); });
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === savedExercise.prompt), 'the Today recommendation opens the same review as its notification');
   await act(async () => tree.unmount());
 
   await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });

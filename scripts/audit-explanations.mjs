@@ -98,6 +98,12 @@ for (const lesson of lessons) {
 }
 
 const nameExercise = lessons.flatMap((lesson) => lesson.exercises).find((item) => item.id === 'g3');
+for (const practiceVariant of [0, 1]) {
+  const linked = getRelevantReinforcement(nameExercise, true, { practiceVariant });
+  assert.equal(linked.construction, 'name');
+  assert.notEqual(linked.answer, nameExercise.answer);
+  assert.ok(!linked.prompt.includes('Анна'));
+}
 assert.ok(getAssemblyExplanation(nameExercise).includes('My name → is → Anna'));
 assert.ok(explainAssemblyAttempt(nameExercise, 'My Anna name is').includes('нарушен порядок'));
 assert.ok(explainAssemblyAttempt(nameExercise, 'My name Anna').includes('Не хватает: is'));

@@ -1,4 +1,4 @@
-import { findReinforcement } from "../data/reinforcement.js";
+import { constructionForExercise, findReinforcement } from "../data/reinforcement.js";
 import { assemblyBlocks } from '../data/assemblyNotes.js';
 import { closestAnswerAnalysis, normalizeAnswer, evaluateExercise } from './answer.js';
 import { errorFeedback } from './errorFeedback.js';
@@ -190,8 +190,8 @@ export function getExplanationExamples(item = {}, context = {}) {
 export function getRelevantReinforcement(item = {}, enabled = true, context = {}) {
   if (!enabled) return null;
   const linked = findReinforcement(item, context);
-  if (linked && linked.prompt !== item.prompt) {
-    return { ...linked, id: `${item.id || item.prompt}-linked`, sourceId: item.id || null, isNew: true };
+  if (linked && normalizeAnswer(linked.prompt) !== normalizeAnswer(item.prompt)) {
+    return { ...linked, id: `${item.id || item.prompt}-linked`, sourceId: item.id || null, construction: constructionForExercise(item), isNew: true };
   }
   // Never disguise the original question as a new task by adding a prefix.
   // A section without a reviewed linked task simply has no reinforcement button.

@@ -478,7 +478,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   useTheme();
   const keyboard = useKeyboardDock();
   const progress = useProgressSelector(({ progress: value }) => ({ notebook: value.notebook, customWords: value.customWords, mistakes: value.mistakes }));
-  const { toggleNotebook, addCustomWord, addReviewPhrase } = useProgressActions();
+  const { toggleNotebook, addCustomWord, addReviewPhrase, addConstructionReview } = useProgressActions();
   const [restoredDraft] = useState(() => {
     const draft = tabDrafts.get(model.id);
     return practice?.requestId && practice.requestId !== draft?.coursePractice?.requestId ? null : draft;
@@ -1183,7 +1183,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
               <Text style={styles.smallMuted}>{followUp.explanation}</Text>
               <MiniLesson exercises={followUpExercises} />
               <Pressable accessibilityRole="button" disabled={practiceSavedFor === lastLearner.id} onPress={() => {
-                addReviewPhrase(followUp.review);
+                addConstructionReview(followUp.construction);
                 setPracticeSavedFor(lastLearner.id);
               }} style={styles.routeLink}><Text style={styles.speakText}>{practiceSavedFor === lastLearner.id ? 'Добавлено на завтра' : 'Повторить завтра'}</Text></Pressable>
             </>}

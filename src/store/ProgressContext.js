@@ -19,7 +19,7 @@ import { readQuickSession } from '../utils/learningContinuation';
 import { createSelectorStore, shallowEqual } from '../utils/selectorStore';
 import { createPersistenceQueue } from '../utils/persistenceQueue';
 import { applyRewardPolicy } from '../utils/rewardPolicy';
-import { finishPracticeSession, validatePracticeSession, enqueuePhrase } from '../utils/unifiedReview';
+import { finishPracticeSession, validatePracticeSession, enqueuePhrase, enqueueConstructionReview } from '../utils/unifiedReview';
 import { advanceWordReview } from '../utils/wordSchedule';
 import { readWordSession } from '../utils/wordSession';
 import { recoverStoredProgress, parseBackup } from '../utils/snapshot';
@@ -266,6 +266,7 @@ export function ProgressProvider({ children }) {
     return next;
   });
   const addReviewPhrase = phrase => setProgress(old => enqueuePhrase(old, phrase));
+  const addConstructionReview = construction => setProgress(old => enqueueConstructionReview(old, construction));
   const clearPracticeDraft = key => setProgress(old => ({ ...old, practiceDrafts: { ...old.practiceDrafts, [key]: null } }));
   const saveQuickSession = session => setProgress(old => !readQuickSession(session, old) || JSON.stringify(old.quickSession) === JSON.stringify(session) ? old : { ...old, quickSession: session });
   const saveWordSession = draft => {
@@ -1347,6 +1348,7 @@ export function ProgressProvider({ children }) {
       savePracticeDraft,
       completePractice,
       addReviewPhrase,
+      addConstructionReview,
       clearPracticeDraft,
       saveQuickSession,
       saveWordSession,

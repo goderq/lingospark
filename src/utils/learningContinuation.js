@@ -1,5 +1,7 @@
 import { learningJourneys, getJourney } from '../data/learningJourney.js';
-import { isJourneyUnlocked, stageAvailable } from './learningJourney.js';
+import { isJourneyUnlocked, stageAvailable, readJourneyDraft } from './learningJourney.js';
+import { readLessonSession } from './lessonSession.js';
+import { validatePracticeSession } from './unifiedReview.js';
 
 export function nextLearningStep(progress, requestedId) {
   const requested = getJourney(requestedId);
@@ -16,4 +18,32 @@ export function readQuickSession(saved, progress) {
   if (saved.stageId && !journey.stages.some(item => item.id === saved.stageId && stageAvailable(progress, journey.id, item.id))) return null;
   if (saved.results.some(item => !item || !Number.isInteger(item.correct) || !Number.isInteger(item.total) || item.correct < 0 || item.total < item.correct || typeof item.skipped !== 'boolean')) return null;
   return saved;
+}
+
+export function savedStudyTargets(progress, lessons) {
+  const targets = [];
+  const quick = readQuickSession(progress.quickSession, progress);
+  if (quick && quick.step < 3) targets.push({ type: 'quickSession', id: quick.id });
+  const lesson = lessons.find(item => item.id === progress.lessonDraft?.lessonId);
+  if (lesson && readLessonSession(lesson, progress.lessonDraft).lessonId) targets.push({ type: 'lesson', id: lesson.id });
+  for (const [topicId, entry] of Object.entries(progress.journeys || {})) {
+    const draft = entry?.draft;
+    if (draft && stageAvailable(progress, topicId, draft.stageId) && readJourneyDraft(topicId, draft.stageId, draft).attemptId) {
+      targets.push({ type: 'journey', id: topicId, stageId: draft.stageId });
+    }
+  }
+  return targets;
+}
+
+export function todayStudyAction(progress, lessons, reviewCount) {
+  const target = savedStudyTargets(progress, lessons)[0];
+  if (target) return { kind: 'resume', target };
+  const draft = progress.practiceDrafts?.['unified-review'];
+  if (draft?.mode === 'review' && validatePracticeSession(draft)) {
+    return { kind: 'resume', target: { type: 'unifiedReview' } };
+  }
+  if (reviewCount) return { kind: 'review', count: reviewCount, target: { type: 'unifiedReview' } };
+  if (learningJourneys.every(topic => progress.completed?.includes(topic.id))) return { kind: 'browse', target: { type: 'learn' } };
+  const step = nextLearningStep(progress);
+  return { kind: 'next', step, target: { type: step.stageId ? 'journey' : 'courseTest', id: step.topicId, stageId: step.stageId } };
 }

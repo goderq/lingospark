@@ -36,6 +36,7 @@ function varyGap(item, context) {
 }
 
 export const courseReinforcement = {
+  g3: task('Представиться по имени', 'Ты на первом занятии. Представься группе как Эмма.', 'My name is Emma.', ['My name Emma.', 'My name am Emma.'], 'После My name нужна связка is. Форма am употребляется с I.'),
   'j-understand-1': task('Начать встречу', 'Ты впервые видишь нового одноклассника. Как начать знакомство?', 'Hello!', ['Goodbye!', 'Good night!'], 'Hello начинает разговор. Goodbye завершает встречу, Good night говорят перед сном.'),
   'j-understand-2': task('Представиться', 'Тебя зовут Эмма. Выбери правильное представление.', 'My name is Emma.', ['My name am Emma.', 'My name Emma.'], 'My name требует is. Если начать с I, нужна другая конструкция: I am Emma.'),
   'j-understand-3': task('Представить другого', 'Познакомь собеседника со своим другом Максом.', 'This is my friend Max.', ['My name is Max.', 'This my friend Max.'], 'This is представляет другого человека. My name is называет самого говорящего.'),
@@ -76,6 +77,7 @@ export const tenseReinforcement = {
 };
 
 const alternateCourseTasks = {
+  g3: task('Представиться по имени', 'Ты встретился с новым соседом. Скажи ему, что тебя зовут Алекс.', 'My name is Alex.', ['My name Alex.', 'My name are Alex.'], 'My name в единственном числе, поэтому связываем его с именем с помощью is.'),
   g1: task('Приветствие', 'Ты начинаешь дружеское сообщение однокласснику. Какая первая реплика подходит?', 'Hey!', ['See you!', 'Sorry!'], 'Hey — неформальное приветствие. See you используют при прощании, Sorry — для извинения.'),
   g2: task('Имя собеседника', 'На языковой встрече ты ещё не знаешь имени партнёра. Что спросить?', 'What is your name?', ['What time is it?', 'Where is the station?'], 'Name означает имя. What time спрашивает время, Where is the station — расположение вокзала.'),
   'mega-greetings-2': task('Представить друга', 'Познакомь коллегу со своим другом Дэвидом.', 'This is my friend David', ['My name is David', 'Nice to meet you'], 'This is… представляет другого человека. My name is… называет твоё собственное имя.'),
@@ -85,6 +87,14 @@ const alternateCourseTasks = {
   pa1: task('Прошлая форма go', 'Last Sunday, we ___ to the park.', 'went', ['go', 'gone'], 'Last Sunday — завершённое прошлое. Нужна форма Past Simple: went. Gone используется с вспомогательным have.'),
   ph2: task('Снять одежду', 'Please ___ your hat before the ceremony.', 'take off', ['turn off', 'put off'], 'Take off означает снять одежду. Turn off — выключить, put off — отложить событие.'),
 };
+
+const constructionByExercise = {
+  g3: 'name', 'j-understand-2': 'name', 'j-phrases-1': 'name',
+  'j-understand-3': 'introduceFriend', 'j-phrases-2': 'introduceFriend', 'mega-greetings-2': 'introduceFriend',
+  pa2: 'pastQuestion', c2: 'bill',
+};
+
+export const constructionForExercise = item => constructionByExercise[item.sourceExerciseId || item.id];
 
 export function findReinforcement(item, context = {}) {
   if (item.sourceExerciseId) item = { ...item, id: item.sourceExerciseId };

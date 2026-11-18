@@ -1,7 +1,8 @@
 const assert = require('node:assert/strict');
 const load = require('./load-data.cjs');
 const { notificationPreferences, planStudyReminder, localDay, savedStudyTargets } = load('src/utils/notificationPlans');
-const { enqueuePhrase } = load('src/utils/unifiedReview');
+const { todayStudyAction } = load('src/utils/learningContinuation');
+const { buildUnifiedReview, enqueueConstructionReview, hasReviewWordCandidates, enqueuePhrase } = load('src/utils/unifiedReview');
 const { lessonContentKey } = load('src/utils/lessonSession');
 const { lessons } = load('src/data/course');
 
@@ -22,6 +23,16 @@ assert.deepEqual(savedStudyTargets({ lessonDraft: { ...lessonDraft, contentKey: 
 
 const plan = (progress, options = {}) => planStudyReminder({ progress, preferences, words: [], lessons, now: morning, ...options });
 assert.equal(plan({}), null);
+assert.equal(todayStudyAction({}, lessons, 0).target.type, 'journey');
+assert.equal(todayStudyAction({}, lessons, 2).target.type, 'unifiedReview');
+assert.deepEqual(todayStudyAction({ lessonDraft }, lessons, 2).target, target);
+assert.equal(hasReviewWordCandidates({ reviewQueue: { a: { exercise: { wordId: 'word' }, dueAt: at(6) } } }, morning), false);
+const construction = enqueueConstructionReview({}, 'name', morning);
+assert.equal(enqueueConstructionReview(construction, 'name', morning), construction);
+assert.equal(buildUnifiedReview(construction, [], lessons, morning).length, 0);
+const dialogue = buildUnifiedReview(construction, [], lessons, at(6))[0];
+assert.equal(dialogue.answer, 'My name is Kate.');
+assert.ok(dialogue.context.includes('What’s your name?'));
 assert.deepEqual(plan({ lessonDraft }), { kind: 'resume', fireAt: at(5), target });
 const date = new Date(morning).toISOString().slice(0, 10);
 assert.deepEqual(plan({ lessonDraft, activity: { [date]: 1 } }), { kind: 'resume', fireAt: at(6), target });

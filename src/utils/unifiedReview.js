@@ -1,3 +1,4 @@
+import { constructionReviews } from '../data/constructionPractice.js';
 import { snapshotKey } from './snapshot.js';
 import { evaluateExercise, normalizeAnswer } from './answer.js';
 import { retentionSummary, retentionDeck, DAY } from './retention.js';
@@ -9,6 +10,16 @@ const dueTime = value => typeof value === 'number' ? value : Date.parse(value ||
 const wordMistake = /^review-(.*)-(en-ru|ru-en)$/;
 const isDueWordStat = (stats, now) => !!stats?.total && dueTime(stats.dueDate) <= now;
 const canReviewWord = (id, byId, hidden) => byId.has(id) && !hidden.has(id);
+
+export function hasReviewWordCandidates(progress, now = Infinity) {
+  const hidden = new Set(progress.wordPreferences?.hidden);
+  return Object.entries(progress.reviewStats || {}).some(([id, stats]) => !hidden.has(id) && isDueWordStat(stats, now)) ||
+    Object.values(progress.reviewQueue || {}).some(entry => entry?.exercise?.wordId && !hidden.has(entry.exercise.wordId) && entry.dueAt <= now) ||
+    (progress.mistakes || []).some(mistake => {
+      const match = mistake.id?.match(wordMistake);
+      return match && !hidden.has(match[1]) && dueTime(mistake.nextReviewAt) <= now;
+    });
+}
 
 export function countDueReviewWords(progress, words, now = Date.now()) {
   const byId = new Set(words.map(word => word.id));
@@ -133,4 +144,15 @@ export function enqueuePhrase(progress, phrase, now = Date.now()) {
   const id = reviewId(item);
   if (progress.reviewQueue?.[id]) return progress;
   return { ...progress, reviewQueue: { ...progress.reviewQueue, [id]: { id, exercise: item, dueAt: now + DAY, streak: 0, attempts: 0, reason: 'Сохранённая фраза из разговора' } } };
+}
+
+export function enqueueConstructionReview(progress, construction, now = Date.now()) {
+  if (!Object.hasOwn(constructionReviews, construction)) return progress;
+  const exercise = constructionReviews[construction];
+  const id = reviewId(exercise);
+  if (progress.reviewQueue?.[id]) return progress;
+  const tomorrow = new Date(now);
+  tomorrow.setHours(24, 0, 0, 0);
+  const entry = { id, exercise, dueAt: tomorrow.getTime(), streak: 0, attempts: 0, reason: 'Та же конструкция в новом диалоге' };
+  return { ...progress, reviewQueue: { ...progress.reviewQueue, [id]: entry } };
 }
