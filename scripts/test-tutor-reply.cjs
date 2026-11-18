@@ -53,6 +53,16 @@ async function main() {
   outputs.push('«How are you?» — «Как дела?»');
   const translated = await ai.completeTutorMessage({ model: ai.AI_MODELS[0], level: 'A2', topic: 'Свободный разговор', messages: [{ role: 'user', kind: 'command', action: 'translate', content: 'Переведи How are you?' }] });
   assert.ok(translated.text.includes('Как дела'));
+  const { interviewContext, interviewProgress } = load(path.join(__dirname, '../src/utils/interview'));
+  const interviewMessages = [{ role: 'user', id: 'candidate-1', content: 'I have experience in customer service.', interviewStepId: 'intro' }];
+  const scenarioContext = interviewContext(interviewProgress([]), interviewProgress(interviewMessages));
+  for (const model of ai.AI_MODELS.slice(0, 3)) {
+    outputs.push('Спасибо за ответ.', 'Customer service experience is relevant to this role.');
+    await ai.completeTutorMessage({ model, level: 'A2', topic: 'Работа', dialogueMode: 'interview', messages: interviewMessages, scenarioContext });
+    for (const call of nativeCalls.slice(-2)) {
+      assert.match(call.messages[0].content, /React to a concrete detail/, 'interview guidance survives context budgeting and repair');
+    }
+  }
   assert.equal(outputs.length, 0);
   console.log('Tutor passed: actual service prompts/context, English A1–C1, short-repeat repair, explicit translation, rejected second failure, cancellation, buffered output and keyboard coordinate cases. Native model quality and keyboard movement still need an iPhone.');
 }

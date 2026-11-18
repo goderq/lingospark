@@ -2,6 +2,7 @@ import { evaluateExercise } from '../utils/answer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { courseTutorContext } from '../utils/learningJourney';
 import { courseDialogueEvidence, learnerTurns } from '../utils/conversationCoach';
+import { interviewContext, interviewProgress, interviewReview } from '../utils/interview';
 import ToolSheet from '../components/ToolSheet';
 import useKeyboardDock from '../components/useKeyboardDock';
 import {
@@ -77,6 +78,7 @@ const TOPICS = ["Свободный разговор", "Путешествия",
 const DIALOGUE_MODES = [
   { id: "conversation", title: "Живой", icon: "chatbubbles", hint: "Вопросы, выбор и неожиданные повороты" },
   { id: "roleplay", title: "Ролевая игра", icon: "people", hint: "ИИ остаётся персонажем выбранной ситуации" },
+  { id: "interview", title: "Собеседование", icon: "briefcase-outline", hint: "Представься, расскажи об опыте и задай вопрос" },
   { id: "debate", title: "Дебаты", icon: "megaphone", hint: "Защищай мнение и отвечай на возражения" },
   { id: "story", title: "История", icon: "book", hint: "Продолжай сюжет через решения A или B" },
   { id: "strict", title: "Строгий", icon: "school", hint: "Каждая ошибка разбирается коротко и точно" },
@@ -93,7 +95,9 @@ const RESPONSE_ACTIONS = [
 const welcomeFor = (level, topic, modeId = "conversation") => ({
   id: `welcome-${Date.now()}`,
   role: "assistant",
-  content: modeId === "roleplay"
+  content: modeId === "interview"
+    ? 'Thanks for coming in today. Let’s start with your background.'
+    : modeId === "roleplay"
     ? 'Let’s practise a real situation. Where are we, and who am I?'
     : modeId === "debate"
       ? 'Let’s discuss an opinion. What would you like to debate?'
@@ -434,9 +438,16 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   useEffect(() => { setGoalSummaryOpen(false); }, [coursePractice?.topicId, coursePractice?.requestId]);
   useEffect(() => { setLessonHelp(0); }, [coursePractice?.topicId, coursePractice?.requestId]);
   const [dialogueMode, setDialogueMode] = useState("conversation");
+  const [interviewHint, setInterviewHint] = useState(null);
+  const [interviewSummary, setInterviewSummary] = useState(false);
   const [mission, setMission] = useState(null);
   const [missionOpen, setMissionOpen] = useState(false);
   const [messages, setMessages] = useState([welcomeFor("A2", TOPICS[0])]);
+  const interview = useMemo(() => dialogueMode === 'interview' ? interviewProgress(messages) : null, [dialogueMode, messages]);
+  const interviewEnded = !!interview && (!interview.next || messages.length >= 56);
+  const review = useMemo(() => interview && (interviewSummary || interviewEnded) ? interviewReview(messages) : null, [interview, interviewSummary, interviewEnded, messages]);
+  const interviewExercises = useMemo(() => review?.exercise ? [review.exercise] : [], [review?.exercise]);
+  const lastInterviewAttempt = interview?.attempts.at(-1);
   const evidenceKey = learnerTurns(messages).map(item => item.content).join('\u0000');
   const dialogueEvidence = useMemo(() => coursePractice?.topicId ? courseDialogueEvidence(coursePractice.topicId, messages) : [], [coursePractice?.topicId, evidenceKey]);
   const dialogueTurns = useMemo(() => learnerTurns(messages).length, [messages]);
@@ -543,7 +554,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         topic,
         dialogueMode,
         coursePractice,
-        title: firstUser ? firstUser.slice(0, 42) : topic,
+        title: dialogueMode === 'interview' ? 'Собеседование' : firstUser ? firstUser.slice(0, 42) : topic,
         messages: cleanMessages,
         analysis,
         createdAt: sessions.find((item) => item.id === sessionId)?.createdAt || Date.now(),
@@ -575,11 +586,11 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
     : liveMissionProgress;
 
   useEffect(() => {
-    if (!mission || !missionProgress.completed || mission.alreadyCompleted) return;
+    if (interview || !mission || !missionProgress.completed || mission.alreadyCompleted) return;
     markTutorMissionCompleted(mission.id)
       .then(() => setMission((current) => current?.id === mission.id ? { ...current, alreadyCompleted: true } : current))
       .catch(() => {});
-  }, [mission?.id, mission?.alreadyCompleted, missionProgress.completed]);
+  }, [dialogueMode, mission?.id, mission?.alreadyCompleted, missionProgress.completed]);
 
   const startListening = async () => {
     setError("");
@@ -634,6 +645,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   const submitMessage = async (rawText, options = {}) => {
     const text = String(rawText || "").trim();
     if (!text || generating || requestRef.current || !modelReady) return;
+    if (interviewEnded && !options.retry) return;
     Keyboard.dismiss();
     if (options.kind !== "command") setInput("");
     setOpenActionsId(null);
@@ -650,8 +662,13 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       displayContent: options.displayContent || text,
       kind: options.kind || "message",
       action: options.action || null,
+      ...(interview?.next && options.kind !== 'command' ? { interviewStepId: interview.next.id } : {}),
     };
     const nextMessages = (options.retry ? messages.filter(item => item.id !== 'streaming') : [...messages, userMessage]).slice(-59);
+    let scenarioContext = '';
+    if (interview && options.kind !== 'command') {
+      scenarioContext = interviewContext(interviewProgress(nextMessages.slice(0, -1)), interviewProgress(nextMessages));
+    }
     setMessages([...nextMessages, { id: "streaming", role: "assistant", content: "" }]);
     setGenerating(true);
     generationText.current = "";
@@ -662,6 +679,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         topic,
         dialogueMode,
         courseContext: courseTutorContext(coursePractice, level, topic, progress),
+        scenarioContext,
         messages: nextMessages,
         analysis,
         signal: request.signal,
@@ -687,7 +705,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         level,
         topic,
         dialogueMode,
-        title: nextMessages.find((item) => item.role === "user")?.content?.slice(0, 42) || topic,
+        title: dialogueMode === 'interview' ? 'Собеседование' : nextMessages.find((item) => item.role === "user")?.content?.slice(0, 42) || topic,
         coursePractice,
         messages: completedMessages.slice(-60),
         analysis,
@@ -744,16 +762,22 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   const speakMessage = (text) => speak(text, { language: "en-US", rate: 0.88 });
   const progressLabel = loadProgress > 0 ? `${Math.round(loadProgress * 100)}%` : "подготовка";
 
-  const newConversation = () => {
+  const startConversation = (mode) => {
     if (requestRef.current) return;
     setCoursePractice(null);
     const id = `ai-${Date.now()}`;
     setSessionId(id);
-    setMessages([welcomeFor(level, topic, dialogueMode)]);
+    setDialogueMode(mode);
+    if (mode === 'interview') setTopic('Работа');
+    setMessages([welcomeFor(level, topic, mode)]);
+    setInterviewHint(null);
+    setInterviewSummary(false);
+    setInput('');
     setAnalysis(null);
     setRetryRequest(null); setError('');
     setHistoryOpen(false);
   };
+  const newConversation = () => startConversation(dialogueMode);
 
   const openSession = (session) => {
     if (requestRef.current) return;
@@ -762,6 +786,9 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
     setLevel(session.level || "A2");
     setTopic(session.topic || TOPICS[0]);
     setDialogueMode(session.dialogueMode || "conversation");
+    setInterviewSummary(false);
+    setInterviewHint(null);
+    setInput('');
     setMessages(session.messages?.length ? session.messages : [welcomeFor(session.level || "A2", session.topic || TOPICS[0], session.dialogueMode)]);
     setAnalysis(session.analysis || null);
     setRetryRequest(null); setError('');
@@ -876,6 +903,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         </View>
         <Pressable accessibilityLabel={keyboardVisible ? 'Скрыть клавиатуру' : 'Инструменты разговора'} onPress={() => { Keyboard.dismiss(); if (!keyboardVisible) setToolsOpen(true); }} style={styles.headerButton}><Ionicons name={keyboardVisible ? 'chevron-down' : 'ellipsis-horizontal'} size={25} color={colors.text} /></Pressable>
         <ToolSheet visible={toolsOpen} onClose={() => setToolsOpen(false)} title="Твой разговор" actions={[
+          { title: 'Новое собеседование', detail: 'Три шага и короткий разбор', icon: 'briefcase-outline', onPress: () => startConversation('interview') },
           { title: 'Голосовой режим', detail: 'Практика речи с собеседником', icon: 'mic-outline', onPress: onVoice },
           { title: 'История разговоров', detail: 'Открой сохранённый диалог вручную', icon: 'time-outline', onPress: () => setHistoryOpen(true) },
           { title: 'Локальные модели', detail: 'Выбрать и скачать модель', icon: 'hardware-chip-outline', onPress: onModels },
@@ -889,7 +917,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
               <Text style={[styles.chipText, level === item && styles.chipTextActive]}>{item}</Text>
             </Pressable>
           ))}
-          {TOPICS.map((item) => (
+          {!interview && TOPICS.map((item) => (
             <Pressable key={item} disabled={generating} onPress={() => { setTopic(item); setCoursePractice(null); }} style={[styles.topicChip, topic === item && styles.topicChipActive]}>
               <Text style={[styles.topicText, topic === item && { color: colors.white }]}>{item}</Text>
             </Pressable>
@@ -917,7 +945,11 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
           {DIALOGUE_MODES.map((item) => {
             const active = dialogueMode === item.id;
             return (
-              <Pressable key={item.id} disabled={generating} onPress={() => { setDialogueMode(item.id); setCoursePractice(null); }} style={[styles.modeChip, active && styles.modeChipActive]}>
+              <Pressable key={item.id} disabled={generating} onPress={() => {
+                if (active) return;
+                if (interview || item.id === 'interview') startConversation(item.id);
+                else { setDialogueMode(item.id); setCoursePractice(null); }
+              }} style={[styles.modeChip, active && styles.modeChipActive]}>
                 <Ionicons name={item.icon} size={15} color={active ? colors.purple : colors.textMuted} />
                 <Text style={[styles.modeText, active && { color: colors.text }]}>{item.title}</Text>
               </Pressable>
@@ -949,7 +981,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
           scrollEventThrottle={80}
           onContentSizeChange={() => { if (followTail.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
           onLayout={() => { if (followTail.current) scrollRef.current?.scrollToEnd({ animated: false }); }}
-          ListHeaderComponent={mission ? (
+          ListHeaderComponent={mission && !interview ? (
             <View style={[styles.missionCard, missionProgress.completed && styles.missionCardDone]}>
               <Pressable accessibilityRole="button" accessibilityState={{ expanded: missionOpen }} onPress={() => setMissionOpen(value => !value)} style={[styles.missionTop, { minHeight: 44 }]}>
                 <View style={[styles.missionIcon, missionProgress.completed && { backgroundColor: "rgba(46,211,183,0.16)" }]}>
@@ -1016,7 +1048,43 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
               </View>
             </View>
           ); }}
-          ListFooterComponent={messages.filter((item) => item.role === "user" && item.kind !== "command").length >= 2 ? (
+          ListFooterComponent={interview ? (
+            <View style={{ gap: 12, paddingTop: 12 }}>
+              {!interviewEnded && !generating && !retryRequest && <>
+                <View style={styles.exerciseCard}>
+                  <Text style={styles.exerciseCount}>Собеседование · шаг {interview.completed.length + 1} из 3</Text>
+                  <Text style={styles.smallMuted}>{interview.next.goal}</Text>
+                  <Text accessibilityLiveRegion="polite" style={styles.exercisePrompt}>{interview.next.question}</Text>
+                  <Pressable accessibilityRole="button" onPress={() => speakMessage(interview.next.question)} style={styles.routeLink}><Text style={styles.speakText}>Послушать вопрос</Text></Pressable>
+                  <Pressable accessibilityRole="button" accessibilityState={{ expanded: interviewHint === interview.next.id }} onPress={() => setInterviewHint(value => value === interview.next.id ? null : interview.next.id)} style={styles.routeLink}>
+                    <Text style={styles.speakText}>{interviewHint === interview.next.id ? 'Скрыть подсказку' : 'Подсказка'}</Text>
+                  </Pressable>
+                  {interviewHint === interview.next.id && <Text style={styles.smallMuted}>{interview.next.hint}</Text>}
+                  {lastInterviewAttempt?.step.id === interview.next.id && /[a-z]{2,}/i.test(lastInterviewAttempt.text) && <Pressable accessibilityRole="button" style={styles.routeLink} onPress={() => {
+                    setMessages(current => current.map(item => item.id === lastInterviewAttempt.id ? { ...item, interviewConfirmed: true } : item));
+                  }}><Text style={styles.speakText}>Мой ответ по теме · следующий шаг</Text></Pressable>}
+                </View>
+                {interview.attempts.length > 0 && <Pressable accessibilityRole="button" accessibilityState={{ expanded: interviewSummary }} onPress={() => setInterviewSummary(value => !value)} style={styles.routeLink}>
+                  <Text style={styles.speakText}>{interviewSummary ? 'Свернуть разбор' : 'Короткий разбор'}</Text>
+                </Pressable>}
+              </>}
+              {!generating && review && <>
+                <View style={styles.exerciseCard}>
+                  <Text style={styles.exercisePrompt}>Итог собеседования</Text>
+                  <Text style={styles.smallMuted}>Пройдено шагов — {review.completed.length} из 3.</Text>
+                  {review.completed.some(item => item.confirmed) && <Text style={styles.smallMuted}>Ты самостоятельно подтвердил часть ответов по теме.</Text>}
+                  {review.strength && <Text style={styles.exerciseOptionText}>Удачная фраза — «{review.strength.text}»</Text>}
+                  {review.mistake ? <>
+                    <Text style={styles.exerciseOptionText}>Твоя фраза — «{review.mistake.original}»</Text>
+                    <Text style={styles.exerciseOptionText}>Исправление — «{review.mistake.corrected}»</Text>
+                    <Text style={styles.smallMuted}>{review.mistake.explanation}</Text>
+                  </> : <Text style={styles.smallMuted}>Среди проверяемых конструкций явной ошибки не найдено.</Text>}
+                </View>
+                <MiniLesson exercises={interviewExercises} />
+                {interviewEnded && <Pressable accessibilityRole="button" onPress={newConversation} style={styles.routeLink}><Text style={styles.speakText}>Начать новое собеседование</Text></Pressable>}
+              </>}
+            </View>
+          ) : dialogueTurns >= 2 ? (
             <Pressable disabled={generating} onPress={runAnalysis} style={styles.analysisBanner}>
               <View style={styles.analysisBannerIcon}>
                 <Ionicons name="school" size={23} color={colors.orange} />
@@ -1039,7 +1107,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         </View>
       ) : null}
 
-      <View style={[styles.composer, { marginBottom: keyboardVisible ? 0 : 82 }]}>
+      {(!interviewEnded || generating) && <View style={[styles.composer, { marginBottom: keyboardVisible ? 0 : 82 }]}>
         <Pressable onPress={startListening} disabled={!modelReady || generating || speechTranscribing} style={[styles.micButton, listening && styles.micActive]}>
           {speechTranscribing ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name={listening ? "stop" : "mic"} size={22} color={colors.text} />}
         </Pressable>
@@ -1064,7 +1132,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         >
           <Ionicons name={generating ? "stop" : "arrow-up"} size={22} color={colors.onAccent} />
         </Pressable>
-      </View>
+      </View>}
     </View>
   );
 }

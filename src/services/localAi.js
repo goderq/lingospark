@@ -617,6 +617,7 @@ function systemPrompt(level, topic, analysis, turnNumber = 1, dialogueMode = "co
   const modes = {
     conversation: "Be a conversation partner. React to the learner's answer, add one concrete detail and ask at most one related question.",
     roleplay: "Stay in your character and advance the scene by one event. Do not answer for the learner.",
+    interview: "Play the interviewer. Let the app guide the interview steps and respond to the learner's own words.",
     debate: "Discuss one claim at a time. Give a reason or a counterexample and invite a response.",
     story: "Continue the shared story briefly, then offer choices A and B. Let the learner decide.",
     strict: "Respond to meaning first. Correct only a real error with a short English explanation, then set one related task without its answer.",
@@ -642,13 +643,13 @@ function compactConversationContext(messages) {
   return parts.join(". ").slice(0, 900);
 }
 
-async function improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes }) {
+async function improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes, scenarioContext = '' }) {
   const context = messages.slice(-8).map((item) => `${item.role === "user" ? "Ученик" : "Lingo"}: ${item.content}`).join("\n");
   const result = await completeWithGuard(llama, {
     messages: [
       {
         role: "system",
-        content: `Rewrite the English tutor reply. Output only the final reply, no commentary about editing. Level: ${level}. Mode: ${dialogueMode}. Respond to the latest learner message. Resolve the listed problems. If the learner says what?, explain your previous question simply, do not greet again. Use 1–4 sentences and at most one new question. Never repeat a recent answer or question. Do not invent errors. ${tutorLanguageRule(messages)}`,
+        content: `Rewrite the English tutor reply. Output only the final reply, no commentary about editing. Level: ${level}. Mode: ${dialogueMode}. Respond to the latest learner message. Resolve the listed problems. If the learner says what?, explain your previous question simply, do not greet again. Use 1–4 sentences and at most one new question. Never repeat a recent answer or question. Do not invent errors. ${scenarioContext} ${tutorLanguageRule(messages)}`,
       },
       {
         role: "user",
@@ -664,12 +665,12 @@ async function improveTutorReply({ llama, draft, messages, level, dialogueMode, 
   return result;
 }
 
-async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken, onStatus, signal, courseContext = '' }) {
+async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = "conversation", messages, analysis, onToken, onStatus, signal, courseContext = '', scenarioContext = '' }) {
   const llama = await loadModelUnsafe(model);
   const settings = await getAiSettings();
   const tutorMemory = await loadTutorMemory();
   const tutorFeedback = await loadTutorFeedback();
-  const mission = getDailyTutorMission({ level, topic, memory: tutorMemory });
+  const mission = dialogueMode === 'interview' ? null : getDailyTutorMission({ level, topic, memory: tutorMemory });
   const turnNumber = messages.filter((item) => item.role === "user" && item.kind !== "command").length;
   const lastUserText = [...messages].reverse().find((item) => item.role === "user")?.content || "";
   const grammarNotes = lastUserText.trim().split(/\s+/).length <= 2 && topic !== 'Грамматика' ? '' : grammarNotesFor(lastUserText, topic, level, tutorMemory);
@@ -683,7 +684,7 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
     generate: () => completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext + dialogueGuidance(messages) + '\n' + tutorLanguageRule(messages) }, ...history],
+      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext + '\n' + (scenarioContext || dialogueGuidance(messages)) + '\n' + tutorLanguageRule(messages) }, ...history],
       n_predict: isLightModel(model) ? 190 : 280,
       temperature: 0.76,
       top_k: 40,
@@ -693,7 +694,7 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
     undefined,
     90000,
   ),
-    repair: (draft, problems) => improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes }),
+    repair: (draft, problems) => improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, grammarNotes, scenarioContext }),
   });
   onToken?.(result.text || '');
   return result;

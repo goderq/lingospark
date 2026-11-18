@@ -27,7 +27,7 @@ class Value { constructor(value) { this.value = value; } setValue(value) { this.
 const animate = (value, options) => ({ start: callback => { animations.push(options); value.setValue(options.toValue); callback?.({ finished: true }); }, stop() {} });
 const native = {
   View: host('View'), Text: host('Text'), TextInput: host('TextInput'), Pressable: host('Pressable'), ScrollView: host('ScrollView'), KeyboardAvoidingView: host('KeyboardAvoidingView'), Modal: host('Modal'), ActivityIndicator: host('ActivityIndicator'), InputAccessoryView: host('InputAccessoryView'), Switch: host('Switch'),
-  FlatList: props => React.createElement('FlatList', props, props.ListHeaderComponent, props.data?.length ? props.data.slice(0, 5).map((item, index) => React.createElement(React.Fragment, { key: props.keyExtractor(item) }, props.renderItem({ item, index }))) : props.ListEmptyComponent),
+  FlatList: props => React.createElement('FlatList', props, props.ListHeaderComponent, props.data?.length ? props.data.slice(0, 5).map((item, index) => React.createElement(React.Fragment, { key: props.keyExtractor(item) }, props.renderItem({ item, index }))) : props.ListEmptyComponent, props.ListFooterComponent),
   StyleSheet: { create: styles => styles, hairlineWidth: 1, absoluteFillObject: { position: 'absolute' } }, Platform: { OS: 'ios', select: options => options.ios ?? options.default },
   Appearance: { getColorScheme: () => override || system, setColorScheme: value => { const old = override || system; override = ['light', 'dark'].includes(value) ? value : null; if ((override || system) !== old) emit('appearance', { colorScheme: override || system }); }, addChangeListener: callback => subscribe('appearance', callback) },
   AccessibilityInfo: { isReduceMotionEnabled: async () => reduced, addEventListener: (_, callback) => subscribe('motion', callback) },
@@ -334,6 +334,36 @@ async function main() {
   await act(async () => { namedButton('Повторить ответ').props.onPress(); await flush(); });
   assert.equal(tutorRequests.at(-1).args.messages.filter(item => item.role === 'user').length, userCount, 'retry must not insert the learner message twice');
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'Let’s try again. What did you enjoy today?' }); await flush(); });
+  await act(async () => namedButton('Собеседование').props.onPress());
+  const containsText = text => tree.root.findAllByType('Text').some(node => String(React.Children.toArray(node.props.children).join('')).includes(text));
+  assert.ok(containsText('шаг 1 из 3'));
+  await act(async () => namedButton('Подсказка').props.onPress());
+  assert.ok(containsText('My background is in'));
+  const interviewTurn = async (input, reply) => {
+    await act(async () => chatInput().props.onChangeText(input));
+    await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
+    const request = tutorRequests.at(-1);
+    await act(async () => { request.resolve({ text: reply }); await flush(); });
+    return request.args;
+  };
+  const clarification = await interviewTurn('what?', 'I mean: what kind of work have you done?');
+  assert.match(clarification.scenarioContext, /Help the candidate/);
+  assert.ok(containsText('шаг 1 из 3'));
+  const intro = await interviewTurn('I am have experience working with customers.', 'Customer service experience is relevant to this role.');
+  assert.match(intro.scenarioContext, /React to a concrete detail/);
+  assert.equal(intro.messages.at(-1).interviewStepId, 'intro');
+  assert.ok(containsText('шаг 2 из 3'));
+  assert.ok(!containsText('My background is in'));
+  await interviewTurn('Last year, I helped a customer solve a problem.', 'Thanks for sharing that customer example.');
+  assert.ok(containsText('шаг 3 из 3'));
+  await interviewTurn('Could you tell me about the team?', 'You would join a small customer support team.');
+  assert.ok(containsText('Итог собеседования'));
+  assert.ok(containsText('Удачная фраза — «Last year, I helped'));
+  assert.ok(containsText('Исправление — «I have experience working with customers.'));
+  assert.ok(containsText('Как сказать «У меня есть опыт работы с клиентами»?'));
+  assert.equal(chatInput(), undefined, 'finished interview replaces the composer with its review');
+  await act(async () => namedButton('Начать новое собеседование').props.onPress());
+  assert.ok(containsText('шаг 1 из 3'));
   await act(async () => tree.unmount());
   const Practice = load('src/screens/PracticeScreen.js').default;
   const savedExercise = { id: 'draft-question', type: 'translate', prompt: 'A saved exercise', answer: 'Hello' };
