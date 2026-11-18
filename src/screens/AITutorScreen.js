@@ -479,6 +479,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   const followTail = useRef(true);
   const generationText = useRef("");
   const historyReady = useRef(false);
+  const historySaveTimer = useRef(null);
   const localSpeechRef = useRef(false);
 
   useEffect(() => {
@@ -564,8 +565,9 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         createdAt: sessions.find((item) => item.id === sessionId)?.createdAt || Date.now(),
       }).then((allSessions) =>
         setSessions(allSessions.filter((item) => item.modelId === model.id)),
-      );
+      ).catch(() => setError('Не удалось сохранить историю ИИ на устройстве.'));
     }, 450);
+    historySaveTimer.current = timer;
     return () => clearTimeout(timer);
   }, [messages, level, topic, dialogueMode, sessionId, model.id, analysis, coursePractice]);
 
@@ -648,14 +650,16 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
 
   const submitMessage = async (rawText, options = {}) => {
     const text = String(rawText || "").trim();
+    const translationTargetId = options.translationTargetId;
     if (!text || generating || requestRef.current || !modelReady) return;
-    if (interviewEnded && !options.retry) return;
+    if (interviewEnded && !translationTargetId && !options.retry) return;
+    if (translationTargetId && !messages.some(item => item.id === translationTargetId)) return;
     Keyboard.dismiss();
     if (options.kind !== "command") setInput("");
     setOpenActionsId(null);
     setError("");
     setRetryRequest(null);
-    followTail.current = true;
+    if (!translationTargetId) followTail.current = true;
     setReplyStage('thinking');
     const request = new AbortController();
     requestRef.current = request;
@@ -669,12 +673,14 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       ...(options.action === 'translate' ? { translationSource: text } : {}),
       ...(interview?.next && options.kind !== 'command' ? { interviewStepId: interview.next.id } : {}),
     };
-    const nextMessages = (options.retry ? messages.filter(item => item.id !== 'streaming') : [...messages, userMessage]).slice(-59);
+    const nextMessages = (options.retry && !translationTargetId
+      ? messages.filter(item => item.id !== 'streaming')
+      : [...messages, userMessage]).slice(-59);
     let scenarioContext = '';
     if (interview && options.kind !== 'command') {
       scenarioContext = interviewContext(interviewProgress(nextMessages.slice(0, -1)), interviewProgress(nextMessages));
     }
-    setMessages([...nextMessages, { id: "streaming", role: "assistant", content: "" }]);
+    if (!translationTargetId) setMessages([...nextMessages, { id: "streaming", role: "assistant", content: "" }]);
     setGenerating(true);
     generationText.current = "";
     try {
@@ -702,7 +708,9 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         ...(options.action === 'translate' ? { action: 'translate' } : {}),
         quality: result?.quality || null,
       };
-      const completedMessages = [...nextMessages, assistantMessage];
+      const completedMessages = translationTargetId
+        ? messages.map(item => item.id === translationTargetId ? { ...item, translation: finalText } : item)
+        : [...nextMessages, assistantMessage];
       setMessages(completedMessages);
       await saveTutorSession({
         id: sessionId,
@@ -739,6 +747,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       kind: "command",
       displayContent: action.title,
       action: action.id,
+      ...(interviewEnded && action.id === 'translate' ? { translationTargetId: message.id } : {}),
     });
   };
 
@@ -805,10 +814,16 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   };
 
   const removeSession = async (session) => {
-    const next = await deleteTutorSession(session.id);
-    const filtered = next.filter((item) => item.modelId === model.id);
-    setSessions(filtered);
-    if (session.id === sessionId) newConversation();
+    const isCurrent = session.id === sessionId;
+    if (isCurrent && requestRef.current) return;
+    if (isCurrent) clearTimeout(historySaveTimer.current);
+    try {
+      const next = await deleteTutorSession(session.id);
+      setSessions(next.filter(item => item.modelId === model.id));
+      if (isCurrent) newConversation();
+    } catch {
+      Alert.alert('Не удалось удалить диалог', 'Попробуй ещё раз.');
+    }
   };
 
   const noteForMessage = (message, index) => {
@@ -886,7 +901,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
                 <Text numberOfLines={1} style={styles.historyTitle}>{session.title || session.topic}</Text>
                 <Text style={styles.historyMeta}>{session.level} · {DIALOGUE_MODES.find((item) => item.id === session.dialogueMode)?.title || "Живой"} · {Math.max(0, (session.messages?.length || 1) - 1)} сообщений</Text>
               </View>
-              <Pressable onPress={(event) => { event.stopPropagation(); removeSession(session); }} hitSlop={10}>
+              <Pressable disabled={generating && session.id === sessionId} onPress={(event) => { event.stopPropagation(); removeSession(session); }} hitSlop={10}>
                 <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
               </Pressable>
             </Pressable>
@@ -1047,6 +1062,14 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
                       </Pressable>
                       {!message.id.startsWith("welcome") ? <Pressable onPress={() => setOpenActionsId((current) => current === message.id ? null : message.id)} style={styles.speakButton}><Ionicons name="options" size={16} color={openActionsId === message.id ? colors.mint : colors.textMuted} /><Text style={[styles.speakText, { color: openActionsId === message.id ? colors.mint : colors.textMuted }]}>Действия</Text></Pressable> : null}
                     </View>
+                    {!!message.translation && <View style={styles.responsePanel}>
+                      <Text style={styles.responsePanelTitle}>ПЕРЕВОД</Text>
+                      <Text style={styles.messageText}>{message.translation}</Text>
+                      <Pressable onPress={() => speakMessage(message.translation, 'ru-RU')} style={styles.speakButton}>
+                        <Ionicons name="volume-medium" size={17} color={colors.purple} />
+                        <Text style={styles.speakText}>Озвучить перевод</Text>
+                      </Pressable>
+                    </View>}
                     {openActionsId === message.id && !message.id.startsWith("welcome") ? <View style={styles.feedbackRow}>
                       <Text style={styles.feedbackLabel}>Полезный ответ?</Text>
                       <Pressable hitSlop={8} onPress={() => recordFeedback(message, "up")} style={[styles.feedbackButton, feedbackMap[message.id]?.rating === "up" && styles.feedbackButtonUp]}><Ionicons name={feedbackMap[message.id]?.rating === "up" ? "thumbs-up" : "thumbs-up-outline"} size={15} color={feedbackMap[message.id]?.rating === "up" ? colors.mint : colors.textMuted} /></Pressable>
@@ -1054,8 +1077,8 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
                     </View> : null}
                     {openActionsId === message.id ? <View style={styles.responsePanel}>
                       {note && <Pressable onPress={() => toggleNotebook(note)} style={[styles.speakButton, { minHeight: 44 }]}><Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.orange} /><Text style={styles.speakText}>{saved ? 'Сохранено в тетради' : 'Сохранить в тетрадь'}</Text></Pressable>}
-                      <Text style={styles.responsePanelTitle}>ИЗМЕНИТЬ ОТВЕТ</Text>
-                      <View style={styles.responseActionGrid}>{RESPONSE_ACTIONS.map((action) => <Pressable key={action.id} disabled={generating} onPress={() => runResponseAction(message, action)} style={styles.responseAction}><Ionicons name={action.icon} size={16} color={colors.purple} /><Text style={styles.responseActionText}>{action.title}</Text></Pressable>)}</View>
+                      {!interviewEnded && <Text style={styles.responsePanelTitle}>ИЗМЕНИТЬ ОТВЕТ</Text>}
+                      <View style={styles.responseActionGrid}>{RESPONSE_ACTIONS.filter(action => !interviewEnded || action.id === 'translate').map((action) => <Pressable key={action.id} disabled={generating} onPress={() => runResponseAction(message, action)} style={styles.responseAction}><Ionicons name={action.icon} size={16} color={colors.purple} /><Text style={styles.responseActionText}>{action.title}</Text></Pressable>)}</View>
                       <Text style={styles.responsePanelTitle}>ОТКРЫТЬ УПРАЖНЕНИЕ</Text>
                       <View style={styles.toolGrid}>
                         <Pressable onPress={() => onNavigate?.({ type: "tab", target: "review" })} style={styles.toolButton}><Ionicons name="library" size={16} color={colors.mint} /><Text style={styles.toolText}>Слова</Text></Pressable>
@@ -1128,7 +1151,12 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
         </View>
       ) : null}
 
-      {(!interviewEnded || generating) && <View style={[styles.composer, { marginBottom: keyboardVisible ? 0 : 82 }]}>
+      {interviewEnded && generating && <View style={[styles.composer, { marginBottom: 82, justifyContent: 'flex-end' }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Остановить ответ" onPress={stop} style={styles.sendButton}>
+          <Ionicons name="stop" size={22} color={colors.onAccent} />
+        </Pressable>
+      </View>}
+      {!interviewEnded && <View style={[styles.composer, { marginBottom: keyboardVisible ? 0 : 82 }]}>
         <Pressable onPress={startListening} disabled={!modelReady || generating || speechTranscribing} style={[styles.micButton, listening && styles.micActive]}>
           {speechTranscribing ? <ActivityIndicator size="small" color={colors.text} /> : <Ionicons name={listening ? "stop" : "mic"} size={22} color={colors.text} />}
         </Pressable>

@@ -24,7 +24,7 @@ assert.equal(keyboardOverlap({ ...frame, height: 465 }, { height: 320, screenY: 
 assert.equal(keyboardOverlap(frame, { height: 320, screenY: 524, screenX: 500, width: 200 }), 0);
 
 // Real service and budgeting with only native files/storage/engine replaced.
-const { serviceLoad, nativeCalls, outputs } = require('./mock-local-ai.cjs')();
+const { serviceLoad, nativeCalls, outputs, storage } = require('./mock-local-ai.cjs')();
 async function main() {
   let repairs = 0;
   await assert.rejects(reply.generateTutorReply({ messages, generate: async () => ({ text: 'Привет! Как дела?' }), repair: async () => { repairs++; return { text: 'Привет! Как дела?' }; } }), { code: 'TUTOR_REPLY_INVALID' });
@@ -32,6 +32,19 @@ async function main() {
   const controller = new AbortController();
   await assert.rejects(reply.generateTutorReply({ messages, signal: controller.signal, generate: async () => { controller.abort(); return { text: 'A cancelled reply.' }; }, repair: async () => { throw Error('must not repair after cancellation'); } }), { name: 'AbortError' });
   const ai = serviceLoad('src/services/localAi.js');
+  await Promise.all([ai.saveTutorSession({ id: 'first' }), ai.saveTutorSession({ id: 'second' })]);
+  assert.deepEqual((await ai.loadTutorSessions()).map(session => session.id).sort(), ['first', 'second']);
+  await Promise.all([ai.deleteTutorSession('first'), ai.saveTutorSession({ id: 'third' })]);
+  assert.deepEqual((await ai.loadTutorSessions()).map(session => session.id).sort(), ['second', 'third']);
+  await Promise.all([ai.saveTutorSession({ id: 'fourth' }), ai.clearTutorSessions()]);
+  assert.deepEqual(await ai.loadTutorSessions(), []);
+  const historyKey = '@lingospark/ai-tutor-sessions-v1';
+  storage.set(historyKey, 'unreadable data');
+  await assert.rejects(ai.saveTutorSession({ id: 'must-not-overwrite' }));
+  assert.equal(storage.get(historyKey), 'unreadable data');
+  await ai.clearTutorSessions();
+  await ai.saveTutorSession({ id: 'after-error' });
+  assert.equal((await ai.loadTutorSessions())[0].id, 'after-error');
   for (const model of ai.AI_MODELS) for (const level of ['A1', 'A2', 'B1', 'B2', 'C1']) {
     const tokens = [], stages = [];
     outputs.push('Привет! Как дела?', 'Would you like to talk about food or travel?');

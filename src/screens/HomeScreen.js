@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -6,7 +6,7 @@ import { lessons } from '../data/course';
 import { useProgressSelector } from '../store/ProgressContext';
 import { nextLearningStep, readQuickSession } from '../utils/learningContinuation';
 import { retentionSummary } from '../utils/retention';
-import { wordLearningState } from '../utils/wordDictionary';
+import { countDueReviewWords } from '../utils/unifiedReview';
 import SyncStatus from '../components/SyncStatus';
 import { ProgressBar } from '../components/UI';
 import { MotionPressable } from '../components/Motion';
@@ -16,12 +16,24 @@ export default function HomeScreen({ onJourney, onRetention, onLearningHub, onLe
   useTheme();
   const progress = useProgressSelector(({ progress: p }) => ({
     name: p.name, streak: p.streak, completed: p.completed, retention: p.retention, journeys: p.journeys, dailyXP: p.dailyXP, dailyGoal: p.dailyGoal, reviewStats: p.reviewStats, quickSession: p.quickSession,
+    wordPreferences: p.wordPreferences, customWords: p.customWords, reviewQueue: p.reviewQueue, mistakes: p.mistakes,
   }));
   const next = lessons.find(item => !progress.completed.includes(item.id));
   const step = useMemo(() => nextLearningStep(progress), [progress.completed, progress.journeys]);
   const quick = useMemo(() => readQuickSession(progress.quickSession, progress), [progress.quickSession, progress.completed, progress.journeys]);
   const today = new Date().toISOString().slice(0, 10);
-  const dueWords = useMemo(() => Object.values(progress.reviewStats || {}).filter(stats => wordLearningState(stats, today) === 'due').length, [progress.reviewStats, today]);
+  const [reviewWords, setReviewWords] = useState(null);
+  const hasReviewActivity = !!(progress.mistakes?.length || Object.keys(progress.reviewStats || {}).length || Object.keys(progress.reviewQueue || {}).length);
+  useEffect(() => {
+    if (!hasReviewActivity || reviewWords) return;
+    let active = true;
+    import('../data/wordBank').then(({ extendedWordBank }) => {
+      if (active) setReviewWords(extendedWordBank);
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [hasReviewActivity, reviewWords]);
+  const dueWords = useMemo(() => reviewWords ? countDueReviewWords(progress, [...reviewWords, ...(progress.customWords || [])]) : 0,
+    [reviewWords, progress.customWords, progress.reviewStats, progress.reviewQueue, progress.wordPreferences, progress.mistakes, today]);
   const dueTopics = useMemo(() => retentionSummary(progress, lessons).due.length, [progress.retention, progress.completed, today]);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';

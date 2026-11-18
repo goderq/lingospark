@@ -68,7 +68,14 @@ export default function AICenterScreen({ onClose, onPronunciation, onSpeechModel
     "Диалоги и их разборы будут удалены. Прогресс курсов и слова останутся.",
     [
       { text: "Отмена", style: "cancel" },
-      { text: "Очистить", style: "destructive", onPress: async () => { await clearTutorSessions(); await refresh(); } },
+      { text: "Очистить", style: "destructive", onPress: async () => {
+        try {
+          await clearTutorSessions();
+          await refresh();
+        } catch {
+          Alert.alert('Не удалось обновить историю ИИ', 'Попробуй ещё раз.');
+        }
+      } },
     ],
   );
   const confirmClearMemory = () => Alert.alert(

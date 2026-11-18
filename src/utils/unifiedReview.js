@@ -6,6 +6,31 @@ import { advanceWordReview } from './wordSchedule.js';
 export const reviewId = item => item.wordId ? `word-${item.wordId}-${item.direction || 'en-ru'}` : `review-${snapshotKey([normalizeAnswer(item.prompt).replace(/^(переведи|напиши перевод):\s*/, ''), normalizeAnswer(item.answer)])}`;
 const dueTime = value => typeof value === 'number' ? value : Date.parse(value || '') || 0;
 
+const wordMistake = /^review-(.*)-(en-ru|ru-en)$/;
+const isDueWordStat = (stats, now) => !!stats?.total && dueTime(stats.dueDate) <= now;
+const canReviewWord = (id, byId, hidden) => byId.has(id) && !hidden.has(id);
+
+export function countDueReviewWords(progress, words, now = Date.now()) {
+  const byId = new Set(words.map(word => word.id));
+  const hidden = new Set(progress.wordPreferences?.hidden);
+  const queued = progress.reviewQueue || {};
+  const due = new Set();
+  for (const entry of Object.values(queued)) {
+    const id = entry.exercise?.wordId;
+    if (id && entry.dueAt <= now && canReviewWord(id, byId, hidden)) due.add(id);
+  }
+  for (const mistake of progress.mistakes || []) {
+    const match = mistake.id?.match(wordMistake);
+    if (!match || !mistake.prompt || dueTime(mistake.nextReviewAt) > now) continue;
+    const [, id, direction] = match;
+    if (canReviewWord(id, byId, hidden) && !queued[reviewId({ wordId: id, direction })]) due.add(id);
+  }
+  for (const [id, stats] of Object.entries(progress.reviewStats || {})) {
+    if (canReviewWord(id, byId, hidden) && isDueWordStat(stats, now) && !queued[reviewId({ wordId: id })]) due.add(id);
+  }
+  return due.size;
+}
+
 export function buildUnifiedReview(progress, words, lessons, now = Date.now(), limit = 12) {
   const deck = [], seen = new Set();
   const add = item => {
@@ -19,8 +44,9 @@ export function buildUnifiedReview(progress, words, lessons, now = Date.now(), l
   }
   if (deck.length >= limit) return deck;
   const byId = new Map(words.map(word => [word.id, word]));
+  const hidden = new Set(progress.wordPreferences?.hidden);
   const queued = progress.reviewQueue || {};
-  for (const entry of Object.values(queued).filter(entry => entry.dueAt <= now && entry.exercise && (!entry.exercise.wordId || byId.has(entry.exercise.wordId) && !progress.wordPreferences?.hidden?.includes(entry.exercise.wordId))).sort((a, b) => a.dueAt - b.dueAt)) {
+  for (const entry of Object.values(queued).filter(entry => entry.dueAt <= now && entry.exercise && (!entry.exercise.wordId || canReviewWord(entry.exercise.wordId, byId, hidden))).sort((a, b) => a.dueAt - b.dueAt)) {
     add({ ...entry.exercise, reason: entry.reason || 'Наступил срок повторения' });
     if (deck.length >= limit) return deck;
   }
@@ -28,10 +54,10 @@ export function buildUnifiedReview(progress, words, lessons, now = Date.now(), l
     if (deck.length >= limit) return deck;
     if (dueTime(mistake.nextReviewAt) > now) continue;
     let item = { id: mistake.id, type: 'translate', prompt: mistake.prompt, answer: mistake.answer, answers: mistake.answers || [], explanation: mistake.explanation, topic: mistake.topic, sourceMistakeId: mistake.id, reason: `Ошибка: ${mistake.topic || 'практика'}` };
-    const match = mistake.id?.match(/^review-(.*)-(en-ru|ru-en)$/);
+    const match = mistake.id?.match(wordMistake);
     if (match) {
       const word = byId.get(match[1]);
-      if (!word || progress.wordPreferences?.hidden?.includes(word.id)) continue;
+      if (!word || hidden.has(word.id)) continue;
       item = { ...item, skill: 'vocabulary', wordId: word.id, direction: match[2], answer: match[2] === 'ru-en' ? word.english : progress.wordPreferences?.customTranslations?.[word.id] || word.russian };
     }
     if (!item.prompt || !item.answer || queued[reviewId(item)]) continue;
@@ -40,7 +66,7 @@ export function buildUnifiedReview(progress, words, lessons, now = Date.now(), l
   for (const [id, stats] of Object.entries(progress.reviewStats || {})) {
     if (deck.length >= limit) break;
     const word = byId.get(id);
-    if (!word || !stats?.total || dueTime(stats.dueDate) > now || progress.wordPreferences?.hidden?.includes(id)) continue;
+    if (!word || !isDueWordStat(stats, now) || hidden.has(id)) continue;
     const item = { id: `word-${id}`, wordId: id, type: 'translate', skill: 'vocabulary', prompt: `Переведи: ${word.english}`, answer: progress.wordPreferences?.customTranslations?.[id] || word.russian, answers: word.translations || [], topic: 'Слова', explanation: word.example ? `${word.example}\n${word.exampleRu || ''}` : `${word.english} — ${word.russian}`, reason: 'Слово пора повторить' };
     if (!queued[reviewId(item)]) add(item);
   }

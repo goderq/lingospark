@@ -454,37 +454,52 @@ export async function cancelModelDownload() {
   await FileSystem.deleteAsync(current.destination, { idempotent: true });
 }
 
+async function readTutorSessions() {
+  const raw = await AsyncStorage.getItem(TUTOR_SESSIONS_KEY);
+  const parsed = raw ? JSON.parse(raw) : [];
+  if (!Array.isArray(parsed)) throw new Error('Не удалось прочитать историю ИИ');
+  return parsed;
+}
+
 export async function loadTutorSessions() {
   try {
-    const raw = await AsyncStorage.getItem(TUTOR_SESSIONS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed : [];
+    return await readTutorSessions();
   } catch {
     return [];
   }
 }
 
-export async function saveTutorSession(session) {
-  const sessions = await loadTutorSessions();
-  const next = [
-    { ...session, updatedAt: Date.now() },
-    ...sessions.filter((item) => item.id !== session.id),
-  ]
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-    .slice(0, 30);
-  await AsyncStorage.setItem(TUTOR_SESSIONS_KEY, JSON.stringify(next));
-  return next;
+// Serialize whole read-modify-write operations, including removal.
+let pendingHistoryWrite = Promise.resolve();
+function updateTutorHistory(update) {
+  const operation = pendingHistoryWrite.then(update);
+  pendingHistoryWrite = operation.catch(() => {});
+  return operation;
 }
 
-export async function deleteTutorSession(sessionId) {
-  const sessions = await loadTutorSessions();
-  const next = sessions.filter((item) => item.id !== sessionId);
-  await AsyncStorage.setItem(TUTOR_SESSIONS_KEY, JSON.stringify(next));
-  return next;
+export function saveTutorSession(session) {
+  return updateTutorHistory(async () => {
+    const sessions = await readTutorSessions();
+    const next = [
+      { ...session, updatedAt: Date.now() },
+      ...sessions.filter(item => item.id !== session.id),
+    ].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 30);
+    await AsyncStorage.setItem(TUTOR_SESSIONS_KEY, JSON.stringify(next));
+    return next;
+  });
 }
 
-export async function clearTutorSessions() {
-  await AsyncStorage.removeItem(TUTOR_SESSIONS_KEY);
+export function deleteTutorSession(sessionId) {
+  return updateTutorHistory(async () => {
+    const sessions = await readTutorSessions();
+    const next = sessions.filter(item => item.id !== sessionId);
+    await AsyncStorage.setItem(TUTOR_SESSIONS_KEY, JSON.stringify(next));
+    return next;
+  });
+}
+
+export function clearTutorSessions() {
+  return updateTutorHistory(() => AsyncStorage.removeItem(TUTOR_SESSIONS_KEY));
 }
 
 export async function clearIncompleteModels() {

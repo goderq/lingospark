@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { practiceCatalog, buildPracticeDeck } from '../src/data/practiceCatalog.js';
-import { buildUnifiedReview, reviewId, finishPracticeSession, validatePracticeSession, enqueuePhrase } from '../src/utils/unifiedReview.js';
+import { buildUnifiedReview, countDueReviewWords, reviewId, finishPracticeSession, validatePracticeSession, enqueuePhrase } from '../src/utils/unifiedReview.js';
 import { evaluateExercise } from '../src/utils/answer.js';
 import { choiceQualityIssues } from '../src/utils/contentQuality.js';
 import { sampleExamQuestions } from '../src/utils/examDeck.js';
@@ -58,6 +58,12 @@ const corrected = finishPracticeSession(oldState, 'review', wordSession, now);
 assert.equal(corrected.mistakes.length, 0); assert.equal(corrected.reviewStats.hello.total, 2);
 assert.equal(buildUnifiedReview(corrected, [word], lessons, now).length, 0, 'a scheduled item must not reappear through its legacy stats');
 assert.equal(buildUnifiedReview({ ...oldState, wordPreferences: { hidden: ['hello'] } }, [word], lessons, now).length, 0);
+assert.equal(countDueReviewWords(oldState, [word], now), 1, 'count a word and its mistake once');
+assert.equal(countDueReviewWords({ ...oldState, wordPreferences: { hidden: ['hello'] } }, [word], now), 0);
+assert.equal(countDueReviewWords(oldState, [], now), 0, 'removed words do not count');
+assert.equal(countDueReviewWords(corrected, [word], now), 0, 'an older stat cannot override a later review');
+assert.equal(countDueReviewWords(corrected, [word], now + DAY), 1);
+assert.equal(countDueReviewWords({ reviewStats: { hello: { total: 1, dueDate: now + 60000 } } }, [word], now), 0);
 
 const scheduled = { completed: [lessons[0].id], retention: { [lessons[0].id]: { dueAt: now - DAY } } };
 const memoryDeck = buildUnifiedReview(scheduled, [], lessons, now);
