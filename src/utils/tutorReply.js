@@ -1,4 +1,4 @@
-import { asksLearnerName, dialogueContinuity, greetingRestart, isSimpleGreeting } from './conversationCoach.js';
+import { asksLearnerName, dialogueContinuity, greetingRestart, isClarification, isSimpleGreeting } from './conversationCoach.js';
 
 const lastUser = messages => [...messages].reverse().find(item => item.role === 'user');
 const normalize = text => String(text || '').normalize('NFKC').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, ' ').trim();
@@ -33,6 +33,7 @@ export function findTutorReplyProblems({ reply, messages, dialogueMode = 'conver
   if (language === 'english' && (/[а-яё]/i.test(text) || !/[a-z]/i.test(text))) problems.push('reply must be in English');
   const prior = messages.filter(item => item.role === 'assistant' && item.content?.trim() && (!String(item.id || '').startsWith('welcome') || !/[а-яё]/i.test(item.content))).slice(-4);
   const user = lastUser(messages);
+  const clarification = user?.kind !== 'command' && isClarification(user?.content);
   const repeatRequested = /^(?:(?:can|could|would) you\s+)?(?:please\s+)?(?:repeat\b|say (?:that|it) again\b)|^(?:пожалуйста[, ]*)?повтори/i.test(user?.content?.trim() || '');
   if (language === 'english' && user?.kind !== 'command' && !repeatRequested) {
     const continuity = dialogueContinuity(messages);
@@ -45,11 +46,11 @@ export function findTutorReplyProblems({ reply, messages, dialogueMode = 'conver
     const old = normalize(item.content), oldTokens = new Set(old.split(' ').filter(Boolean));
     if (normalized && normalized === old) return true;
     const common = [...tokens].filter(word => oldTokens.has(word)).length;
-    if (tokens.size >= 4 && oldTokens.size >= 4 && common / Math.max(tokens.size, oldTokens.size) >= 0.78) return true;
+    if (!clarification && tokens.size >= 4 && oldTokens.size >= 4 && common / Math.max(tokens.size, oldTokens.size) >= 0.78) return true;
     const oldQuestions = (item.content.match(/[^.!?\n]*\?/g) || []).map(normalize);
     return language === 'english' && questions.some(question => normalize(question).split(' ').length >= 3 && oldQuestions.includes(normalize(question)));
   })) problems.push('repeats a recent answer or question');
-  if (/^(?:what|huh|sorry|pardon|что|не понял)[?!.\s]*$/i.test(user?.content?.trim() || '') && (/^(?:hi|hello|hey|привет)\b/i.test(text) || !/\?|mean|asking|asked|question|simpl|choose|prefer|or\b/i.test(text))) problems.push('clarify the previous question instead of restarting the greeting');
+  if (clarification && (/^(?:hi|hello|hey|привет)\b/i.test(text) || !/\?|mean|asking|asked|question|simpl|choose|prefer|or\b/i.test(text))) problems.push('clarify the previous question instead of restarting the greeting');
   if (dialogueMode === 'story' && !/\bA[).:]|\bB[).:]|choice|what (?:do|would) you/i.test(text)) problems.push('story needs a choice for the learner');
   return problems;
 }

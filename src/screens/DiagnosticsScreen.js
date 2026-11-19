@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as Clipboard from 'expo-clipboard';
 import {performanceSummary, resetPerformanceSamples} from '../utils/performance';
+import { runTutorComparison, tutorComparisonCases, tutorComparisonModels } from '../utils/tutorComparison';
 import { nativeResourceState } from '../services/nativeResources';
 import { useAuth } from "../store/AuthContext";
 import { useCloudSync } from "../store/CloudSyncContext";
@@ -66,6 +67,16 @@ export default function DiagnosticsScreen({ onClose }) {
   const [busy, setBusy] = useState(false);
   const [timings,setTimings]=useState(()=>performanceSummary());
   const [resources, setResources] = useState(nativeResourceState);
+  const [comparison, setComparison] = useState(null);
+  const [comparisonStage, setComparisonStage] = useState(null);
+  const comparisonRun = useRef(null);
+  useEffect(() => () => {
+    const run = comparisonRun.current;
+    if (!run) return;
+    run.disposed = true;
+    run.controller.abort();
+    run.stop?.();
+  }, []);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -84,6 +95,7 @@ export default function DiagnosticsScreen({ onClose }) {
       ]);
       setDevice({
         aiInstalled: Object.values(aiModels).filter((item) => item.installed).length,
+        comparisonReady: tutorComparisonModels.every(id => aiModels[id]?.installed),
         activeAi,
         speechInstalled: Object.values(speechModels).filter((item) => item.installed).length,
         activeSpeech,
@@ -97,6 +109,40 @@ export default function DiagnosticsScreen({ onClose }) {
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  const compareModels = async () => {
+    if (!device?.comparisonReady || comparisonRun.current) return;
+    const run = { controller: new AbortController() };
+    comparisonRun.current = run;
+    setComparison(null);
+    setComparisonStage('Подготовка…');
+    try {
+      const ai = await import('../services/localAi');
+      if (run.controller.signal.aborted) return;
+      run.stop = () => ai.stopGeneration().catch(() => {});
+      const models = tutorComparisonModels.map(id => ai.AI_MODELS.find(model => model.id === id));
+      try {
+        const results = await runTutorComparison({
+          models, loadModel: ai.loadModel, completeTutorMessage: ai.completeTutorMessage, signal: run.controller.signal,
+          onUpdate: ({ model, scenario }) => setComparisonStage(scenario ? `${model} · ${scenario}` : `Загружаю ${model}…`),
+        });
+        if (!run.controller.signal.aborted) setComparison(results);
+      } finally {
+        if (!run.disposed) await ai.unloadModel().catch(() => {});
+      }
+    } catch (error) {
+      if (!run.controller.signal.aborted) Alert.alert('Не удалось сравнить модели', error.message);
+    } finally {
+      comparisonRun.current = null;
+      if (!run.disposed) setComparisonStage(null);
+    }
+  };
+
+  const stopComparison = () => {
+    comparisonRun.current?.controller.abort();
+    comparisonRun.current?.stop?.();
+    setComparisonStage('Останавливаю…');
+  };
 
   const forceRestore = () => Alert.alert(
     "Восстановить из облака?",
@@ -180,6 +226,27 @@ export default function DiagnosticsScreen({ onClose }) {
               <Row icon="flash" label="ИИ загружен в память" value={yesNo(device?.engineLoaded)} good={Boolean(device?.engineLoaded)} />
             </>
           )}
+        </Section>
+
+        <Section title="СРАВНЕНИЕ GEMMA И LLAMA">
+          <Text style={styles.value}>{device?.comparisonReady
+            ? 'Две модели отвечают на одинаковые реплики. Время отсчитывается после загрузки модели.'
+            : 'Для сравнения установи Gemma 3 · 1B и Llama 3.2 · 1B в разделе ИИ.'}</Text>
+          {comparisonStage ? <>
+            <Text accessibilityLiveRegion="polite" style={styles.value}>{comparisonStage}</Text>
+            <Action title="Остановить проверку" icon="stop-circle-outline" onPress={stopComparison} />
+          </> : <Action title="Сравнить модели" icon="speedometer-outline" onPress={compareModels} disabled={!device?.comparisonReady} />}
+          {comparison?.map(result => <View key={result.modelId} style={{ gap: 6, marginTop: 10 }}>
+            <Text style={styles.label}>{result.title}</Text>
+            {!!result.error && <Text style={styles.error}>{result.error}</Text>}
+            {result.cases.map(test => <View key={test.id}>
+              <Text style={styles.label}>{test.title} · {test.durationMs} мс</Text>
+              <Text style={test.error ? styles.error : styles.value}>{test.error || test.reply}</Text>
+            </View>)}
+          </View>)}
+          {!!comparison && <Action title="Скопировать сравнение" icon="copy" onPress={() => Clipboard.setStringAsync(JSON.stringify({
+            version: Constants.expoConfig?.version, platform: Platform.OS, cases: tutorComparisonCases, results: comparison,
+          }, null, 2))} />}
         </Section>
       </ScrollView>
     </View>

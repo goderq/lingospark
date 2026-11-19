@@ -2,8 +2,8 @@ import { notifyModelReady } from './learningNotifications';
 import { withNativeResource, registerResource, releaseNativeResource } from './nativeResources';
 import { budgetMessages, recentTranscript } from '../utils/contextBudget';
 import { now, recordTiming } from '../utils/performance';
-import { continuityGuidance, dialogueGuidance } from '../utils/conversationCoach';
-import { assertTutorReplyNotAborted, generateTutorReply, openingQuestionForGreeting, tutorLanguageRule } from '../utils/tutorReply';
+import { continuityGuidance, dialogueGuidance, earlierLearnerFacts } from '../utils/conversationCoach';
+import { assertTutorReplyNotAborted, generateTutorReply, openingQuestionForGreeting, tutorLanguageRule, tutorReplyLanguage } from '../utils/tutorReply';
 import { AI_MODELS, isLightModel } from '../data/aiModels';
 import { modelCompletionOptions, modelSizeProblem } from '../utils/aiModelRuntime';
 export { AI_MODELS } from '../data/aiModels';
@@ -695,21 +695,40 @@ function compactConversationContext(messages) {
   return parts.join(". ").slice(0, 900);
 }
 
-async function improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, nextMove }) {
-  const recent = messages.slice(-8);
+function compactTutorPrompt({ level, topic, nextMove, facts, grammarNotes, messages }) {
+  return [
+    `You are Lingo, an offline English conversation partner. Level: ${level}. Topic: ${topic}.`,
+    'Use 1–3 short sentences and at most one related follow-up. Use relevant learner facts. Do not repeat your last question. Correct briefly if asked or if the meaning is unclear.',
+    nextMove,
+    facts,
+    grammarNotes && `Grammar reference: ${grammarNotes}`,
+    tutorReplyLanguage(messages) === 'english' ? 'REQUIRED: Reply in English only.' : tutorLanguageRule(messages),
+  ].filter(Boolean).join('\n');
+}
+
+function wantsGrammarHelp(lastUser) {
+  if (lastUser?.kind === 'command') return lastUser.action === 'explain';
+  const text = lastUser?.content || '';
+  return /^(?:(?:can|could) you )?(?:please )?(?:explain|correct (?:me|my)|check my|what does .+ mean)\b/i.test(text)
+    || /^(?:объясни|исправь|проверь|что значит)(?:[\s!,.:?]|$)/i.test(text)
+    || /\b(?:i is|do you are|did you went|can to go|enjoy to read|more easier|informations|advices)\b/i.test(text);
+}
+
+async function improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, nextMove, compact, facts }) {
+  const recent = messages.slice(compact ? -6 : -8);
   const context = recent.map((item, index) => `${item.role === 'user' ? 'Learner' : 'Lingo'}: ${item.content.slice(0, index === recent.length - 1 ? 800 : 160)}`).join('\n');
   const result = await completeWithGuard(llama, {
     messages: [
       {
         role: "system",
-        content: `Write a fresh reply as the English tutor. Output only the reply. Level: ${level}. Mode: ${dialogueMode}. Respond to the latest learner message and continue from the last answer. If the learner says what?, rephrase the previous question. Use 1–4 sentences and at most one question. Do not ask for something already answered. ${nextMove} ${tutorLanguageRule(messages)}`,
+        content: `Write a fresh reply as the English tutor. Output only the reply. Level: ${level}. Mode: ${dialogueMode}. Respond to the latest learner message and continue from the last answer. If the learner says what?, rephrase the previous question. Use 1–4 sentences and at most one question. Do not ask for something already answered. ${nextMove} ${facts || ''} ${tutorLanguageRule(messages)}`,
       },
       {
         role: "user",
         content: `Conversation:\n${context}\n\nRejected draft or draft to edit:\n${draft.slice(0, 500)}\n\nWhat to fix: ${problems.length ? problems.join('; ') : 'Improve clarity and natural phrasing.'}`,
       },
     ],
-    n_predict: 300,
+    n_predict: compact ? 140 : 300,
     temperature: 0.35,
     top_k: 30,
     top_p: 0.85,
@@ -736,28 +755,36 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
     return result;
   }
   const settings = await getAiSettings();
-  const tutorMemory = await loadTutorMemory();
-  const tutorFeedback = await loadTutorFeedback();
-  const mission = dialogueMode === 'interview' ? null : getDailyTutorMission({ level, topic, memory: tutorMemory });
-  const turnNumber = messages.filter((item) => item.role === "user" && item.kind !== "command").length;
-  const lastUserText = lastUser?.content || "";
-  const grammarNotes = lastUserText.trim().split(/\s+/).length <= 2 && topic !== 'Грамматика' ? '' : grammarNotesFor(lastUserText, topic, level, tutorMemory);
-  const rawHistory = messages.filter((item) => (item.role === "user" || item.role === "assistant") && !String(item.id || '').startsWith('welcome') && item.content?.trim());
-  const fullHistory = rawHistory.map(({ role, content }) => ({ role, content }));
-  const historyLimit = isLightModel(model) ? 8 : 14;
-  const history = fullHistory.slice(-historyLimit);
-  const longContext = compactConversationContext(rawHistory.slice(0, -historyLimit));
-  const learnerFeedback = feedbackPrompt(tutorFeedback);
+  const compact = dialogueMode === 'conversation' && !courseContext && !scenarioContext && lastUser?.kind !== 'command';
+  const tutorMemory = compact ? EMPTY_TUTOR_MEMORY : await loadTutorMemory();
+  const tutorFeedback = compact ? [] : await loadTutorFeedback();
+  const mission = compact || dialogueMode === 'interview' ? null : getDailyTutorMission({ level, topic, memory: tutorMemory });
+  const turnNumber = messages.filter(item => item.role === 'user' && item.kind !== 'command').length;
+  const lastUserText = lastUser?.content || '';
+  const grammarNotes = compact
+    ? wantsGrammarHelp(lastUser) ? grammarNotesFor(lastUserText, topic, level).slice(0, 240) : ''
+    : lastUserText.trim().split(/\s+/).length <= 2 && topic !== 'Грамматика' ? '' : grammarNotesFor(lastUserText, topic, level, tutorMemory);
+  const rawHistory = messages.filter(item => (item.role === 'user' || item.role === 'assistant') && !String(item.id || '').startsWith('welcome') && item.content?.trim());
+  const historyLimit = compact ? 6 : isLightModel(model) ? 8 : 14;
+  const history = rawHistory.slice(-historyLimit).map(({ role, content }) => ({ role, content }));
+  const earlier = rawHistory.slice(0, -historyLimit);
+  const facts = compact ? earlierLearnerFacts(earlier) : '';
   const introductionCourse = !!courseContext && topic === 'Знакомство на языковой встрече';
   const continuity = lastUser?.kind !== 'command' ? continuityGuidance(messages, introductionCourse) : '';
   const nextMove = [scenarioContext || dialogueGuidance(messages), continuity].filter(Boolean).join('\n');
+  const instruction = compact
+    ? compactTutorPrompt({ level, topic, nextMove, facts, grammarNotes, messages })
+    : [
+        systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, compactConversationContext(earlier), feedbackPrompt(tutorFeedback)),
+        courseContext, nextMove, tutorLanguageRule(messages),
+      ].filter(Boolean).join('\n');
   const result = await generateTutorReply({ messages, dialogueMode, qualityMode: settings.qualityMode, signal, onStatus,
     generate: () => completeWithGuard(
     llama,
     {
-      messages: [{ role: "system", content: systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, longContext, learnerFeedback) + courseContext + '\n' + nextMove + '\n' + tutorLanguageRule(messages) }, ...history],
-      n_predict: isLightModel(model) ? 190 : 280,
-      temperature: 0.76,
+      messages: [{ role: "system", content: instruction }, ...history],
+      n_predict: compact ? (grammarNotes ? 180 : 120) : isLightModel(model) ? 190 : 280,
+      temperature: compact ? 0.55 : 0.76,
       top_k: 40,
       top_p: 0.9,
       repeat_penalty: 1.13,
@@ -765,7 +792,7 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
     undefined,
     90000,
   ),
-    repair: (draft, problems) => improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, nextMove }),
+    repair: (draft, problems) => improveTutorReply({ llama, draft, messages, level, dialogueMode, problems, nextMove, compact, facts }),
   });
   onToken?.(result.text || '');
   return result;

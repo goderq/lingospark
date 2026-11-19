@@ -114,6 +114,57 @@ async function main() {
     assert.match(call.messages[0].content, /friend Mia/);
   }
   assert.ok(!reply.findTutorReplyProblems({ messages: introduction, reply: 'What is your friend’s name?' }).includes('asks for the learner name already given'));
+  const comparison = load(path.join(__dirname, '../src/utils/tutorComparison'));
+  const targets = comparison.tutorComparisonModels.map(id => ai.AI_MODELS.find(model => model.id === id));
+  const sampleReplies = [
+    'Sounds fun! Do you all meet at the same park every Saturday?',
+    'Great. Do you need a single ticket or a return?',
+    'I mean: do you play in organized games against other teams?',
+  ];
+  let elapsed = 0;
+  const callsBeforeComparison = nativeCalls.length;
+  const settingsBefore = await ai.getActiveModelId();
+  for (const model of targets) outputs.push(...sampleReplies);
+  const report = await comparison.runTutorComparison({
+    models: targets, loadModel: ai.loadModel, completeTutorMessage: ai.completeTutorMessage, clock: () => elapsed += 50,
+  });
+  assert.deepEqual(report.map(item => item.modelId), comparison.tutorComparisonModels);
+  assert.deepEqual(report[0].cases.map(item => item.id), report[1].cases.map(item => item.id));
+  assert.ok(report.flatMap(item => item.cases).every(item => item.reply && item.durationMs === 50));
+  assert.equal(await ai.getActiveModelId(), settingsBefore, 'comparison does not change the learner’s selection');
+  const requests = nativeCalls.slice(callsBeforeComparison);
+  assert.equal(requests.length, 6);
+  for (const [index, call] of requests.entries()) {
+    const scenario = comparison.tutorComparisonCases[index % 3];
+    const first = call.messages[0].content;
+    assert.ok(first.length < 800 && call.n_predict <= 120, 'ordinary chat should have compact instructions and a short output budget');
+    assert.ok(first.includes(scenario.messages[1].content), 'short replies must include the previous question');
+    assert.ok(!first.includes('Grammar reference:'), 'ordinary chat must not inject grammar handouts');
+    assert.ok(call.messages.some(item => item.content.includes(scenario.messages[0].content)), 'keep the first learner detail in the prompt');
+  }
+
+  const footballHistory = [{ role: 'user', content: 'I play football on Saturdays.' }];
+  for (let index = 0; index < 5; index++) {
+    footballHistory.push({ role: 'assistant', content: 'What else do you enjoy?' }, { role: 'user', content: 'A few other things.' });
+  }
+  footballHistory.push({ role: 'assistant', content: 'Do you play with friends or with a team?' }, { role: 'user', content: 'With friends.' });
+  outputs.push('Do you and your friends meet every Saturday?');
+  await ai.completeTutorMessage({ ...gemmaOpeningArgs, messages: footballHistory });
+  const compactMessages = nativeCalls.at(-1).messages;
+  assert.match(compactMessages[0].content, /Earlier learner facts.*I play football on Saturdays/);
+  assert.ok(compactMessages.length <= 6, 'keep the native window bounded');
+  outputs.push('Use the base verb after did. Say: “Did you go?”');
+  await ai.completeTutorMessage({ ...gemmaOpeningArgs, messages: [{ role: 'user', content: 'Could you explain why “did you went” is wrong?' }] });
+  assert.ok(nativeCalls.at(-1).messages[0].content.includes('Grammar reference:'), 'explicit grammar help retains a relevant reference');
+  assert.deepEqual(reply.findTutorReplyProblems({ messages: [
+    { role: 'assistant', content: 'What do you like to do in your free time?' }, { role: 'user', content: 'What?' },
+  ], reply: 'What do you like to do after school or work?' }), [], 'allow a genuine but lexically similar clarification');
+
+  const stoppedComparison = new AbortController();
+  await assert.rejects(comparison.runTutorComparison({
+    models: targets, signal: stoppedComparison.signal, loadModel: async () => stoppedComparison.abort(),
+    completeTutorMessage: () => { throw Error('should not start a turn after cancellation'); },
+  }), { name: 'AbortError' });
   const source = 'Okay! What do you think about the weather?';
   const wrongTranslation = source + '\nThe translation is: ' + source;
   const translation = 'Хорошо! Что ты думаешь о погоде?';
@@ -144,7 +195,13 @@ async function main() {
       assert.match(call.messages[0].content, /React to a concrete detail/, 'interview guidance survives context budgeting and repair');
     }
   }
+  const partialReport = await comparison.runTutorComparison({
+    models: targets, loadModel: async model => { if (model === targets[0]) throw new Error('Missing test model'); },
+    completeTutorMessage: async () => ({ text: 'A reply from the remaining model.' }),
+  });
+  assert.equal(partialReport[0].error, 'Missing test model');
+  assert.equal(partialReport[1].cases.length, 3);
   assert.equal(outputs.length, 0);
-  console.log('Tutor passed: actual service prompts/context, English A1–C1, short-repeat repair, explicit translation, rejected second failure, cancellation, buffered output and keyboard coordinate cases. Native model quality and keyboard movement still need an iPhone.');
+  console.log('Tutor passed: actual service prompts/context, English A1–C1, context for short replies, same prompts for Gemma and Llama, explicit translation, repaired/rejected answers, cancellation, buffered output and keyboard coordinate cases. Native model quality and keyboard movement still need an iPhone.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

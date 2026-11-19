@@ -69,19 +69,40 @@ export function continuityGuidance(messages, introductions = false) {
   return guidance.join(' ');
 }
 
+export const isClarification = text => /^(?:what|huh|sorry|pardon|what do you mean|что|не понял(?:а)?)[?!.\s]*$/i.test(String(text || '').trim());
+
 export function dialogueGuidance(messages) {
-  const turns = learnerTurns(messages);
-  if (!turns.length) return '';
-  const last = turns.at(-1).content.trim();
-  const beats = [
-    'Предложи один конкретный выбор внутри ситуации, опираясь на ответ ученика.',
-    'Добавь небольшое правдоподобное изменение условий и дай ученику на него отреагировать.',
-    'Попроси уточнить одну важную деталь, которую ученик ещё не сообщил.',
-    'Коротко подведи итог договорённости и предложи ученику подтвердить или изменить её.',
-  ];
-  const move = /\?\s*$/.test(last) ? 'Сначала прямо ответь на вопрос ученика. Затем продвинь ситуацию на один шаг.' : last.split(/\s+/).length < 4 ? 'Реплика короткая: предложи один конкретный выбор из двух вариантов. Не отвечай за ученика и не проси абстрактно «больше деталей».' : beats[(turns.length - 1) % beats.length];
-  const questions = messages.filter(item => item.role === 'assistant' && typeof item.content === 'string').slice(-2).flatMap(item => item.content.match(/[^.!?\n]*\?/g) || []).map(text => text.trim().slice(0, 180));
-  return `\nСЛЕДУЮЩИЙ ХОД В ДИАЛОГЕ: ${move} Не более одного вопроса за ход. Не задавай заново уже отвеченный вопрос; при неясности скажи, что именно нужно уточнить.${questions.length ? ` Недавние вопросы, которые не нужно повторять дословно: ${questions.join(' / ')}` : ''} Завершение ситуации допустимо: не растягивай разговор бесконечными вопросами.`;
+  const last = learnerTurns(messages).at(-1)?.content.trim();
+  if (!last) return '';
+  const previous = [...messages].reverse().find(item => item.role === 'assistant' && item.action !== 'translate' && item.content?.trim())?.content;
+  const question = previous?.match(/[^.!?\n]*\?/g)?.at(-1)?.trim();
+  const anchor = question || previous?.trim();
+  const reference = anchor ? ` Previous turn: "${anchor.replace(/\s+/g, ' ').slice(-200)}".` : '';
+  if (isClarification(last)) {
+    return anchor
+      ? `Clarify the previous question or statement in simpler English. Keep its topic and make it easier to answer.${reference}`
+      : 'Ask which part the learner wants you to explain.';
+  }
+  if (anchor && /^(?:yes|yeah|yep|sure|of course|no|nope|not really)[.!\s]*$/i.test(last)) {
+    return `Treat the short reply as a yes or no to the previous turn. Acknowledge it and move one step forward.${reference}`;
+  }
+  if (anchor && !isSimpleGreeting(last) && !/\?\s*$/.test(last) && last.split(/\s+/).length < 5) {
+    return `Use this short reply as an answer to the previous turn. Follow up on the detail the learner gave.${reference}`;
+  }
+  return /\?\s*$/.test(last) ? 'Answer the learner’s question directly.' : 'Use one concrete detail from the learner’s latest message to continue.';
+}
+
+const learnerFact = /^(?:i(?:['’]m| am| like| love| enjoy| play| live| work| study| usually| often| have| go| prefer)|my (?:name|hobby|favourite|favorite|job)|we (?:usually|often|play|go|live))\b/i;
+
+export function earlierLearnerFacts(messages) {
+  const facts = [];
+  for (const turn of learnerTurns(messages).reverse()) {
+    const quote = turn.content.trim().replace(/\s+/g, ' ');
+    if (quote.length > 120 || /[?\n]/.test(quote) || !learnerFact.test(quote) || facts.includes(quote)) continue;
+    facts.unshift(quote);
+    if (facts.length === 2) break;
+  }
+  return facts.length ? `Earlier learner facts (quotes): ${facts.map(text => JSON.stringify(text)).join(' | ')}.` : '';
 }
 
 export function courseDialogueEvidence(topicId, messages) {
