@@ -40,6 +40,7 @@ const timingLabels = {
   ai_first_token: 'Первый токен · попытка генерации',
   ai_reply_ready: 'Готовый ответ ИИ',
   ai_opening_ready: 'Продолжение приветствия',
+  ai_context_recovery_ready: 'Продолжение от приложения',
   ai_translation_ready: 'Готовый перевод ИИ',
   ai_reply_failed: 'До ошибки ответа ИИ',
   progress_serialize: 'Подготовка сохранения',
@@ -240,7 +241,7 @@ export default function DiagnosticsScreen({ onClose }) {
             <Text style={styles.label}>{result.title}</Text>
             {!!result.error && <Text style={styles.error}>{result.error}</Text>}
             {result.cases.map(test => <View key={test.id}>
-              <Text style={styles.label}>{test.title} · {test.durationMs} мс</Text>
+              <Text style={styles.label}>{test.title} · {test.durationMs} мс{test.source === 'context-recovery' ? ' · подсказка приложения' : ''}</Text>
               <Text style={test.error ? styles.error : styles.value}>{test.error || test.reply}</Text>
             </View>)}
           </View>)}

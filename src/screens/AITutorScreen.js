@@ -776,6 +776,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       if (request.signal.aborted) return;
       const finalText = (result?.text || generationText.current).trim();
       const timing = result?.quality?.source === 'local-opening' ? 'ai_opening_ready'
+        : result?.quality?.source === 'context-recovery' ? 'ai_context_recovery_ready'
         : translationTargetId ? 'ai_translation_ready' : 'ai_reply_ready';
       recordTiming(timing, now() - requestedAt);
       const assistantMessage = {

@@ -130,7 +130,7 @@ async function main() {
   });
   assert.deepEqual(report.map(item => item.modelId), comparison.tutorComparisonModels);
   assert.deepEqual(report[0].cases.map(item => item.id), report[1].cases.map(item => item.id));
-  assert.ok(report.flatMap(item => item.cases).every(item => item.reply && item.durationMs === 50));
+  assert.ok(report.flatMap(item => item.cases).every(item => item.reply && item.durationMs === 50 && item.source === 'model'));
   assert.equal(await ai.getActiveModelId(), settingsBefore, 'comparison does not change the learner’s selection');
   const requests = nativeCalls.slice(callsBeforeComparison);
   assert.equal(requests.length, 6);
@@ -142,6 +142,33 @@ async function main() {
     assert.ok(!first.includes('Grammar reference:'), 'ordinary chat must not inject grammar handouts');
     assert.ok(call.messages.some(item => item.content.includes(scenario.messages[0].content)), 'keep the first learner detail in the prompt');
   }
+
+  const reportedReplies = [
+    ['Football can be very social.', 'You can buy tickets at train stations.', ''],
+    ['That’s great! It’s fun to play football with friends. 😊', 'Okay.',
+      'That’s a good question! I like football, but I only play at weekends.\n\nDo you like football too?'],
+  ];
+  for (const modelReplies of reportedReplies) {
+    for (const draft of modelReplies) outputs.push(draft, draft);
+  }
+  const recovered = await comparison.runTutorComparison({
+    models: targets, loadModel: ai.loadModel, completeTutorMessage: ai.completeTutorMessage, clock: () => elapsed += 50,
+  });
+  for (const model of recovered) {
+    const [detail, yes, clarify] = model.cases;
+    assert.match(detail.reply, /where.*your friends.*football/i);
+    assert.match(yes.reply, /morning train to York.*single or a return ticket/i);
+    assert.match(clarify.reply, /organized matches against other teams/i);
+    assert.ok(model.cases.every(item => item.source === 'context-recovery' && item.rewritten === false));
+  }
+  const [footballCase, trainCase, leagueCase] = comparison.tutorComparisonCases;
+  const turn = load(path.join(__dirname, '../src/utils/tutorTurn'));
+  assert.equal(turn.tutorTurn([footballCase.messages[0], { role: 'assistant', content: 'Do you play tennis with friends?' }, footballCase.messages[2]]), null);
+  assert.equal(turn.tutorTurn([trainCase.messages[0], { role: 'assistant', content: 'Would you prefer not to take the morning train?' }, trainCase.messages[2]]), null);
+  const returnTicket = [{ role: 'user', content: 'I need a return train ticket to York.' }, ...trainCase.messages.slice(1)];
+  assert.ok(reply.findTutorReplyProblems({ reply: sampleReplies[1], messages: returnTicket }).length);
+  assert.match(turn.tutorTurn(returnTicket).replies[0], /window seat/);
+  assert.ok(reply.findTutorReplyProblems({ reply: reportedReplies[1][2], messages: leagueCase.messages }).some(problem => problem.includes('personal fact')));
 
   const footballHistory = [{ role: 'user', content: 'I play football on Saturdays.' }];
   for (let index = 0; index < 5; index++) {

@@ -1,3 +1,5 @@
+import { isClarification, tutorTurn } from './tutorTurn.js';
+export { isClarification } from './tutorTurn.js';
 import { getCourseDialogue } from '../data/courseDialogues.js';
 import { evaluateExercise } from './answer.js';
 import { courseSupplement } from '../data/courseSupplement.js';
@@ -69,15 +71,15 @@ export function continuityGuidance(messages, introductions = false) {
   return guidance.join(' ');
 }
 
-export const isClarification = text => /^(?:what|huh|sorry|pardon|what do you mean|что|не понял(?:а)?)[?!.\s]*$/i.test(String(text || '').trim());
-
 export function dialogueGuidance(messages) {
+  const focusedTurn = tutorTurn(messages);
   const last = learnerTurns(messages).at(-1)?.content.trim();
   if (!last) return '';
   const previous = [...messages].reverse().find(item => item.role === 'assistant' && item.action !== 'translate' && item.content?.trim())?.content;
   const question = previous?.match(/[^.!?\n]*\?/g)?.at(-1)?.trim();
   const anchor = question || previous?.trim();
   const reference = anchor ? ` Previous turn: "${anchor.replace(/\s+/g, ' ').slice(-200)}".` : '';
+  if (focusedTurn) return focusedTurn.instruction + reference;
   if (isClarification(last)) {
     return anchor
       ? `Clarify the previous question or statement in simpler English. Keep its topic and make it easier to answer.${reference}`

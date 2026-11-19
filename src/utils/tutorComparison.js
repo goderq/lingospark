@@ -54,7 +54,7 @@ export async function runTutorComparison({ models, loadModel, completeTutorMessa
         });
         assertTutorReplyNotAborted(signal);
         cases.push({ id: scenario.id, title: scenario.title, durationMs: Math.round(clock() - started),
-          reply: result.text, rewritten: result.quality?.checked === 'repaired' });
+          reply: result.text, source: result.quality?.source || 'model', rewritten: result.quality?.checked === 'repaired' });
       } catch (error) {
         assertTutorReplyNotAborted(signal);
         cases.push({ id: scenario.id, title: scenario.title, durationMs: Math.round(clock() - started), error: error.message });

@@ -778,7 +778,7 @@ async function completeTutorMessageUnsafe({ model, level, topic, dialogueMode = 
         systemPrompt(level, topic, analysis, turnNumber, dialogueMode, tutorMemory, mission, grammarNotes, compactConversationContext(earlier), feedbackPrompt(tutorFeedback)),
         courseContext, nextMove, tutorLanguageRule(messages),
       ].filter(Boolean).join('\n');
-  const result = await generateTutorReply({ messages, dialogueMode, qualityMode: settings.qualityMode, signal, onStatus,
+  const result = await generateTutorReply({ messages, dialogueMode, qualityMode: settings.qualityMode, allowContextRecovery: compact, signal, onStatus,
     generate: () => completeWithGuard(
     llama,
     {

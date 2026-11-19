@@ -1,4 +1,5 @@
 import { asksLearnerName, dialogueContinuity, greetingRestart, isClarification, isSimpleGreeting } from './conversationCoach.js';
+import { echoesLearnerFact, tutorTurn, tutorTurnProblem } from './tutorTurn.js';
 
 const lastUser = messages => [...messages].reverse().find(item => item.role === 'user');
 const normalize = text => String(text || '').normalize('NFKC').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, ' ').trim();
@@ -51,6 +52,12 @@ export function findTutorReplyProblems({ reply, messages, dialogueMode = 'conver
     return language === 'english' && questions.some(question => normalize(question).split(' ').length >= 3 && oldQuestions.includes(normalize(question)));
   })) problems.push('repeats a recent answer or question');
   if (clarification && (/^(?:hi|hello|hey|привет)\b/i.test(text) || !/\?|mean|asking|asked|question|simpl|choose|prefer|or\b/i.test(text))) problems.push('clarify the previous question instead of restarting the greeting');
+  if (language === 'english' && dialogueMode === 'conversation' && user?.kind !== 'command' && !repeatRequested) {
+    const turn = tutorTurn(messages);
+    if ((turn || clarification) && echoesLearnerFact(messages, text)) problems.push('copies the learner’s personal fact in the tutor’s voice');
+    const problem = tutorTurnProblem(turn, text);
+    if (problem) problems.push(problem);
+  }
   if (dialogueMode === 'story' && !/\bA[).:]|\bB[).:]|choice|what (?:do|would) you/i.test(text)) problems.push('story needs a choice for the learner');
   return problems;
 }
@@ -73,9 +80,8 @@ export function openingQuestionForGreeting({ messages, topic, dialogueMode = 'co
   return openingQuestions[topic].find(reply => !findTutorReplyProblems({ reply, messages }).length) || null;
 }
 
-// One bounded repair. Both outputs are checked, including short repeated replies.
-// Invalid output is never replaced by a canned greeting or presented as verified.
-export async function generateTutorReply({ generate, repair, messages, dialogueMode, qualityMode = false, onStatus, signal }) {
+// Check the draft and one repair before trying an app reply for a recognized turn.
+export async function generateTutorReply({ generate, repair, messages, dialogueMode, qualityMode = false, allowContextRecovery = false, onStatus, signal }) {
   assertTutorReplyNotAborted(signal); onStatus?.('thinking');
   const draft = await generate();
   assertTutorReplyNotAborted(signal);
@@ -89,6 +95,10 @@ export async function generateTutorReply({ generate, repair, messages, dialogueM
   const remaining = findTutorReplyProblems({ reply: improved?.text, messages, dialogueMode });
   if (remaining.length) {
     if (validDraft) return validDraft;
+    const recovery = allowContextRecovery && tutorReplyLanguage(messages) === 'english'
+      ? tutorTurn(messages)?.replies.find(text => !findTutorReplyProblems({ reply: text, messages, dialogueMode }).length)
+      : null;
+    if (recovery) return { text: recovery, quality: { source: 'context-recovery' } };
     const error = new Error(tutorReplyLanguage(messages) === 'russian'
       ? 'Модель не выдала перевод на русский. Попробуй ещё раз или выбери другую модель.'
       : 'Не удалось получить подходящий ответ. Попробуй ещё раз или измени реплику.');
