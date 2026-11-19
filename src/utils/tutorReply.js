@@ -1,4 +1,4 @@
-import { asksLearnerName, dialogueContinuity, greetingRestart } from './conversationCoach.js';
+import { asksLearnerName, dialogueContinuity, greetingRestart, isSimpleGreeting } from './conversationCoach.js';
 
 const lastUser = messages => [...messages].reverse().find(item => item.role === 'user');
 const normalize = text => String(text || '').normalize('NFKC').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, ' ').trim();
@@ -37,7 +37,7 @@ export function findTutorReplyProblems({ reply, messages, dialogueMode = 'conver
   if (language === 'english' && user?.kind !== 'command' && !repeatRequested) {
     const continuity = dialogueContinuity(messages);
     if (continuity.learnerName && asksLearnerName.test(text)) problems.push('asks for the learner name already given');
-    if (greetingRestart(text, continuity)) problems.push('restarts the greeting instead of continuing the dialogue');
+    if (greetingRestart(text, continuity)) problems.push('gives only a greeting or introduction without continuing');
   }
   const tokens = new Set(normalized.split(' ').filter(Boolean));
   const questions = text.match(/[^.!?\n]*\?/g) || [];
@@ -53,26 +53,44 @@ export function findTutorReplyProblems({ reply, messages, dialogueMode = 'conver
   if (dialogueMode === 'story' && !/\bA[).:]|\bB[).:]|choice|what (?:do|would) you/i.test(text)) problems.push('story needs a choice for the learner');
   return problems;
 }
-function assertNotAborted(signal) {
+export function assertTutorReplyNotAborted(signal) {
   if (signal?.aborted) { const error = new Error('Ответ остановлен'); error.name = 'AbortError'; throw error; }
 }
+const openingQuestions = {
+  'Свободный разговор': ['Let’s start with something easy. What do you like to do in your free time?', 'Let’s talk about your day. What did you do this morning?'],
+  Путешествия: ['Let’s talk about travel. Where would you like to go on your next trip?', 'Do you prefer going by train or by plane?'],
+  Работа: ['Let’s talk about work. What does a normal day look like for you?', 'What kind of work would you like to do?'],
+};
+
+// The built-in welcome can hand off a standalone greeting without inference.
+export function openingQuestionForGreeting({ messages, topic, dialogueMode = 'conversation', courseContext, scenarioContext }) {
+  if (dialogueMode !== 'conversation' || courseContext || scenarioContext || messages.length !== 2) return null;
+  const [welcome, latest] = messages;
+  if (welcome.role !== 'assistant' || !String(welcome.id || '').startsWith('welcome') ||
+    latest.role !== 'user' || latest.kind === 'command' || !isSimpleGreeting(latest.content)) return null;
+  if (!Object.hasOwn(openingQuestions, topic)) return null;
+  return openingQuestions[topic].find(reply => !findTutorReplyProblems({ reply, messages }).length) || null;
+}
+
 // One bounded repair. Both outputs are checked, including short repeated replies.
 // Invalid output is never replaced by a canned greeting or presented as verified.
 export async function generateTutorReply({ generate, repair, messages, dialogueMode, qualityMode = false, onStatus, signal }) {
-  assertNotAborted(signal); onStatus?.('thinking');
+  assertTutorReplyNotAborted(signal); onStatus?.('thinking');
   const draft = await generate();
-  assertNotAborted(signal);
+  assertTutorReplyNotAborted(signal);
   onStatus?.('checking');
   const problems = findTutorReplyProblems({ reply: draft?.text, messages, dialogueMode });
-  if (!qualityMode && !problems.length) return { ...draft, quality: { checked: 'format', source: 'model' } };
+  const validDraft = problems.length ? null : { ...draft, quality: { checked: 'format', source: 'model' } };
+  if (!qualityMode && validDraft) return validDraft;
   onStatus?.('rewriting');
   const improved = await repair(draft?.text || '', problems);
-  assertNotAborted(signal);
+  assertTutorReplyNotAborted(signal);
   const remaining = findTutorReplyProblems({ reply: improved?.text, messages, dialogueMode });
   if (remaining.length) {
+    if (validDraft) return validDraft;
     const error = new Error(tutorReplyLanguage(messages) === 'russian'
       ? 'Модель не выдала перевод на русский. Попробуй ещё раз или выбери другую модель.'
-      : 'Модель не смогла сформировать ответ без повторов и с нужным языком. Повтори запрос или выбери другую модель в меню.');
+      : 'Не удалось получить подходящий ответ. Попробуй ещё раз или измени реплику.');
     error.code = 'TUTOR_REPLY_INVALID'; throw error;
   }
   return { ...improved, quality: { checked: 'repaired', source: 'model' } };

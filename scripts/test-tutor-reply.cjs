@@ -29,6 +29,12 @@ async function main() {
   let repairs = 0;
   await assert.rejects(reply.generateTutorReply({ messages, generate: async () => ({ text: 'Привет! Как дела?' }), repair: async () => { repairs++; return { text: 'Привет! Как дела?' }; } }), { code: 'TUTOR_REPLY_INVALID' });
   assert.equal(repairs, 1, 'repair must be bounded and checked again');
+  const validBeforeRewrite = 'I meant to ask how you feel today. Are you tired or excited?';
+  assert.equal((await reply.generateTutorReply({
+    messages, qualityMode: true,
+    generate: async () => ({ text: validBeforeRewrite }),
+    repair: async () => ({ text: 'Hi! How are you?' }),
+  })).text, validBeforeRewrite, 'an optional rewrite must not discard a valid original');
   const controller = new AbortController();
   await assert.rejects(reply.generateTutorReply({ messages, signal: controller.signal, generate: async () => { controller.abort(); return { text: 'A cancelled reply.' }; }, repair: async () => { throw Error('must not repair after cancellation'); } }), { name: 'AbortError' });
   const ai = serviceLoad('src/services/localAi.js');
@@ -45,10 +51,38 @@ async function main() {
   await ai.clearTutorSessions();
   await ai.saveTutorSession({ id: 'after-error' });
   assert.equal((await ai.loadTutorSessions())[0].id, 'after-error');
+  const screenshotMessages = [
+    { id: 'welcome-shot', role: 'assistant', content: 'Hi! I’m Lingo. Let’s speak English. What would you like to talk about today?' },
+    { id: 'user-hi', role: 'user', kind: 'message', content: 'hi' },
+  ];
+  const gemmaOpeningArgs = { model: ai.AI_MODELS.find(model => model.family === 'gemma'), level: 'A2', topic: 'Свободный разговор' };
+  const nativeBeforeGreeting = nativeCalls.length;
+  const greeting = await ai.completeTutorMessage({ ...gemmaOpeningArgs, messages: screenshotMessages });
+  assert.equal(greeting.quality.source, 'local-opening');
+  assert.match(greeting.text, /What do you like to do/);
+  assert.equal(nativeCalls.length, nativeBeforeGreeting, 'short first greetings should bypass inference');
+  assert.deepEqual(reply.findTutorReplyProblems({ messages: screenshotMessages, reply: 'Hi! Have you read a good book lately?' }), []);
+  assert.ok(reply.findTutorReplyProblems({ messages: screenshotMessages, reply: 'Hi!' }).some(reason => /without continuing/.test(reason)));
+  assert.ok(reply.findTutorReplyProblems({ messages: screenshotMessages, reply: screenshotMessages[0].content }).some(reason => /repeats/.test(reason)));
+  assert.equal(reply.openingQuestionForGreeting({ ...gemmaOpeningArgs, messages: screenshotMessages, dialogueMode: 'roleplay' }), null);
+  assert.equal(reply.openingQuestionForGreeting({ ...gemmaOpeningArgs, messages: screenshotMessages, courseContext: 'Speak about an assignment.' }), null);
+  assert.equal(reply.openingQuestionForGreeting({ ...gemmaOpeningArgs, messages: [screenshotMessages[0], { role: 'user', content: 'Hi, can you help me?' }] }), null);
+  const duplicateOpening = [{ ...screenshotMessages[0], content: greeting.text }, screenshotMessages[1]];
+  assert.notEqual((await ai.completeTutorMessage({ ...gemmaOpeningArgs, messages: duplicateOpening })).text, greeting.text);
+  const abortedOpening = new AbortController();
+  abortedOpening.abort();
+  await assert.rejects(ai.completeTutorMessage({ ...gemmaOpeningArgs, messages: screenshotMessages, signal: abortedOpening.signal }), { name: 'AbortError' });
+  outputs.push('I enjoy cooking too. What do you like to cook?');
+  const followUp = await ai.completeTutorMessage({ ...gemmaOpeningArgs, messages: [
+    ...screenshotMessages, { id: 'assistant-opening', role: 'assistant', content: greeting.text },
+    { role: 'user', content: 'I enjoy cooking.' },
+  ] });
+  assert.equal(followUp.quality.source, 'model');
+  assert.match(nativeCalls.at(-1).messages.map(message => message.content).join(' '), /What do you like to do/);
   for (const model of ai.AI_MODELS) for (const level of ['A1', 'A2', 'B1', 'B2', 'C1']) {
     const tokens = [], stages = [];
     outputs.push('Привет! Как дела?', 'Would you like to talk about food or travel?');
-    const result = await ai.completeTutorMessage({ model, level, topic: 'Свободный разговор', messages: [{ id: 'welcome-1', role: 'assistant', content: 'Привет! Я преподаватель.' }, { role: 'user', content: 'hi' }], onToken: text => tokens.push(text), onStatus: status => stages.push(status) });
+    const result = await ai.completeTutorMessage({ model, level, topic: 'Свободный разговор', messages: [{ id: 'welcome-1', role: 'assistant', content: 'Привет! Я преподаватель.' }, { role: 'user', content: 'I would like to practise English.' }], onToken: text => tokens.push(text), onStatus: status => stages.push(status) });
     assert.equal(result.text, 'Would you like to talk about food or travel?');
     assert.deepEqual(tokens, [result.text], 'unvalidated draft must never be streamed to the screen');
     assert.deepEqual(stages, ['thinking', 'checking', 'rewriting']);

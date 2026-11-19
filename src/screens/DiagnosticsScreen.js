@@ -23,6 +23,31 @@ import { grammarTracks } from "../data/grammarAcademy";
 import { extendedWordBankSize, wordBankSize } from "../data/wordBank";
 import { colors , useTheme, createThemedStyles } from "../theme";
 
+const timingLabels = {
+  startup_js: 'Запуск JS и подготовка данных',
+  words_open: 'Экран слов',
+  dictionary_open: 'Словарь',
+  dictionary_filter: 'Поиск в словаре',
+  speech_start: 'Озвучка · вся задержка',
+  speech_prepare: 'Озвучка · подготовка',
+  speech_stop: 'Озвучка · остановка',
+  speech_native_start: 'Озвучка · нативный запуск',
+  practice_open: 'Экран практики',
+  journey_open: 'Учебная тема',
+  learning_home_open: 'Экран обучения',
+  native_queue_wait: 'Ожидание движка',
+  ai_first_token: 'Первый токен · попытка генерации',
+  ai_reply_ready: 'Готовый ответ ИИ',
+  ai_opening_ready: 'Продолжение приветствия',
+  ai_translation_ready: 'Готовый перевод ИИ',
+  ai_reply_failed: 'До ошибки ответа ИИ',
+  progress_serialize: 'Подготовка сохранения',
+};
+
+const timingLabel = name => name.startsWith('navigation_')
+  ? `Переход · ${timingLabels[name.slice('navigation_'.length)] || name}`
+  : timingLabels[name] || name;
+
 const yesNo = (value) => (value ? "Готово" : "Не установлено");
 
 export default function DiagnosticsScreen({ onClose }) {
@@ -136,8 +161,9 @@ export default function DiagnosticsScreen({ onClose }) {
             <Action title="Скопировать замеры" icon="copy" onPress={async () => { await Clipboard.setStringAsync(JSON.stringify({ version: Constants.expoConfig?.version, platform: Platform.OS, recordedAt: new Date().toISOString(), timings: performanceSummary(), resources: nativeResourceState(), note: 'Замеры текущего запуска; не измеряют память или FPS.' }, null, 2)); Alert.alert('Скопировано', 'Отчёт содержит длительности и состояние очереди моделей.'); }} />
             <Action title="Новый замер" icon="refresh" onPress={() => { resetPerformanceSamples(); setTimings([]); }} />
           </View>
-          {timings.map((entry)=><Row key={entry.name} icon="speedometer" label={({startup_js:'Запуск JavaScript',words_open:'Экран слов',dictionary_open:'Открытие словаря',dictionary_filter:'Поиск в словаре',speech_start:'Озвучка: вся задержка',speech_prepare:'Озвучка: подготовка',speech_stop:'Озвучка: остановка',speech_native_start:'Озвучка: нативный запуск',practice_open:'Экран практики',journey_open:'Учебная тема',learning_home_open:'Экран обучения',native_queue_wait:'Ожидание движка',ai_first_token:'Первый токен ИИ',progress_serialize:'Подготовка сохранения'})[entry.name] || entry.name} value={`${entry.last} мс · 95% до ${entry.p95} мс · замеров ${entry.count}`}/>)}
-          <Text style={styles.value}>Последние 60 замеров. Открытие экрана — от начала отрисовки до следующего кадра. Запуск JS не включает загрузку iOS. Озвучка — от нажатия до события начала речи.</Text>
+          {timings.map(entry => <Row key={entry.name} icon="speedometer" label={timingLabel(entry.name)}
+            value={`${entry.last} мс · замеров ${entry.count}${entry.count >= 20 ? ` · p95 ${entry.p95} мс` : ''}`} />)}
+          <Text style={styles.value}>Открытие экрана измеряется до следующего кадра. Готовый ответ ИИ измеряется от отправки до проверки ответа, включая повторную попытку при необходимости. Запуск JS включает подготовку прогресса и авторизации. Озвучка измеряется от нажатия до начала речи.</Text>
         </Section>
 
         <Section title={`СООБЩЕНИЯ ОБ ОШИБКАХ · ${progress.contentReports?.length || 0}`}>

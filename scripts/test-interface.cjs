@@ -388,6 +388,17 @@ async function main() {
   await act(async () => chatInput().props.onChangeText('please try'));
   await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
   await act(async () => { tutorRequests.at(-1).reject(new Error('Модель не смогла сформировать ответ')); await flush(); });
+  const retryButton = namedButton('Повторить ответ');
+  const editReplyButton = namedButton('Изменить реплику');
+  const chatErrorView = tree.root.findAllByType('View').find(node => node.props.accessibilityLiveRegion === 'polite'
+    && node.findAllByType('Text').some(text => text.props.children === 'Модель не смогла сформировать ответ'));
+  assert.ok(chatErrorView);
+  assert.notEqual(flatten(chatErrorView.props.style).flexDirection, 'row', 'message and actions must not compete in one row');
+  const errorActions = chatErrorView.findAllByType('View').find(node => flatten(node.props.style).flexWrap === 'wrap');
+  assert.ok(errorActions.findAllByType('Pressable').includes(retryButton));
+  assert.ok(errorActions.findAllByType('Pressable').includes(editReplyButton));
+  assert.equal(load('src/utils/performance.js').performanceSummary().find(item => item.name === 'ai_reply_failed').count, 1);
+
   const userCount = tree.root.findByType('FlatList').props.data.filter(item => item.role === 'user').length;
   await act(async () => { namedButton('Повторить ответ').props.onPress(); await flush(); });
   assert.equal(tutorRequests.at(-1).args.messages.filter(item => item.role === 'user').length, userCount, 'retry must not insert the learner message twice');

@@ -1,3 +1,4 @@
+import { now, recordTiming } from '../utils/performance';
 import { evaluateExercise } from '../utils/answer';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { courseTutorContext } from '../utils/learningJourney';
@@ -726,6 +727,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
     if (!text || generating || requestRef.current || !modelReady) return;
     if (interviewEnded && !translationTargetId && !options.retry) return;
     if (translationTargetId && !messages.some(item => item.id === translationTargetId)) return;
+    const requestedAt = now();
     Keyboard.dismiss();
     if (options.kind !== "command") setInput("");
     setOpenActionsId(null);
@@ -773,6 +775,9 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       });
       if (request.signal.aborted) return;
       const finalText = (result?.text || generationText.current).trim();
+      const timing = result?.quality?.source === 'local-opening' ? 'ai_opening_ready'
+        : translationTargetId ? 'ai_translation_ready' : 'ai_reply_ready';
+      recordTiming(timing, now() - requestedAt);
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
@@ -799,6 +804,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       }).catch(() => { if (!request.signal.aborted) setError('Ответ получен, но сохранить разговор на устройстве не удалось.'); });
     } catch (generationError) {
       if (request.signal.aborted) return;
+      recordTiming('ai_reply_failed', now() - requestedAt);
       setMessages((current) => current.filter((item) => item.id !== "streaming"));
       setError(generationError?.message || "Не удалось получить ответ");
       setRetryRequest({ text, options, messageId: nextMessages.at(-1)?.id });
@@ -1241,11 +1247,19 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       )}
 
       {error ? (
-        <View style={styles.chatError}>
-          <Ionicons name="alert-circle" color={colors.orange} size={18} />
-          <Text style={styles.chatErrorText}>{error}</Text>
-          {!!retryRequest && <Pressable accessibilityRole="button" onPress={() => submitMessage(retryRequest.text, { ...retryRequest.options, retry: true })} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>Повторить ответ</Text></Pressable>}
-          {!!retryRequest && retryRequest.options.kind !== 'command' && <Pressable accessibilityRole="button" onPress={editFailedReply} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={styles.speakText}>Изменить реплику</Text></Pressable>}
+        <View style={styles.chatError} accessibilityLiveRegion="polite">
+          <View style={styles.chatErrorMessage}>
+            <Ionicons name="alert-circle" color={colors.orange} size={18} />
+            <Text style={styles.chatErrorText}>{error}</Text>
+          </View>
+          {!!retryRequest && <View style={styles.chatErrorActions}>
+            <Pressable accessibilityRole="button" onPress={() => submitMessage(retryRequest.text, { ...retryRequest.options, retry: true })} style={styles.chatErrorAction}>
+              <Text style={styles.speakText}>Повторить ответ</Text>
+            </Pressable>
+            {retryRequest.options.kind !== 'command' && <Pressable accessibilityRole="button" onPress={editFailedReply} style={styles.chatErrorAction}>
+              <Text style={styles.speakText}>Изменить реплику</Text>
+            </Pressable>}
+          </View>}
         </View>
       ) : null}
 
@@ -1593,8 +1607,11 @@ const styles = createThemedStyles(() => ({
   toolGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   toolButton: { width: "48%", flexGrow: 1, height: 38, borderRadius: 10, backgroundColor: colors.card, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
   toolText: { color: colors.text, fontSize: 9, fontWeight: "800" },
-  chatError: { marginHorizontal: 14, marginBottom: 7, backgroundColor: "rgba(255,159,67,0.12)", borderRadius: 12, padding: 10, flexDirection: "row", gap: 8, alignItems: "center" },
-  chatErrorText: { color: colors.text, fontSize: 11, lineHeight: 15, flex: 1 },
+  chatError: { marginHorizontal: 14, marginBottom: 7, backgroundColor: "rgba(255,159,67,0.12)", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, gap: 2 },
+  chatErrorMessage: { flexDirection: "row", gap: 8, alignItems: "flex-start" },
+  chatErrorText: { color: colors.text, fontSize: 13, lineHeight: 19, flex: 1 },
+  chatErrorActions: { flexDirection: "row", flexWrap: "wrap", columnGap: 14 },
+  chatErrorAction: { minHeight: 44, justifyContent: "center" },
   composer: { flexDirection: "row", alignItems: "flex-end", gap: 8, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 8, borderTopWidth: 1, borderColor: colors.border, backgroundColor: colors.background },
   micButton: { width: 46, height: 46, borderRadius: 16, backgroundColor: colors.cardLight, alignItems: "center", justifyContent: "center" },
   micActive: { backgroundColor: colors.pink },

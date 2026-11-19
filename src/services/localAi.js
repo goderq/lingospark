@@ -3,7 +3,7 @@ import { withNativeResource, registerResource, releaseNativeResource } from './n
 import { budgetMessages, recentTranscript } from '../utils/contextBudget';
 import { now, recordTiming } from '../utils/performance';
 import { continuityGuidance, dialogueGuidance } from '../utils/conversationCoach';
-import { generateTutorReply, tutorLanguageRule } from '../utils/tutorReply';
+import { assertTutorReplyNotAborted, generateTutorReply, openingQuestionForGreeting, tutorLanguageRule } from '../utils/tutorReply';
 import { AI_MODELS, isLightModel } from '../data/aiModels';
 import { modelCompletionOptions, modelSizeProblem } from '../utils/aiModelRuntime';
 export { AI_MODELS } from '../data/aiModels';
@@ -1006,6 +1006,17 @@ ${grammarContext ? `Проверенная грамматическая памя
 registerResource('llm', unloadModelUnsafe, stopGeneration);
 export const loadModel = (model, onProgress) => withNativeResource('llm', () => loadModelUnsafe(model, onProgress));
 export const unloadModel = () => releaseNativeResource('llm');
-export const completeTutorMessage = args => withNativeResource('llm', () => completeTutorMessageUnsafe(args));
+export async function completeTutorMessage(args) {
+  assertTutorReplyNotAborted(args.signal);
+  const opening = openingQuestionForGreeting(args);
+  if (opening) {
+    args.onToken?.(opening);
+    return { text: opening, quality: { source: 'local-opening' } };
+  }
+  return withNativeResource('llm', () => {
+    assertTutorReplyNotAborted(args.signal);
+    return completeTutorMessageUnsafe(args);
+  });
+}
 export const analyzeTutorConversation = args => withNativeResource('llm', () => analyzeTutorConversationUnsafe(args));
 export const completeVoiceCoachMessage = args => withNativeResource('llm', () => completeVoiceCoachMessageUnsafe(args));

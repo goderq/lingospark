@@ -6,6 +6,7 @@ export const learnerTurns = messages => messages.filter(item => item.role === 'u
 
 const greetingStart = /^(?:hi\b|hello\b|hey\b|good (?:morning|afternoon|evening)\b|привет(?:[!,.\s]|$)|здравствуй(?:те)?(?:[!,.\s]|$))/i;
 const greetingOnly = /^(?:hi(?: there)?|hello(?: there)?|hey(?: there)?|good (?:morning|afternoon|evening)|привет|здравствуй(?:те)?)[\s!.,?]*$/i;
+export const isSimpleGreeting = text => greetingOnly.test(String(text || '').trim());
 export const asksLearnerName = /(?:\bwhat(?:['’]s| is) your (?:first )?name\b|\b(?:tell me|share|ask|know|have) (?:me )?your (?:first )?name\b|\bwhat (?:should|can|may|do) i call you\b|\bwhat name (?:do|should) (?:you|i)\b|\byour (?:first )?name(?:[ ,]+please)?\s*\?)/i;
 
 function introducedName(text, answerToNameQuestion) {
@@ -35,15 +36,16 @@ export function dialogueContinuity(messages) {
     }
   }
   const latest = messages.at(-1);
-  const latestIsGreeting = latest?.role === 'user' && greetingOnly.test(latest.content?.trim() || '');
+  const latestIsGreeting = latest?.role === 'user' && isSimpleGreeting(latest.content);
   const continueAfterGreeting = alreadyGreeted && (latestIsGreeting || latestIntroducedName);
   return { learnerName, continueAfterGreeting, latestIntroducedName, previous };
 }
 
 export function greetingRestart(reply, continuity) {
   if (!continuity.continueAfterGreeting) return false;
-  if (greetingStart.test(reply) || greetingOnly.test(reply)) return true;
-  return /^(?:nice|good|great|lovely) to meet you(?:[ ,]+[a-z'-]+)?[.!\s]*$/i.test(reply);
+  if (isSimpleGreeting(reply) || /^(?:hi|hello|hey)[ ,]+[a-z'’-]+[.!?,\s]*$/i.test(reply)) return true;
+  const continuation = reply.replace(/^(?:hi|hello|hey|good (?:morning|afternoon|evening))\b(?:[ ,]+[a-z'’-]+(?=[.!]))?[,.!\s]+/i, '');
+  return /^(?:(?:nice|good|great|lovely) to meet you(?:[ ,]+[a-z'’-]+)?|(?:i(?:['’]m| am)|my name is) [a-z'’-]+)[.!\s]*$/i.test(continuation);
 }
 
 export function continuityGuidance(messages, introductions = false) {
@@ -53,7 +55,7 @@ export function continuityGuidance(messages, introductions = false) {
     guidance.push(`The learner already gave their name: ${facts.learnerName}. Never ask for or reconfirm it.`);
   }
   if (facts.continueAfterGreeting) {
-    guidance.push('The conversation already started. Continue without greeting or introducing yourself again. Make the next turn specific to the current situation.');
+    guidance.push('The conversation already started. Acknowledge the learner briefly and then add a new detail or question. Avoid introducing yourself again.');
     if (facts.latestIntroducedName) {
       guidance.push(introductions
         ? 'Acknowledge their name and introduce your friend Mia if you have not done so yet. Then invite the learner to respond to Mia or introduce a friend.'
