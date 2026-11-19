@@ -57,10 +57,23 @@ const turns = [{ role: 'assistant', content: 'My name is Anna.' }, { role: 'user
 assert.equal(courseDialogueEvidence('greetings', turns)[0].matched, false, 'assistant replies and commands cannot demonstrate learner practice');
 assert.equal(courseDialogueEvidence('greetings', [...turns, { role: 'user', content: "I'm Anna" }])[0].matched, true);
 assert.deepEqual(courseDialogueEvidence('unknown-topic', turns), []);
-assert.match(dialogueGuidance([{ role: 'user', content: 'find' }]), /конкретный выбор/);
-assert.match(dialogueGuidance([{ role: 'user', content: 'Can I pay by card?' }]), /Сначала прямо ответь/);
-const moves = [1, 2, 3, 4].map(count => dialogueGuidance(Array.from({ length: count }, () => ({ role: 'user', content: 'I would like to book a table for tomorrow' }))));
-assert.equal(new Set(moves).size, 4);
+const guidanceFor = (text, previous) => dialogueGuidance([
+  ...(previous ? [{ role: 'assistant', content: previous }] : []),
+  { role: 'user', content: text },
+]);
+assert.match(guidanceFor('find'), /ask one specific question to clarify/i);
+assert.match(guidanceFor('Can I pay by card?'), /answer the learner’s question directly/i);
+assert.match(guidanceFor('I would like to book a table for tomorrow'), /use one concrete detail/i);
+const previousQuestion = 'Do you usually play with friends or with a team?';
+const fragmentGuidance = guidanceFor('With friends.', previousQuestion);
+assert.match(fragmentGuidance, /follow up on the detail/i);
+assert.ok(fragmentGuidance.includes(previousQuestion));
+const clarificationGuidance = guidanceFor('What?', previousQuestion);
+assert.match(clarificationGuidance, /clarify.*in simpler English/i);
+assert.ok(clarificationGuidance.includes(previousQuestion));
+const yesNoGuidance = guidanceFor('Yes.', 'Would you like the morning train?');
+assert.match(yesNoGuidance, /yes or no.*move one step forward/i);
+assert.ok(yesNoGuidance.includes('Would you like the morning train?'));
 assert.equal(wordLearningDetails('family', 'семья').partOfSpeech, 'существительное');
 assert.notEqual(wordLearningDetails('building', 'здание').partOfSpeech, 'глагол');
 console.log('Learning quality passed: concrete feedback, accepted variants, linked skills, 43 prerequisite routes, resumable short sessions, learner-only dialogue evidence and contextual word labels.');

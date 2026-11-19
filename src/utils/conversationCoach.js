@@ -86,8 +86,10 @@ export function dialogueGuidance(messages) {
   if (anchor && /^(?:yes|yeah|yep|sure|of course|no|nope|not really)[.!\s]*$/i.test(last)) {
     return `Treat the short reply as a yes or no to the previous turn. Acknowledge it and move one step forward.${reference}`;
   }
-  if (anchor && !isSimpleGreeting(last) && !/\?\s*$/.test(last) && last.split(/\s+/).length < 5) {
-    return `Use this short reply as an answer to the previous turn. Follow up on the detail the learner gave.${reference}`;
+  if (!isSimpleGreeting(last) && !/\?\s*$/.test(last) && last.split(/\s+/).length < 5) {
+    return anchor
+      ? `Use this short reply as an answer to the previous turn. Follow up on the detail the learner gave.${reference}`
+      : 'If the request is incomplete, ask one specific question to clarify what the learner wants.';
   }
   return /\?\s*$/.test(last) ? 'Answer the learner’s question directly.' : 'Use one concrete detail from the learner’s latest message to continue.';
 }
