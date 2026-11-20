@@ -13,6 +13,9 @@ const errorMessage = error => ({
   owner_required: 'Назначать администраторов может владелец.',
   account_required: 'Войди в аккаунт ещё раз.',
   account_not_found: 'Аккаунт с подтверждённой почтой не найден.',
+  invalid_license_days: 'Укажи срок от 1 до 3650 дней.',
+  invalid_license_reason: 'Укажи причину длиной от 3 до 200 символов.',
+  license_already_permanent: 'У аккаунта уже есть бессрочная лицензия.',
 }[error?.message] || 'Не удалось выполнить действие. Проверь подключение и попробуй ещё раз.');
 
 const displayDate = value => new Date(value).toLocaleDateString('ru-RU');
@@ -134,18 +137,180 @@ export default function AccessScreen({ onClose, onAccount }) {
 }
 
 const PAGE_SIZE = 50;
+const DIRECTORY_PAGE_SIZE = 30;
 const eventTitles = {
   promo_created: 'Промокод создан',
   promo_disabled: 'Промокод отключён',
   promo_redeemed: 'Промокод активирован',
   license_revoked: 'Лицензия отозвана',
+  license_granted: 'Лицензия выдана',
+  license_extended: 'Лицензия продлена',
 };
 const displayTime = value => new Date(value).toLocaleString('ru-RU', {
   year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-function AccessJournal({ onClose, account }) {
+const roleTitle = role => ({ owner: 'Владелец', admin: 'Администратор' }[role] || 'Пользователь');
+const integer = (value, max) => /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= max;
+const userFilters = { all: 'Все', active: 'Активная лицензия', expiring: 'Скоро истечёт', none: 'Без доступа' };
+const promoFilters = { all: 'Все', active: 'Действующие', expired: 'Просроченные', exhausted: 'Исчерпанные', disabled: 'Отключённые' };
+const promoStatus = { active: 'Действует', expired: 'Истёк срок', exhausted: 'Активации исчерпаны', disabled: 'Отключён' };
+const roleOptions = {};
+
+const confirmAction = (title, description, action) => Alert.alert(title, description, [
+  { text: 'Отмена', style: 'cancel' },
+  { text: 'Подтвердить', onPress: action },
+]);
+
+function FilterButtons({ options, selected, onSelect, disabled }) {
+  return <View style={s.filters}>
+    {Object.entries(options).map(([key, title]) => <Pressable key={key} accessibilityRole="button"
+      accessibilityState={{ selected: selected === key, disabled: !!disabled }}
+      disabled={disabled} onPress={() => onSelect(key)} style={[s.filter, selected === key && s.filterSelected]}>
+      <Text style={selected === key ? s.label : s.muted}>{title}</Text>
+    </Pressable>)}
+  </View>;
+}
+
+function useAdminPage(action, options, field) {
+  const [items, setItems] = useState([]);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const revision = useRef(0);
+  const load = useCallback(async nextOffset => {
+    const request = ++revision.current;
+    setLoading(true);
+    setError('');
+    try {
+      const result = await manageAccess(action, { ...options, offset: nextOffset });
+      if (request !== revision.current) return;
+      setItems(result[field]);
+      setHasMore(result.has_more);
+      setOffset(nextOffset);
+    } catch (reason) {
+      if (request === revision.current) setError(errorMessage(reason));
+    } finally {
+      if (request === revision.current) setLoading(false);
+    }
+  }, [action, options, field]);
+  useEffect(() => {
+    setItems([]);
+    setOffset(0);
+    setHasMore(false);
+    load(0);
+    return () => { revision.current++; };
+  }, [load]);
+  return { items, offset, hasMore, loading, error, load };
+}
+
+function ListControls({ page }) {
+  return <>
+    {!!page.error && <Text accessibilityLiveRegion="polite" style={s.notice}>{page.error}</Text>}
+    {page.offset > 0 && <Button title="Предыдущая страница" secondary disabled={page.loading} onPress={() => page.load(page.offset - DIRECTORY_PAGE_SIZE)} />}
+    {page.hasMore && <Button title="Следующая страница" secondary disabled={page.loading} onPress={() => page.load(page.offset + DIRECTORY_PAGE_SIZE)} />}
+    <Button title="Обновить список" secondary disabled={page.loading} onPress={() => page.load(page.offset)} />
+  </>;
+}
+
+function AdminUsers({ criteria, setCriteria, onAccount, onClose }) {
+  const [query, setQuery] = useState(criteria.query);
+  const page = useAdminPage('list_users', criteria, 'users');
+  const search = (filter = criteria.filter) => setCriteria({ query: query.trim(), filter });
+  return <AccessLayout title="Пользователи" onClose={onClose}>
+    <Field label="Имя или почта" value={query} onChangeText={setQuery} maxLength={254} autoCorrect={false}
+      autoCapitalize="none" returnKeyType="search" onSubmitEditing={() => search()} />
+    <Button title="Найти пользователей" secondary onPress={() => search()} />
+    <FilterButtons options={userFilters} selected={criteria.filter} onSelect={search} />
+    {criteria.filter === 'expiring' && <Text style={s.muted}>Лицензии, которые истекут в ближайшие 7 дней.</Text>}
+    {page.loading && <ActivityIndicator color={colors.purple} />}
+    {!page.loading && !page.error && !page.items.length && <Text style={s.muted}>Пользователи не найдены.</Text>}
+    {!page.loading && page.items.map(account => <Pressable key={account.id} accessibilityRole="button"
+      style={s.card} onPress={() => onAccount(account)}>
+      <Text style={s.label}>{account.name || account.email}</Text>
+      {!!account.name && <Text style={s.muted}>{account.email}</Text>}
+      <Text style={s.muted}>{roleTitle(account.role)} · {account.role && !account.licensed ? 'Доступ по роли' : licenseStatus(account)}</Text>
+      {!account.confirmed && <Text style={s.muted}>Почта не подтверждена</Text>}
+    </Pressable>)}
+    <ListControls page={page} />
+  </AccessLayout>;
+}
+
+function RoleJournal({ onClose }) {
+  const page = useAdminPage('list_role_events', roleOptions, 'events');
+  return <AccessLayout title="Журнал ролей" onClose={onClose}>
+    {page.loading && <ActivityIndicator color={colors.purple} />}
+    {!page.loading && !page.error && !page.items.length && <Text style={s.muted}>Изменений ролей пока нет.</Text>}
+    {page.items.map(event => <View key={event.id} style={s.card}>
+      <Text style={s.label}>{roleTitle(event.before_role)} → {roleTitle(event.after_role)}</Text>
+      <Text style={s.muted}>{event.target_email || 'Аккаунт недоступен'}</Text>
+      <Text style={s.muted}>{displayTime(event.occurred_at)}</Text>
+      <Text style={s.muted}>{event.actor_email ? 'Выполнил: ' + event.actor_email : 'Автор неизвестен'}</Text>
+    </View>)}
+    <ListControls page={page} />
+  </AccessLayout>;
+}
+
+function AccountActions({ account, staffRole, onUpdate }) {
+  const [days, setDays] = useState('7');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const running = useRef(false);
+  const confirmation = useRef(null);
+  const permanent = account.licensed && !account.expires_at;
+  const grantTitle = account.licensed ? 'Продлить лицензию' : 'Выдать лицензию';
+  const run = async (action, options = {}, success = '') => {
+    if (running.current) return;
+    running.current = true;
+    setBusy(true);
+    setMessage('');
+    try {
+      const updated = await manageAccess(action, { email: account.email, ...options });
+      if (action === 'grant_license') {
+        confirmation.current = null;
+        setReason('');
+      }
+      onUpdate(updated);
+      setMessage(success);
+    } catch (error) {
+      setMessage(errorMessage(error));
+    } finally {
+      running.current = false;
+      setBusy(false);
+    }
+  };
+  const grant = () => {
+    const key = [account.email, Number(days), reason.trim()].join('\n');
+    if (confirmation.current?.key !== key) {
+      confirmation.current = { key, id: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2) };
+    }
+    const options = { license_days: Number(days), reason: reason.trim(), request_key: confirmation.current.id };
+    confirmAction(grantTitle + '?', account.email + ' · ' + days + ' дн.', () => run('grant_license', options, 'Лицензия сохранена.'));
+  };
+  return <>
+    {!permanent && <View style={s.issued}>
+      <Field label="Срок лицензии в днях" value={days} onChangeText={setDays} keyboardType="number-pad" maxLength={4} editable={!busy} />
+      <Field label="Причина выдачи или продления" value={reason} onChangeText={setReason} maxLength={200} editable={!busy}
+        placeholder="Например, тестовый доступ" />
+      <Button title={grantTitle} secondary onPress={grant}
+        disabled={busy || !integer(days, 3650) || reason.trim().length < 3} />
+    </View>}
+    {account.licensed && <Button title="Отозвать лицензию" secondary disabled={busy}
+      onPress={() => confirmAction('Отозвать лицензию?', account.email, () => run('revoke_license', {}, 'Лицензия отозвана.'))} />}
+    {staffRole === 'owner' && account.role !== 'owner' && <Button
+      title={account.role === 'admin' ? 'Снять права администратора' : 'Назначить администратором'} secondary disabled={busy}
+      onPress={() => confirmAction(account.role === 'admin' ? 'Снять права?' : 'Назначить администратором?', account.email,
+        () => run(account.role === 'admin' ? 'revoke_admin' : 'grant_admin', {}, 'Роль обновлена.'))} />}
+    {!!message && <Text accessibilityLiveRegion="polite" style={s.notice}>{message}</Text>}
+  </>;
+}
+
+function AccessJournal({ onClose, account, staffRole }) {
   const email = account?.email;
+  const confirmed = account?.confirmed !== false;
+  const [profile, setProfile] = useState(account);
   const [entries, setEntries] = useState([]);
   const [license, setLicense] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -169,22 +334,29 @@ function AccessJournal({ onClose, account }) {
     }
   }, [email]);
   useEffect(() => {
-    load();
+    if (confirmed) load();
+    else setLoading(false);
     return () => { request.current++; };
-  }, [load]);
+  }, [confirmed, load]);
 
-  return <AccessLayout title={account ? 'История доступа' : 'Журнал лицензий'} onClose={onClose}>
-    {!!account && <View style={s.card}>
-      {!!account.name && <Text style={s.label}>{account.name}</Text>}
-      <Text style={s.muted}>{account.email}</Text>
-      <Text style={s.label}>{licenseStatus(license || account)}</Text>
+  return <AccessLayout title={account ? 'Карточка пользователя' : 'Журнал лицензий'} onClose={onClose}>
+    {!!profile && <View style={s.card}>
+      {!!profile.name && <Text style={s.label}>{profile.name}</Text>}
+      <Text style={s.muted}>{profile.email}</Text>
+      <Text style={s.label}>{roleTitle(profile.role)} · {licenseStatus(license || profile)}</Text>
+      {confirmed ? <AccountActions account={{ ...profile, ...license }} staffRole={staffRole} onUpdate={updated => {
+        setProfile(current => ({ ...current, ...updated }));
+        setLicense(updated);
+        load();
+      }} /> : <Text style={s.muted}>Почта ещё не подтверждена.</Text>}
     </View>}
-    <Button title="Обновить журнал" secondary disabled={loading} onPress={() => load()} />
+    {account && confirmed && <Text style={s.heading}>История доступа</Text>}
+    {confirmed && <Button title="Обновить журнал" secondary disabled={loading} onPress={() => load()} />}
     {!!error && <Text accessibilityLiveRegion="polite" style={s.notice}>{error}</Text>}
     {loading && <ActivityIndicator color={colors.purple} />}
     {!loading && !error && entries.length === 0 && <Text style={s.muted}>Событий пока нет.</Text>}
     {entries.map(entry => {
-      const accountEvent = entry.kind === 'promo_redeemed' || entry.kind === 'license_revoked';
+      const accountEvent = ['promo_redeemed', 'license_revoked', 'license_granted', 'license_extended'].includes(entry.kind);
       return <View key={entry.id} style={s.card}>
         <Text style={s.label}>{eventTitles[entry.kind]}</Text>
         <Text style={s.muted}>{displayTime(entry.occurred_at)}</Text>
@@ -196,6 +368,7 @@ function AccessJournal({ onClose, account }) {
         {accountEvent && !entry.historical && <Text style={s.muted}>{entry.expires_at
           ? (entry.kind === 'license_revoked' ? 'Лицензия действовала до ' : 'Доступ до ') + displayTime(entry.expires_at)
           : 'Бессрочная лицензия'}</Text>}
+        {!!entry.reason && <Text style={s.muted}>{entry.reason} · {entry.granted_days} дн.</Text>}
         {accountEvent && entry.historical && <Text style={s.muted}>Срок на момент события неизвестен.</Text>}
       </View>;
     })}
@@ -205,7 +378,9 @@ function AccessJournal({ onClose, account }) {
 
 export function AdminScreen({ onClose }) {
   const access = useAccess();
-  const [journal, setJournal] = useState(null);
+  const [route, setRoute] = useState(null);
+  const [criteria, setCriteria] = useState({ query: '', filter: 'all' });
+  const [promoFilter, setPromoFilter] = useState('all');
   const [promos, setPromos] = useState([]);
   const [page, setPage] = useState(0);
   const [label, setLabel] = useState('');
@@ -213,30 +388,29 @@ export function AdminScreen({ onClose }) {
   const [redeemDays, setRedeemDays] = useState('');
   const [limit, setLimit] = useState('1');
   const [issued, setIssued] = useState('');
-  const [email, setEmail] = useState('');
-  const [target, setTarget] = useState(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const promoRevision = useRef(0);
   const perform = async (task) => {
     setBusy(true);
     setMessage('');
     try { await task(); } catch (error) { setMessage(errorMessage(error)); }
     finally { setBusy(false); }
   };
-  const loadPage = async (nextPage) => {
-    const data = await manageAccess('list_promos', { offset: nextPage * PAGE_SIZE });
+  const loadPage = useCallback(async (nextPage, filter) => {
+    const request = ++promoRevision.current;
+    const data = await manageAccess('list_promos', { offset: nextPage * PAGE_SIZE, filter });
+    if (request !== promoRevision.current) return;
+    setPromoFilter(filter);
     setPromos(data);
     setPage(nextPage);
-  };
+  }, []);
   useEffect(() => {
     if (!access.isAdmin) return;
     let active = true;
-    manageAccess('list_promos', { offset: 0 }).then(data => {
-      if (active) setPromos(data);
-    }).catch(err => { if (active) setMessage(errorMessage(err)); });
-    return () => { active = false; };
-  }, [access.isAdmin]);
-  const integer = (value, max) => /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= max;
+    loadPage(0, 'all').catch(err => { if (active) setMessage(errorMessage(err)); });
+    return () => { active = false; promoRevision.current++; };
+  }, [access.isAdmin, loadPage]);
   const create = () => perform(async () => {
     const result = await manageAccess('create_promo', {
       label: label.trim(), license_days: days ? Number(days) : null,
@@ -244,18 +418,19 @@ export function AdminScreen({ onClose }) {
     });
     setIssued(result.code.match(/.{1,5}/g).join('-'));
     setLabel('');
-    await loadPage(0);
+    await loadPage(0, promoFilter);
   });
-  const accountAction = action => perform(async () => setTarget(await manageAccess(action, { email: email.trim() })));
-  const confirm = (title, description, action) => Alert.alert(title, description, [
-    { text: 'Отмена', style: 'cancel' },
-    { text: 'Подтвердить', style: 'destructive', onPress: action },
-  ]);
   if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
-  if (journal) return <AccessJournal account={journal.account} onClose={() => setJournal(null)} />;
+  if (route?.type === 'journal') return <AccessJournal onClose={() => setRoute(null)} />;
+  if (route?.type === 'roles' && access.role === 'owner') return <RoleJournal onClose={() => setRoute(null)} />;
+  if (route?.type === 'account') return <AccessJournal account={route.account} staffRole={access.role} onClose={() => setRoute({ type: 'users' })} />;
+  if (route?.type === 'users') return <AdminUsers criteria={criteria} setCriteria={setCriteria}
+    onAccount={account => setRoute({ type: 'account', account })} onClose={() => setRoute(null)} />;
 
   return <AccessLayout title="Админ-панель" onClose={onClose}>
-    <Button title="Журнал лицензий" secondary onPress={() => setJournal({})} />
+    <Button title="Пользователи" secondary onPress={() => setRoute({ type: 'users' })} />
+    <Button title="Журнал лицензий" secondary onPress={() => setRoute({ type: 'journal' })} />
+    {access.role === 'owner' && <Button title="Журнал ролей" secondary onPress={() => setRoute({ type: 'roles' })} />}
     {!!message && <Text accessibilityLiveRegion="polite" style={s.notice}>{message}</Text>}
     <View style={s.card}>
       <Text style={s.heading}>Новый промокод</Text>
@@ -273,36 +448,24 @@ export function AdminScreen({ onClose }) {
         }} />
       </View>}
     </View>
-    <View style={s.card}>
-      <Text style={s.heading}>Аккаунты и права</Text>
-      <Field label="Почта аккаунта" value={email} onChangeText={value => { setEmail(value); setTarget(null); }}
-        autoCapitalize="none" autoCorrect={false} keyboardType="email-address" maxLength={254} editable={!busy} />
-      <Button title="Найти аккаунт" onPress={() => accountAction('find_user')} disabled={busy || !email.trim()} secondary />
-      {!!target && <>
-        <Text style={s.label}>{target.name || target.email}</Text>
-        <Text style={s.muted}>{({ owner: 'Владелец', admin: 'Администратор' }[target.role] || 'Пользователь') + ' · ' + licenseStatus(target)}</Text>
-        <Button title="История доступа" secondary onPress={() => setJournal({ account: target })} disabled={busy} />
-        {access.role === 'owner' && target.role !== 'owner' && (target.role === 'admin'
-          ? <Button title="Снять права администратора" secondary disabled={busy} onPress={() => confirm('Снять права?', target.email, () => accountAction('revoke_admin'))} />
-          : <Button title="Назначить администратором" secondary disabled={busy} onPress={() => confirm('Назначить администратором?', target.email, () => accountAction('grant_admin'))} />)}
-        {target.licensed && <Button title="Отозвать лицензию" secondary disabled={busy} onPress={() => confirm('Отозвать лицензию?', target.email, () => accountAction('revoke_license'))} />}
-      </>}
-    </View>
     <Text style={s.heading}>Промокоды</Text>
+    <FilterButtons options={promoFilters} selected={promoFilter} disabled={busy} onSelect={filter => perform(() => loadPage(0, filter))} />
     {promos.length === 0 && <Text style={s.muted}>На этой странице нет промокодов.</Text>}
     {promos.map(promo => <View key={promo.id} style={s.card}>
       <Text style={s.label}>{promo.label} · ••••{promo.suffix}</Text>
-      <Text style={s.muted}>{promo.used}/{promo.use_limit} активаций · {promo.license_days ? promo.license_days + ' дн. доступа' : 'бессрочный доступ'}</Text>
+      <Text style={s.label}>{promoStatus[promo.status] || (promo.disabled_at ? 'Отключён' : 'Действует')}</Text>
+      <Text style={s.muted}>Осталось {promo.remaining ?? (promo.use_limit - promo.used)} из {promo.use_limit} активаций</Text>
+      <Text style={s.muted}>{promo.license_days ? promo.license_days + ' дн. доступа' : 'Бессрочный доступ'}</Text>
       {!!promo.redeem_until && <Text style={s.muted}>Активация до {displayDate(promo.redeem_until)}</Text>}
-      {promo.disabled_at ? <Text style={s.muted}>Отключён</Text> : <Button title="Отключить промокод" secondary disabled={busy}
-        onPress={() => confirm('Отключить промокод?', 'Новые активации прекратятся. Выданные лицензии сохранятся.', () => perform(async () => {
+      {!promo.disabled_at && <Button title="Отключить промокод" secondary disabled={busy}
+        onPress={() => confirmAction('Отключить промокод?', 'Новые активации прекратятся. Выданные лицензии сохранятся.', () => perform(async () => {
           await manageAccess('disable_promo', { id: promo.id });
-          await loadPage(page);
+          await loadPage(page, promoFilter);
         }))} />}
     </View>)}
-    {page > 0 && <Button title="Предыдущая страница" secondary disabled={busy} onPress={() => perform(() => loadPage(page - 1))} />}
-    {promos.length === PAGE_SIZE && <Button title="Следующая страница" secondary disabled={busy} onPress={() => perform(() => loadPage(page + 1))} />}
-    <Button title="Обновить список" secondary disabled={busy} onPress={() => perform(() => loadPage(page))} />
+    {page > 0 && <Button title="Предыдущая страница" secondary disabled={busy} onPress={() => perform(() => loadPage(page - 1, promoFilter))} />}
+    {promos.length === PAGE_SIZE && <Button title="Следующая страница" secondary disabled={busy} onPress={() => perform(() => loadPage(page + 1, promoFilter))} />}
+    <Button title="Обновить список" secondary disabled={busy} onPress={() => perform(() => loadPage(page, promoFilter))} />
   </AccessLayout>;
 }
 
@@ -319,6 +482,9 @@ const s = createThemedStyles(() => ({
   notice: { color: colors.text, backgroundColor: colors.accentSoft, padding: 12, borderRadius: 13 },
   issued: { gap: 8, padding: 12, borderRadius: 12, backgroundColor: colors.accentSoft },
   field: { gap: 6 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filter: { minHeight: 44, justifyContent: 'center', borderRadius: 13, borderWidth: 1, borderColor: colors.buttonBorder, paddingHorizontal: 12, backgroundColor: colors.card },
+  filterSelected: { backgroundColor: colors.accentSoft, borderColor: colors.purple },
   input: { color: colors.text, backgroundColor: colors.background, borderColor: colors.border, borderWidth: 1, borderRadius: 12, fontSize: 16, minHeight: 48, paddingHorizontal: 12 },
   button: { minHeight: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accentFill, borderRadius: 13, paddingHorizontal: 8 },
   secondary: { backgroundColor: colors.accentSoft },

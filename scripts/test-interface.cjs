@@ -16,6 +16,7 @@ const events = new Map();
 const animations = [];
 const speechCalls = [];
 const tutorRequests = [];
+let lastAlert;
 const modelDownloads = [], openedLinks = [];
 const tutorApi = { loadModel: async () => {}, loadTutorSessions: async () => [], loadTutorMemory: async () => ({ completedMissions: [] }), loadTutorFeedback: async () => [], getDailyTutorMission: () => ({ id: 'test-mission', title: 'Обсуди свой день', description: 'Скрытые подробности миссии' }), getTutorMissionProgress: () => ({ current: 0, target: 2, completed: false }), saveTutorSession: async () => {}, stopGeneration: async () => {}, completeTutorMessage: args => new Promise((resolve, reject) => { args.onStatus?.('thinking'); tutorRequests.push({ args, resolve, reject }); }) };
 let system = 'light', override = null, reduced = false;
@@ -32,7 +33,7 @@ const native = {
   Appearance: { getColorScheme: () => override || system, setColorScheme: value => { const old = override || system; override = ['light', 'dark'].includes(value) ? value : null; if ((override || system) !== old) emit('appearance', { colorScheme: override || system }); }, addChangeListener: callback => subscribe('appearance', callback) },
   AccessibilityInfo: { isReduceMotionEnabled: async () => reduced, addEventListener: (_, callback) => subscribe('motion', callback) },
   AppState: { currentState: 'active', addEventListener: (_, callback) => subscribe('appstate', callback) },
-  Keyboard: { dismiss() {}, addListener: (name, callback) => subscribe(name, callback) }, BackHandler: { addEventListener: (_, callback) => subscribe('back', callback) }, Alert: { alert() {} }, Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Keyboard: { dismiss() {}, addListener: (name, callback) => subscribe(name, callback) }, BackHandler: { addEventListener: (_, callback) => subscribe('back', callback) }, Alert: { alert(title, message, options) { lastAlert = { title, message, options }; } }, Dimensions: { get: () => ({ width: 390, height: 844 }) },
   Linking: { openURL: async url => openedLinks.push(url) },
   Animated: { Value, View: host('AnimatedView'), timing: animate, spring: animate }, Easing: { out: value => value, cubic: value => value },
 };
@@ -58,6 +59,9 @@ let licenseState = {};
 const accountActions = [];
 const journalRequests = [];
 const journalAccounts = [];
+const adminRequests = [];
+let manualGrantAttempts = 0;
+let studentLicense = { licensed: false, revoked_at: '2026-11-20T10:00:00Z' };
 let verifyRealAccess = false;
 const testAuthKey = 'test-supabase-auth-token';
 let authResult, rpcResult, authListener;
@@ -86,7 +90,26 @@ const accessApi = { AccessProvider: providers, useAccess: () => ({ ...licenseSta
     licenseState = { licensed: true, expires_at: new Date(checkedAt + 864000000).toISOString(), verifiedAt: checkedAt, offlineUntil: checkedAt + 604800000 };
     return {};
   } }),
-  manageAccess: async (action, options) => action === 'list_promos' ? [] : { email: options.email, name: 'Анна', licensed: true },
+  manageAccess: async (action, options) => {
+    adminRequests.push({ action, options });
+    if (action === 'list_promos') {
+      return options.filter === 'active' ? [{ id: 'promo-1', label: 'Тестовый промокод', suffix: 'AA01',
+        status: 'active', remaining: 2, use_limit: 3, used: 1 }] : [];
+    }
+    if (action === 'list_users') {
+      return { users: [{ id: 'student', name: 'Анна', email: 'student@example.com', confirmed: true, ...studentLicense }], has_more: false };
+    }
+    if (action === 'list_role_events') {
+      return { events: [{ id: 'event-role', occurred_at: '2026-11-20T10:00:00Z', before_role: null, after_role: 'admin',
+        target_email: 'helper@example.com', actor_email: 'owner@example.com' }], has_more: false };
+    }
+    if (action === 'grant_license') {
+      if (++manualGrantAttempts === 1) throw new Error('Network request failed');
+      studentLicense = { licensed: true, expires_at: '2027-01-01T10:00:00Z', revoked_at: null };
+      return { name: 'Анна', email: options.email, ...studentLicense };
+    }
+    throw Error('Unexpected admin action: ' + action);
+  },
   loadAccessEvents: async (cursor, email) => {
     journalRequests.push(cursor);
     journalAccounts.push(email);
@@ -98,7 +121,7 @@ const accessApi = { AccessProvider: providers, useAccess: () => ({ ...licenseSta
       events: [{ id: 'event-2', occurred_at: '2026-11-20T10:00:00Z', kind: 'license_revoked',
         expires_at: '2026-11-25T10:00:00Z', actor_email: 'admin@example.com', target_email: 'student@example.com' }],
       has_more: true,
-      ...(email && { license: { licensed: false, revoked_at: '2026-11-20T10:00:00Z' } }),
+      ...(email && { license: studentLicense }),
     };
   },
 };
@@ -693,7 +716,17 @@ async function main() {
   await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
   await act(async () => { namedButton('Админ-панель').props.onPress(); await flush(); });
   assert.ok(field('Название промокода'));
-  assert.ok(field('Почта аккаунта'));
+  await act(async () => { namedButton('Действующие').props.onPress(); await flush(); });
+  assert.equal(adminRequests.at(-1).options.filter, 'active');
+  assert.ok(tree.root.findAllByType('Text').some(node => Array.isArray(node.props.children) && node.props.children.join('') === 'Осталось 2 из 3 активаций'));
+  await act(async () => { namedButton('Журнал ролей').props.onPress(); await flush(); });
+  assert.equal(adminRequests.at(-1).action, 'list_role_events');
+  assert.ok(tree.root.findAllByType('Text').some(node => Array.isArray(node.props.children) && node.props.children.join('') === 'Пользователь → Администратор'));
+  const goBack = async () => act(async () => {
+    tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Назад').props.onPress();
+    await flush();
+  });
+  await goBack();
   await act(async () => { namedButton('Журнал лицензий').props.onPress(); await flush(); });
   const journalText = text => tree.root.findAllByType('Text').some(node => node.props.children === text);
   assert.ok(journalText('Лицензия отозвана'));
@@ -707,13 +740,36 @@ async function main() {
   await act(async () => { namedButton('Обновить журнал').props.onPress(); await flush(); });
   assert.equal(journalRequests.at(-1), undefined);
   assert.ok(!journalText('Промокод активирован'));
-  await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Назад').props.onPress());
-  await act(async () => field('Почта аккаунта').props.onChangeText('student@example.com'));
-  await act(async () => { namedButton('Найти аккаунт').props.onPress(); await flush(); });
-  await act(async () => { namedButton('История доступа').props.onPress(); await flush(); });
+  await goBack();
+  await act(async () => { namedButton('Пользователи').props.onPress(); await flush(); });
+  await act(async () => field('Имя или почта').props.onChangeText('stud'));
+  await act(async () => { namedButton('Без доступа').props.onPress(); await flush(); });
+  assert.equal(adminRequests.at(-1).action, 'list_users');
+  assert.deepEqual(adminRequests.at(-1).options, { query: 'stud', filter: 'none', offset: 0 });
+  await act(async () => { namedButton('Анна').props.onPress(); await flush(); });
   assert.equal(journalAccounts.at(-1), 'student@example.com');
   assert.ok(journalText('Лицензия отозвана'));
   assert.ok(!journalText('Бессрочный доступ'), 'account history refreshes the current license along with the events');
+  await act(async () => field('Причина выдачи или продления').props.onChangeText('Тестовый доступ'));
+  const grant = async () => {
+    await act(async () => namedButton('Выдать лицензию').props.onPress());
+    assert.equal(lastAlert.title, 'Выдать лицензию?');
+    await act(async () => { lastAlert.options.at(-1).onPress(); await flush(); });
+  };
+  await grant();
+  const firstRequest = adminRequests.at(-1).options;
+  await grant();
+  assert.equal(adminRequests.at(-1).options.request_key, firstRequest.request_key);
+  assert.equal(firstRequest.license_days, 7);
+  assert.equal(firstRequest.reason, 'Тестовый доступ');
+  assert.ok(namedButton('Продлить лицензию'));
+  assert.ok(namedButton('Назначить администратором'));
+  staffRole = 'admin';
+  await act(async () => { tree.update(React.createElement(App, { testPhase: 'ordinary-admin' })); await flush(); });
+  assert.ok(!namedButton('Назначить администратором'));
+  await goBack();
+  await goBack();
+  assert.ok(!namedButton('Журнал ролей'));
   await act(async () => tree.unmount());
 
   const { tutorPracticeFromMessages } = load('src/utils/tutorPractice.js');
