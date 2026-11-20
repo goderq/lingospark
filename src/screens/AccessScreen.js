@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../store/AuthContext';
-import { manageAccess, useAccess } from '../store/AccessContext';
+import { loadAccessEvents, manageAccess, useAccess } from '../store/AccessContext';
 import { colors, useTheme, createThemedStyles } from '../theme';
 
 const errorMessage = error => ({
@@ -117,8 +117,70 @@ export default function AccessScreen({ onClose, onAccount }) {
 }
 
 const PAGE_SIZE = 50;
+const eventTitles = {
+  promo_created: 'Промокод создан',
+  promo_disabled: 'Промокод отключён',
+  promo_redeemed: 'Промокод активирован',
+  license_revoked: 'Лицензия отозвана',
+};
+const displayTime = value => new Date(value).toLocaleString('ru-RU', {
+  year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+});
+
+function AccessJournal({ onClose }) {
+  const [entries, setEntries] = useState([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const request = useRef(0);
+  const load = useCallback(async (cursor) => {
+    const id = ++request.current;
+    setLoading(true);
+    setError('');
+    try {
+      const { events, has_more } = await loadAccessEvents(cursor);
+      if (id !== request.current) return;
+      setEntries(previous => cursor ? [...previous, ...events] : events);
+      setHasMore(has_more);
+    } catch (reason) {
+      if (id === request.current) setError(errorMessage(reason));
+    } finally {
+      if (id === request.current) setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    load();
+    return () => { request.current++; };
+  }, [load]);
+
+  return <AccessLayout title="Журнал лицензий" onClose={onClose}>
+    <Button title="Обновить журнал" secondary disabled={loading} onPress={() => load()} />
+    {!!error && <Text accessibilityLiveRegion="polite" style={s.notice}>{error}</Text>}
+    {loading && <ActivityIndicator color={colors.purple} />}
+    {!loading && !error && entries.length === 0 && <Text style={s.muted}>Событий пока нет.</Text>}
+    {entries.map(entry => {
+      const accountEvent = entry.kind === 'promo_redeemed' || entry.kind === 'license_revoked';
+      return <View key={entry.id} style={s.card}>
+        <Text style={s.label}>{eventTitles[entry.kind]}</Text>
+        <Text style={s.muted}>{displayTime(entry.occurred_at)}</Text>
+        {!!entry.promo_label && <Text style={s.muted}>{entry.promo_label} · ••••{entry.promo_suffix}</Text>}
+        {accountEvent && <Text style={s.muted}>{entry.target_email || 'Аккаунт недоступен'}</Text>}
+        {entry.actor_email !== entry.target_email || !accountEvent
+          ? <Text style={s.muted}>{entry.actor_email ? 'Выполнил: ' + entry.actor_email : 'Автор неизвестен'}</Text>
+          : null}
+        {accountEvent && !entry.historical && <Text style={s.muted}>{entry.expires_at
+          ? (entry.kind === 'license_revoked' ? 'Лицензия действовала до ' : 'Доступ до ') + displayTime(entry.expires_at)
+          : 'Бессрочная лицензия'}</Text>}
+        {accountEvent && entry.historical && <Text style={s.muted}>Срок на момент события неизвестен.</Text>}
+      </View>;
+    })}
+    {hasMore && <Button title="Показать более ранние события" secondary disabled={loading} onPress={() => load(entries.at(-1))} />}
+  </AccessLayout>;
+}
+
 export function AdminScreen({ onClose }) {
   const access = useAccess();
+  const [showJournal, setShowJournal] = useState(false);
   const [promos, setPromos] = useState([]);
   const [page, setPage] = useState(0);
   const [label, setLabel] = useState('');
@@ -165,8 +227,10 @@ export function AdminScreen({ onClose }) {
     { text: 'Подтвердить', style: 'destructive', onPress: action },
   ]);
   if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
+  if (showJournal) return <AccessJournal onClose={() => setShowJournal(false)} />;
 
   return <AccessLayout title="Админ-панель" onClose={onClose}>
+    <Button title="Журнал лицензий" secondary onPress={() => setShowJournal(true)} />
     {!!message && <Text accessibilityLiveRegion="polite" style={s.notice}>{message}</Text>}
     <View style={s.card}>
       <Text style={s.heading}>Новый промокод</Text>

@@ -76,3 +76,11 @@ export async function manageAccess(action, options = {}) {
   if (error) throw error;
   return data;
 }
+
+export async function loadAccessEvents(before) {
+  const { data, error } = await supabase.rpc('lingo_access_events', before ? {
+    p_before_at: before.occurred_at, p_before_id: before.id,
+  } : {});
+  if (error) throw error;
+  return data;
+}

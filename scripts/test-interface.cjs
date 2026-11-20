@@ -55,12 +55,25 @@ let accountUser = null;
 let canEnter = true;
 let staffRole = null;
 const accountActions = [];
+const journalRequests = [];
 const authApi = { useAuth: () => ({ ready: true, user: accountUser, guestMode: true,
   signUp: async (...args) => { accountActions.push(args); return { data: { session: null } }; },
   updateDisplayName: async name => { accountActions.push(name); return {}; },
 }), AuthProvider: providers };
 const accessApi = { AccessProvider: providers, useAccess: () => ({ allowed: canEnter, isAdmin: !!staffRole, role: staffRole }),
   manageAccess: async action => action === 'list_promos' ? [] : {},
+  loadAccessEvents: async cursor => {
+    journalRequests.push(cursor);
+    return cursor ? {
+      events: [{ id: 'event-1', occurred_at: '2026-11-20T09:00:00Z', kind: 'promo_redeemed', historical: true,
+        promo_label: 'Первый код', promo_suffix: 'AB12', target_email: 'student@example.com', actor_email: 'student@example.com' }],
+      has_more: false,
+    } : {
+      events: [{ id: 'event-2', occurred_at: '2026-11-20T10:00:00Z', kind: 'license_revoked',
+        expires_at: '2026-11-25T10:00:00Z', actor_email: 'admin@example.com', target_email: 'student@example.com' }],
+      has_more: true,
+    };
+  },
 };
 const cache = new Map();
 const dynamicImports = ({ types: t }) => ({ visitor: { CallExpression(p) { if (p.node.callee.type === 'Import') p.replaceWith(t.callExpression(t.memberExpression(t.callExpression(t.memberExpression(t.identifier('Promise'), t.identifier('resolve')), []), t.identifier('then')), [t.arrowFunctionExpression([], t.callExpression(t.identifier('require'), p.node.arguments))])); } } });
@@ -633,6 +646,19 @@ async function main() {
   await act(async () => { namedButton('Админ-панель').props.onPress(); await flush(); });
   assert.ok(field('Название промокода'));
   assert.ok(field('Почта аккаунта'));
+  await act(async () => { namedButton('Журнал лицензий').props.onPress(); await flush(); });
+  const journalText = text => tree.root.findAllByType('Text').some(node => node.props.children === text);
+  assert.ok(journalText('Лицензия отозвана'));
+  assert.ok(journalText('Выполнил: admin@example.com'));
+  assert.ok(journalText('student@example.com'));
+  await act(async () => { namedButton('Показать более ранние события').props.onPress(); await flush(); });
+  assert.equal(journalRequests.at(-1).id, 'event-2');
+  assert.ok(journalText('Промокод активирован'));
+  assert.ok(journalText('Срок на момент события неизвестен.'));
+  assert.ok(journalText('Лицензия отозвана'));
+  await act(async () => { namedButton('Обновить журнал').props.onPress(); await flush(); });
+  assert.equal(journalRequests.at(-1), undefined);
+  assert.ok(!journalText('Промокод активирован'));
   await act(async () => tree.unmount());
   console.log('Interface passed: model library/manual downloads/legacy/terms, themes, word sessions, chat keyboard inset/input, stop/retry, Home routes, background preserves work, cold start opens Today, and notification taps open the review or model card. Native model quality and keyboard movement still require iPhone checks.');
 }
