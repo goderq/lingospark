@@ -369,12 +369,15 @@ async function main() {
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'Hello! Would you like to talk about food or travel?' }); await flush(); });
   assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Hello! Would you like to talk about food or travel?'));
   assert.ok(!tree.root.findAllByType('Text').some(node => ['Проверено по контексту', 'Опора на справочник'].includes(node.props.children)));
+  const beforeTranslation = tree.root.findByType('FlatList').props.data;
   await act(async () => namedButton('Действия').props.onPress());
   await act(async () => { namedButton('Перевод').props.onPress(); await flush(); });
   const translationRequest = tutorRequests.at(-1);
   assert.equal(translationRequest.args.messages.at(-1).translationSource, 'Hello! Would you like to talk about food or travel?');
   await act(async () => { translationRequest.resolve({ text: 'Привет! Хочешь поговорить о еде или путешествиях?' }); await flush(); });
-  assert.ok(tree.root.findByType('FlatList').props.data.some(item => item.content === 'Привет! Хочешь поговорить о еде или путешествиях?'));
+  const afterTranslation = tree.root.findByType('FlatList').props.data;
+  assert.deepEqual(afterTranslation.map(item => item.id), beforeTranslation.map(item => item.id), 'translate in place without adding a dialogue turn');
+  assert.equal(afterTranslation.at(-1).translation, 'Привет! Хочешь поговорить о еде или путешествиях?');
   await act(async () => chatInput().props.onChangeText('what'));
   await act(async () => { chatButton('Отправить сообщение').props.onPress(); await flush(); });
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'I mean: which topic do you prefer, food or travel?' }); await flush(); });
@@ -459,7 +462,7 @@ async function main() {
   assert.equal(chatInput(), undefined, 'translation must not reopen the finished interview composer');
   assert.ok(chatButton('Остановить ответ'));
   await act(async () => { tutorRequests.at(-1).reject(new Error('Перевод не получен')); await flush(); });
-  await act(async () => { namedButton('Повторить ответ').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Повторить перевод').props.onPress(); await flush(); });
   assert.equal(tutorRequests.at(-1).args.messages.at(-1).translationSource, interviewerReply.content);
   await act(async () => { tutorRequests.at(-1).resolve({ text: 'Я спрашиваю, где ты работал.' }); await flush(); });
   const translatedInterview = tree.root.findByType('FlatList').props.data;

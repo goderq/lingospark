@@ -19,6 +19,7 @@ import { ProgressBar } from "../components/UI";
 import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import { speak, stopSpeech } from "../utils/speech";
+import { isVoicePracticeTurn } from "../utils/voiceCoachReply";
 import {
   analyzeTutorConversation,
   completeVoiceCoachMessage,
@@ -41,8 +42,8 @@ const SCENARIOS = [
     id: "airport",
     title: "В аэропорту",
     emoji: "✈️",
-    role: "сотрудник стойки регистрации в аэропорту",
-    context: "Ученик регистрируется на международный рейс и уточняет детали поездки.",
+    role: "an airport check-in agent",
+    context: "Help the learner check in for an international flight, check their luggage and find the boarding gate.",
     opening: "Good morning! May I see your passport and ticket, please?",
     goals: ["Поздороваться и назвать рейс", "Сдать багаж", "Уточнить выход на посадку", "Завершить регистрацию"],
     hint: "I’m flying to… / I have one suitcase. / Which gate should I go to?",
@@ -51,8 +52,8 @@ const SCENARIOS = [
     id: "restaurant",
     title: "В ресторане",
     emoji: "🍽️",
-    role: "доброжелательный официант",
-    context: "Ученик пришёл в ресторан, выбирает блюда и оплачивает заказ.",
+    role: "a friendly waiter",
+    context: "Help the learner find a table, order food and a drink, ask about ingredients and request the bill.",
     opening: "Welcome! Would you like a table by the window?",
     goals: ["Попросить столик", "Заказать еду и напиток", "Уточнить состав блюда", "Попросить счёт"],
     hint: "Could I have…? / Does this contain…? / Could I get the bill?",
@@ -61,8 +62,8 @@ const SCENARIOS = [
     id: "hotel",
     title: "В отеле",
     emoji: "🏨",
-    role: "администратор отеля",
-    context: "Ученик заселяется в отель, уточняет услуги и решает небольшую проблему.",
+    role: "a hotel receptionist",
+    context: "Help the learner check in, ask about breakfast and Wi-Fi, and report a problem with the room.",
     opening: "Hello! Welcome to Riverside Hotel. Do you have a reservation?",
     goals: ["Подтвердить бронь", "Уточнить время завтрака", "Спросить о Wi‑Fi", "Сообщить о проблеме в номере"],
     hint: "I have a reservation under… / What time is breakfast? / There is a problem with…",
@@ -71,8 +72,8 @@ const SCENARIOS = [
     id: "interview",
     title: "Собеседование",
     emoji: "💼",
-    role: "рекрутер международной компании",
-    context: "Ученик проходит первое собеседование на работу на английском.",
+    role: "a recruiter interviewing the learner",
+    context: "Ask about their background, work experience and strengths, then invite their questions.",
     opening: "Thanks for joining us today. Could you tell me a little about yourself?",
     goals: ["Рассказать о себе", "Описать опыт", "Назвать сильную сторону", "Задать вопрос работодателю"],
     hint: "I have experience in… / One of my strengths is… / Could you tell me about…?",
@@ -81,8 +82,8 @@ const SCENARIOS = [
     id: "doctor",
     title: "У врача",
     emoji: "🩺",
-    role: "врач общей практики в учебной ролевой сцене",
-    context: "Ученик описывает вымышленные лёгкие симптомы и получает общие рекомендации. Это только языковая практика, не медицинская консультация.",
+    role: "a doctor in a fictional appointment",
+    context: "Ask what the learner feels and when it started. This is language practice, not a medical consultation.",
     opening: "Hello. What seems to be the problem today?",
     goals: ["Описать симптом", "Сказать, когда он начался", "Ответить на вопросы", "Уточнить рекомендации"],
     hint: "I’ve had… since… / It hurts when… / What should I do next?",
@@ -91,8 +92,8 @@ const SCENARIOS = [
     id: "small-talk",
     title: "Новое знакомство",
     emoji: "👋",
-    role: "дружелюбный человек на международном мероприятии",
-    context: "Ученик знакомится с новым человеком и поддерживает естественный small talk.",
+    role: "a friendly person at an international event",
+    context: "Get to know the learner, ask where they come from and what they enjoy, and leave room to stay in touch.",
     opening: "Hi! I don’t think we’ve met before. I’m Alex. What’s your name?",
     goals: ["Представиться", "Рассказать, откуда ты", "Обсудить интересы", "Предложить продолжить общение"],
     hint: "Nice to meet you. / I’m from… / What do you enjoy doing?",
@@ -100,7 +101,6 @@ const SCENARIOS = [
 ];
 
 const todayScenario = () => SCENARIOS[Math.floor(Date.now() / 86400000) % SCENARIOS.length];
-const speechOnly = (text) => String(text || "").split("РУССКИЙ КОММЕНТАРИЙ:")[0].trim();
 
 export default function VoiceCoachScreen({ model, onClose }) {
   useTheme();
@@ -117,12 +117,11 @@ export default function VoiceCoachScreen({ model, onClose }) {
   const [modelReady, setModelReady] = useState(false);
   const [status, setStatus] = useState("loading");
   const [messages, setMessages] = useState([]);
-  const [transcript, setTranscript] = useState("");
-  const [partialReply, setPartialReply] = useState("");
   const [error, setError] = useState("");
   const [analysis, setAnalysis] = useState(null);
   const [speechModel, setSpeechModel] = useState(null);
   const processingRef = useRef(false);
+  const replyRequest = useRef(null);
   const localSpeechRef = useRef(false);
   const messagesRef = useRef([]);
   const scrollRef = useRef(null);
@@ -142,6 +141,7 @@ export default function VoiceCoachScreen({ model, onClose }) {
       .catch((loadError) => mounted && setError(loadError?.message || "Не удалось запустить модель"));
     return () => {
       mounted = false;
+      replyRequest.current?.abort();
       try {
         ExpoSpeechRecognitionModule.abort();
       } catch {}
@@ -159,10 +159,10 @@ export default function VoiceCoachScreen({ model, onClose }) {
   });
   useSpeechRecognitionEvent("result", (event) => {
     const text = event.results?.[0]?.transcript?.trim() || "";
-    if (text) setTranscript(text);
     if (event.isFinal && text && !processingRef.current) processUserSpeech(text);
   });
   useSpeechRecognitionEvent("error", (event) => {
+    if (replyRequest.current || event.error === "aborted") return;
     processingRef.current = false;
     setStatus("ready");
     setError(
@@ -181,7 +181,6 @@ export default function VoiceCoachScreen({ model, onClose }) {
     if (speechModel) {
       const permission = await requestRecordingPermissionsAsync();
       if (!permission.granted) { setError("Разреши микрофон в настройках iPhone."); return; }
-      setTranscript("");
       try { startSpeechRecording(); localSpeechRef.current = true; setStatus("listening"); }
       catch (speechError) { setError(speechError?.message || "Не удалось начать запись."); }
       return;
@@ -191,7 +190,6 @@ export default function VoiceCoachScreen({ model, onClose }) {
       setError("Разреши микрофон и распознавание речи в настройках iPhone.");
       return;
     }
-    setTranscript("");
     ExpoSpeechRecognitionModule.start({
       lang: "en-US",
       interimResults: true,
@@ -218,7 +216,6 @@ export default function VoiceCoachScreen({ model, onClose }) {
       const result = await transcribeSpeechData(speechModel, recording.pcm16);
       const text = String(result?.result || "").trim();
       if (!text) { setStatus("ready"); setError("Речь не распознана. Попробуй произнести фразу чуть громче."); return; }
-      setTranscript(text);
       await processUserSpeech(text);
     } catch (speechError) {
       localSpeechRef.current = false;
@@ -229,16 +226,15 @@ export default function VoiceCoachScreen({ model, onClose }) {
 
   const processUserSpeech = async (text) => {
     if (processingRef.current) return;
+    const request = new AbortController();
+    replyRequest.current = request;
     processingRef.current = true;
     ExpoSpeechRecognitionModule.stop();
     setStatus("thinking");
-    setTranscript("");
-    setPartialReply("");
     const userMessage = { id: `voice-user-${Date.now()}`, role: "user", content: text };
     const next = [...messagesRef.current, userMessage];
     setMessages(next);
     try {
-      let streamed = "";
       const response = await completeVoiceCoachMessage({
         model,
         level,
@@ -247,20 +243,16 @@ export default function VoiceCoachScreen({ model, onClose }) {
         strictness,
         responseLength,
         messages: next,
-        onToken: (token) => {
-          streamed += token;
-          setPartialReply(streamed);
-        },
+        signal: request.signal,
       });
-      const reply = (response?.text || streamed).trim() || "Could you say that again, please?";
-      const assistant = { id: `voice-ai-${Date.now()}`, role: "assistant", content: reply };
+      if (request.signal.aborted) return;
+      const reply = response.text;
+      const assistant = { id: `voice-ai-${Date.now()}`, role: "assistant", content: reply, comment: response.comment };
       const completed = [...next, assistant];
       setMessages(completed);
       messagesRef.current = completed;
-      setPartialReply("");
       setStatus("speaking");
-      processingRef.current = false;
-      speak(speechOnly(reply), {
+      speak(reply, {
         language: "en-US",
         rate: speechRate,
         onDone: () => {
@@ -271,10 +263,14 @@ export default function VoiceCoachScreen({ model, onClose }) {
         onError: () => setStatus("ready"),
       });
     } catch (replyError) {
-      processingRef.current = false;
-      setPartialReply("");
+      if (request.signal.aborted) return;
       setStatus("ready");
       setError(replyError?.message || "Не удалось получить голосовой ответ");
+    } finally {
+      if (replyRequest.current === request) {
+        replyRequest.current = null;
+        processingRef.current = false;
+      }
     }
   };
 
@@ -301,7 +297,10 @@ export default function VoiceCoachScreen({ model, onClose }) {
     try {
       ExpoSpeechRecognitionModule.abort();
     } catch {}
-    if (status === "thinking") await stopGeneration();
+    if (replyRequest.current) {
+      replyRequest.current.abort();
+      await stopGeneration();
+    }
     await stopSpeech();
     setStage("result");
     setStatus("analyzing");
@@ -374,9 +373,8 @@ export default function VoiceCoachScreen({ model, onClose }) {
     );
   }
 
-  const userTurns = messages.filter((item) => item.role === "user").length;
+  const userTurns = messages.filter(item => item.role === "user" && isVoicePracticeTurn(item.content)).length;
   const goalIndex = Math.min(userTurns, scenario.goals.length);
-  const currentSubtitle = transcript || partialReply || messages.at(-1)?.content || scenario.opening;
   const statusLabel = {
     loading: "Запускаю модель…",
     ready: "Нажми и говори",
@@ -427,20 +425,15 @@ export default function VoiceCoachScreen({ model, onClose }) {
           <View key={message.id} style={[s.subtitleBubble, message.role === "user" ? s.userSubtitle : s.aiSubtitle]}>
             <Text style={s.subtitleSpeaker}>{message.role === "user" ? "YOU" : "LINGO"}</Text>
             <Text style={s.subtitleText}>{message.content}</Text>
+            {!!message.comment && <Text style={s.hintText}>{message.comment}</Text>}
             {message.role === "assistant" ? (
-              <Pressable onPress={() => speak(speechOnly(message.content), { language: "en-US", rate: speechRate })} style={s.replay}>
+              <Pressable onPress={() => speak(message.content, { language: "en-US", rate: speechRate })} style={s.replay}>
                 <Ionicons name="volume-medium" size={17} color={colors.purple} />
                 <Text style={s.replayText}>Повторить</Text>
               </Pressable>
             ) : null}
           </View>
         ))}
-        {partialReply ? (
-          <View style={[s.subtitleBubble, s.aiSubtitle]}>
-            <Text style={s.subtitleSpeaker}>LINGO</Text>
-            <Text style={s.subtitleText}>{partialReply}</Text>
-          </View>
-        ) : null}
       </ScrollView>
 
       <View style={s.voiceControls}>

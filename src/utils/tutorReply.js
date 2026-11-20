@@ -3,6 +3,10 @@ import { echoesLearnerFact, tutorTurn, tutorTurnProblem } from './tutorTurn.js';
 
 const lastUser = messages => [...messages].reverse().find(item => item.role === 'user');
 const normalize = text => String(text || '').normalize('NFKC').toLowerCase().replace(/[^a-zа-яё0-9]+/gi, ' ').trim();
+const isTranslation = item => item.action === 'translate';
+export const withoutTutorTranslations = messages => messages.filter(item => !isTranslation(item));
+export const tutorTranslationSource = message => (message?.translationSource || message?.content?.split('Ответ Lingo, с которым нужно работать:\n').at(-1) || '').trim();
+
 export function tutorReplyLanguage(messages) {
   const user = lastUser(messages);
   if (user?.kind === 'command') {
@@ -28,7 +32,15 @@ export function findTutorReplyProblems({ reply, messages, dialogueMode = 'conver
   if (language === 'russian') {
     const russianLetters = (text.match(/[а-яё]/gi) || []).length;
     const latinLetters = (text.match(/[a-z]/gi) || []).length;
-    if (russianLetters < 2 || russianLetters < latinLetters) problems.push('translation must be in Russian');
+    const source = tutorTranslationSource(lastUser(messages));
+    const originalLatin = new Set(source.toLowerCase().match(/[a-z]+/g) || []);
+    if (russianLetters < 2 || russianLetters < latinLetters || (text.toLowerCase().match(/[a-z]+/g) || []).some(word => !originalLatin.has(word))) {
+      problems.push('translation must be in Russian and must not add English words');
+    }
+    if ((source.match(/\?+/g) || []).length !== (text.match(/\?+/g) || []).length) problems.push('translate each question as a question without answering it');
+    if (/^(?:вот перевод|перевод(?: на русский)?\s*:)/i.test(text)) {
+      problems.push('output only the translation with no commentary');
+    }
     return problems;
   }
   if (language === 'english' && (/[а-яё]/i.test(text) || !/[a-z]/i.test(text))) problems.push('reply must be in English');
@@ -65,10 +77,21 @@ export function assertTutorReplyNotAborted(signal) {
   if (signal?.aborted) { const error = new Error('Ответ остановлен'); error.name = 'AbortError'; throw error; }
 }
 const openingQuestions = {
-  'Свободный разговор': ['Let’s start with something easy. What do you like to do in your free time?', 'Let’s talk about your day. What did you do this morning?'],
-  Путешествия: ['Let’s talk about travel. Where would you like to go on your next trip?', 'Do you prefer going by train or by plane?'],
-  Работа: ['Let’s talk about work. What does a normal day look like for you?', 'What kind of work would you like to do?'],
+  'Свободный разговор': [
+    ['Let’s start with something easy. What do you like to do in your free time?', 'Давай начнём с чего-нибудь простого. Что тебе нравится делать в свободное время?'],
+    ['Let’s talk about your day. What did you do this morning?', 'Давай поговорим о твоём дне. Что ты делал сегодня утром?'],
+  ],
+  Путешествия: [
+    ['Let’s talk about travel. Where would you like to go on your next trip?', 'Давай поговорим о путешествиях. Куда бы ты хотел поехать в следующий раз?'],
+    ['Do you prefer going by train or by plane?', 'Ты предпочитаешь ездить на поезде или летать на самолёте?'],
+  ],
+  Работа: [
+    ['Let’s talk about work. What does a normal day look like for you?', 'Давай поговорим о работе. Как проходит твой обычный день?'],
+    ['What kind of work would you like to do?', 'Какой работой ты хотел бы заниматься?'],
+  ],
 };
+const openingTranslations = new Map(Object.values(openingQuestions).flat());
+export const translateTutorOpening = source => openingTranslations.get(source);
 
 // The built-in welcome can hand off a standalone greeting without inference.
 export function openingQuestionForGreeting({ messages, topic, dialogueMode = 'conversation', courseContext, scenarioContext }) {
@@ -77,7 +100,7 @@ export function openingQuestionForGreeting({ messages, topic, dialogueMode = 'co
   if (welcome.role !== 'assistant' || !String(welcome.id || '').startsWith('welcome') ||
     latest.role !== 'user' || latest.kind === 'command' || !isSimpleGreeting(latest.content)) return null;
   if (!Object.hasOwn(openingQuestions, topic)) return null;
-  return openingQuestions[topic].find(reply => !findTutorReplyProblems({ reply, messages }).length) || null;
+  return openingQuestions[topic].find(([reply]) => !findTutorReplyProblems({ reply, messages }).length)?.[0] || null;
 }
 
 // Check the draft and one repair before trying an app reply for a recognized turn.

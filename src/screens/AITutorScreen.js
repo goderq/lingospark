@@ -836,7 +836,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       kind: "command",
       displayContent: action.title,
       action: action.id,
-      ...(interviewEnded && action.id === 'translate' ? { translationTargetId: message.id } : {}),
+      ...(action.id === 'translate' ? { translationTargetId: message.id } : {}),
     });
   };
 
@@ -1255,7 +1255,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
           </View>
           {!!retryRequest && <View style={styles.chatErrorActions}>
             <Pressable accessibilityRole="button" onPress={() => submitMessage(retryRequest.text, { ...retryRequest.options, retry: true })} style={styles.chatErrorAction}>
-              <Text style={styles.speakText}>Повторить ответ</Text>
+              <Text style={styles.speakText}>{retryRequest.options.translationTargetId ? 'Повторить перевод' : 'Повторить ответ'}</Text>
             </Pressable>
             {retryRequest.options.kind !== 'command' && <Pressable accessibilityRole="button" onPress={editFailedReply} style={styles.chatErrorAction}>
               <Text style={styles.speakText}>Изменить реплику</Text>

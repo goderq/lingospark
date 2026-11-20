@@ -10,7 +10,7 @@ assert.ok(reply.findTutorReplyProblems({ reply: 'Hi! How are you?', messages }).
 assert.ok(reply.findTutorReplyProblems({ reply: 'Hi! How are you?', messages: [{ id: 'welcome-1', role: 'assistant', content: 'Hi! How are you?' }, { role: 'user', content: 'hi' }] }).some(item => item.includes('repeats')), 'English opening questions must not be repeated');
 assert.ok(reply.findTutorReplyProblems({ reply: 'Hello! What is your name?', messages }).some(item => item.includes('clarify')));
 assert.deepEqual(reply.findTutorReplyProblems({ reply: 'Hi! How are you?', messages: [messages[0], { role: 'user', content: 'Could you repeat that, please?' }] }), [], 'an explicitly requested repetition is legitimate');
-assert.deepEqual(reply.findTutorReplyProblems({ reply: 'Как дела?', messages: [messages[0], { role: 'user', kind: 'command', action: 'translate', content: 'Переведи ответ' }], dialogueMode: 'story' }), [], 'a translation does not have to continue the story');
+assert.deepEqual(reply.findTutorReplyProblems({ reply: 'Как дела?', messages: [messages[0], { role: 'user', kind: 'command', action: 'translate', content: 'How are you?' }], dialogueMode: 'story' }), [], 'a translation does not have to continue the story');
 assert.deepEqual(reply.findTutorReplyProblems({ reply: 'I was asking how you feel today. Are you happy or tired?', messages }), []);
 assert.equal(reply.tutorReplyLanguage([{ role: 'user', content: 'Переведи ответ на русский' }]), 'bilingual');
 assert.equal(reply.tutorReplyLanguage([{ role: 'user', kind: 'command', action: 'retry', content: 'Ответь иначе. Старый ответ: Привет' }]), 'english');
@@ -207,11 +207,57 @@ async function main() {
   assert.equal(translated.text, translation);
   for (const call of nativeCalls.slice(-2)) {
     assert.match(call.messages.map(item => item.content).join('\n'), /Output only the Russian translation/);
-    assert.ok(call.messages.at(-1).content.endsWith(source));
+    assert.ok(call.messages.at(-1).content.includes(['BEGIN SOURCE', source, 'END SOURCE'].join('\n')));
     assert.ok(!call.messages.some(item => item.content.includes('Unrelated chat history.')));
   }
   outputs.push(wrongTranslation, wrongTranslation);
   await assert.rejects(ai.completeTutorMessage(translationArgs), /не выдала перевод на русский/);
+  const openingSource = 'Let’s start with something easy. What do you like to do in your free time?';
+  const wrongOpeningTranslation = 'Я не имею личных предпочтений, но я могу предоставить информацию о различных интересах и hobbies. Многие люди любят читать, бывать в природе, заниматься спортом или изучать новые языки.';
+  const llama3b = ai.AI_MODELS.find(model => model.id === 'llama-3.2-3b');
+  assert.ok(llama3b, 'use the same model selected in the reported incident');
+  const openingCommand = { role: 'user', kind: 'command', action: 'translate', content: openingSource };
+  assert.ok(reply.findTutorReplyProblems({ reply: wrongOpeningTranslation, messages: [openingCommand] }).length >= 2);
+  const beforeOpening = nativeCalls.length;
+  const openingTranslation = await ai.completeTutorMessage({ ...translationArgs, model: llama3b, messages: [openingCommand] });
+  assert.equal(openingTranslation.text, 'Давай начнём с чего-нибудь простого. Что тебе нравится делать в свободное время?');
+  assert.equal(nativeCalls.length, beforeOpening, 'built-in openings have a checked translation and bypass the model');
+  outputs.push('Какая у вас сейчас погода?', 'I mean: is it sunny or rainy where you are?');
+  const clarification = await ai.completeTutorMessage({
+    ...translationArgs, model: llama3b, dialogueMode: 'conversation',
+    messages: [{ role: 'assistant', content: source },
+      { role: 'user', kind: 'command', action: 'translate', content: source },
+      { role: 'assistant', action: 'translate', content: wrongOpeningTranslation },
+      { role: 'user', content: 'what' }],
+  });
+  assert.equal(clarification.text, 'I mean: is it sunny or rainy where you are?');
+  assert.match(nativeCalls.at(-1).messages[0].content, /What do you think about the weather/);
+  assert.ok(!nativeCalls.at(-1).messages.some(item => item.content.includes('предпочтений')));
+
+  const { isVoicePracticeTurn } = load(path.join(__dirname, '../src/utils/voiceCoachReply'));
+  const scenario = { id: 'doctor', role: 'a doctor in a fictional appointment', context: 'Ask how the learner feels.', opening: 'Hello. What seems to be the problem today?' };
+  const firstDoctorTurn = { model: llama3b, level: 'A2', scenario, mode: 'guided', strictness: 'gentle', responseLength: 'short',
+    messages: [{ role: 'assistant', content: scenario.opening }, { role: 'user', content: 'Sorry' }] };
+  assert.equal(isVoicePracticeTurn('Sorry'), false);
+  assert.equal(isVoicePracticeTurn("Sorry, I've had a headache since yesterday."), true);
+  const beforeApology = nativeCalls.length;
+  assert.deepEqual(await ai.completeVoiceCoachMessage(firstDoctorTurn), { text: 'No problem. How are you feeling today?' });
+  assert.equal(nativeCalls.length, beforeApology);
+  const doctorArgs = { ...firstDoctorTurn, messages: [firstDoctorTurn.messages[0], { role: 'user', content: 'My head hurt.' }] };
+  const wrongVoiceReply = 'Врач: О, у вас разные симптомы? А как они начались?';
+  const doctorReply = 'When did your headache start?';
+  const note = 'Если голова болит сейчас, скажи «My head hurts».';
+  const spoken = [];
+  outputs.push(wrongVoiceReply, doctorReply + '\nРУССКИЙ КОММЕНТАРИЙ: ' + note);
+  assert.deepEqual(await ai.completeVoiceCoachMessage({ ...doctorArgs, onToken: text => spoken.push(text) }), { text: doctorReply, comment: note });
+  assert.deepEqual(spoken, [doctorReply]);
+  outputs.push(doctorReply + '\nРУССКИЙ КОММЕНТАРИЙ: ' + note);
+  assert.deepEqual(await ai.completeVoiceCoachMessage({ ...doctorArgs, mode: 'english' }), { text: doctorReply });
+  outputs.push(wrongVoiceReply, wrongVoiceReply);
+  assert.deepEqual(await ai.completeVoiceCoachMessage(doctorArgs), { text: 'Could you say a little more, please?' });
+  const stoppedVoice = new AbortController();
+  stoppedVoice.abort();
+  await assert.rejects(ai.completeVoiceCoachMessage({ ...firstDoctorTurn, signal: stoppedVoice.signal }), { name: 'AbortError' });
   const { interviewContext, interviewProgress } = load(path.join(__dirname, '../src/utils/interview'));
   const interviewMessages = [{ role: 'user', id: 'candidate-1', content: 'I have experience in customer service.', interviewStepId: 'intro' }];
   const scenarioContext = interviewContext(interviewProgress([]), interviewProgress(interviewMessages));
