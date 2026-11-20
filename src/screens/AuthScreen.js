@@ -15,7 +15,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "../store/AuthContext";
-import { useProgress } from "../store/ProgressContext";
 import { colors , useTheme, createThemedStyles } from "../theme";
 
 const errorText = (error) => {
@@ -33,8 +32,8 @@ const errorText = (error) => {
 
 export default function AuthScreen({ optional = false, onClose }) {
   useTheme();
-  const { signIn, signUp, enterGuestMode } = useAuth();
-  const { progress } = useProgress();
+  const { signIn, signUp } = useAuth();
+  const [name, setName] = useState("");
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -50,6 +49,10 @@ export default function AuthScreen({ optional = false, onClose }) {
       setMessage({ type: "error", text: "Заполни почту и пароль." });
       return;
     }
+    if (mode === "register" && !name.trim()) {
+      setMessage({ type: "error", text: "Введи имя." });
+      return;
+    }
     if (mode === "register" && password !== confirm) {
       setMessage({ type: "error", text: "Пароли не совпадают." });
       return;
@@ -58,7 +61,7 @@ export default function AuthScreen({ optional = false, onClose }) {
     const { data, error } =
       mode === "login"
         ? await signIn(email, password)
-        : await signUp(progress.name, email, password);
+        : await signUp(name, email, password);
     setBusy(false);
     if (error) {
       setMessage({ type: "error", text: errorText(error) });
@@ -73,11 +76,6 @@ export default function AuthScreen({ optional = false, onClose }) {
       setPassword("");
       setConfirm("");
     } else if (onClose) onClose();
-  };
-
-  const continueOffline = async () => {
-    await enterGuestMode();
-    if (onClose) onClose();
   };
 
   return (
@@ -121,6 +119,9 @@ export default function AuthScreen({ optional = false, onClose }) {
               </Pressable>
             ))}
           </View>
+          {mode === "register" && (
+            <Field icon="person-outline" accessibilityLabel="Имя" placeholder="Имя" value={name} onChangeText={setName} maxLength={50} autoCapitalize="words" textContentType="name" />
+          )}
           <Field
             icon="mail-outline"
             placeholder="Электронная почта"
@@ -188,12 +189,6 @@ export default function AuthScreen({ optional = false, onClose }) {
               </>
             )}
           </Pressable>
-          <Pressable onPress={continueOffline} style={styles.offline}>
-            <Text style={styles.offlineText}>Продолжить без аккаунта</Text>
-          </Pressable>
-          <Text style={styles.note}>
-            Без аккаунта всё работает офлайн, но прогресс хранится только на этом iPhone.
-          </Text>
         </ScrollView>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
@@ -233,7 +228,4 @@ const styles = createThemedStyles(() => ({
   messageText: { flex: 1, color: colors.text, lineHeight: 19 },
   primary: { width: "100%", minHeight: 58, borderRadius: 18, backgroundColor: colors.accentFill, flexDirection: "row", gap: 9, alignItems: "center", justifyContent: "center", marginTop: 4 },
   primaryText: { color: colors.onAccent, fontSize: 17, fontWeight: "900" },
-  offline: { padding: 16 },
-  offlineText: { color: colors.mint, fontWeight: "800" },
-  note: { color: colors.textMuted, fontSize: 11, lineHeight: 16, textAlign: "center", maxWidth: 310 },
 }));

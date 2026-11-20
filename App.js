@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { ProgressProvider, useProgressSelector, useProgressActions } from "./src/store/ProgressContext";
 import { AuthProvider, useAuth } from "./src/store/AuthContext";
+import { AccessProvider, useAccess } from "./src/store/AccessContext";
 import { CloudSyncProvider, useCloudBootstrap } from "./src/store/CloudSyncContext";
 import CloudConflictGate from './src/components/CloudConflictGate';
 import { LoadingScreen } from "./src/components/UI";
@@ -45,6 +46,8 @@ const SkillEvidenceScreen = React.lazy(() => import("./src/screens/SkillEvidence
 const LevelCheckpointScreen = React.lazy(() => import("./src/screens/LevelCheckpointScreen"));
 const NotebookScreen = lazyNamed(() => import("./src/screens/StudyToolsScreens"), "NotebookScreen");
 const ArticlesPrepositionsScreen = lazyNamed(() => import("./src/screens/StudyToolsScreens"), "ArticlesPrepositionsScreen");
+const AccessScreen = React.lazy(() => import("./src/screens/AccessScreen"));
+const AdminScreen = lazyNamed(() => import("./src/screens/AccessScreen"), "AdminScreen");
 const ProfileScreen = React.lazy(() => import("./src/screens/ProfileScreen"));
 const PhrasebookScreen = React.lazy(() => import("./src/screens/PhrasebookScreen"));
 const LessonScreen = React.lazy(() => import("./src/screens/LessonScreen"));
@@ -115,13 +118,15 @@ export default function App() {
     <SafeAreaProvider>
       <ThemeStatusBar />
       <AuthProvider>
-        <ProgressProvider>
-          <CloudSyncProvider>
-            <React.Suspense fallback={<LoadingScreen />}>
-              <CloudConflictGate><AppContent /></CloudConflictGate>
-            </React.Suspense>
-          </CloudSyncProvider>
-        </ProgressProvider>
+        <AccessProvider>
+          <ProgressProvider>
+            <CloudSyncProvider>
+              <React.Suspense fallback={<LoadingScreen />}>
+                <CloudConflictGate><AppContent /></CloudConflictGate>
+              </React.Suspense>
+            </CloudSyncProvider>
+          </ProgressProvider>
+        </AccessProvider>
       </AuthProvider>
     </SafeAreaProvider>
     </ThemeProvider>
@@ -135,8 +140,8 @@ function ThemeStatusBar() {
 
 function AppContent() {
   const appearance = useTheme();
-  const { ready, onboarded, dailyGoal, loadError } = useProgressSelector(state => ({ ready: state.ready, onboarded: state.progress.onboarded, dailyGoal: state.progress.dailyGoal, loadError: state.loadError }));
-  const { finishOnboarding } = useProgressActions();
+  const { ready, onboarded, dailyGoal, loadError, progressName } = useProgressSelector(state => ({ ready: state.ready, onboarded: state.progress.onboarded, dailyGoal: state.progress.dailyGoal, loadError: state.loadError, progressName: state.progress.name }));
+  const { finishOnboarding, updateName } = useProgressActions();
   const savedReduceMotion = useProgressSelector(state => !!state.progress.settings?.reduceMotion);
   useEffect(() => { if (savedReduceMotion && !appearance.userReduceMotion) appearance.setReduceMotion(true); }, [savedReduceMotion, appearance.userReduceMotion]);
   const progress = { onboarded, dailyGoal };
@@ -145,6 +150,7 @@ function AppContent() {
     user,
     guestMode,
   } = useAuth();
+  const access = useAccess();
   const cloudRestoring = useCloudBootstrap();
   const [tab, rawSetTab] = useState("home");
   const [overlay, rawSetOverlay] = useState(null);
@@ -160,10 +166,10 @@ function AppContent() {
   useEffect(()=>{if(ready&&authReady&&navigationReady&&(!user||!cloudRestoring))markStartup();},[ready,authReady,navigationReady,user,cloudRestoring]);
   const accountName = user?.user_metadata?.display_name?.trim() || "";
   useEffect(() => {
-    if (!loadError && user && !cloudRestoring && !progress.onboarded && accountName) {
-      finishOnboarding(accountName, progress.dailyGoal || 30);
-    }
-  }, [user?.id, cloudRestoring, progress.onboarded, accountName, loadError]);
+    if (!ready || loadError || !user || cloudRestoring || !accountName) return;
+    if (!progress.onboarded) finishOnboarding(accountName, progress.dailyGoal || 30);
+    else if (progressName !== accountName) updateName(accountName);
+  }, [ready, user?.id, cloudRestoring, progress.onboarded, progress.dailyGoal, progressName, accountName, loadError, finishOnboarding, updateName]);
 
   useEffect(() => { AsyncStorage.removeItem(NAV_KEY).catch(() => {}).finally(() => setNavigationReady(true)); }, []);
 
@@ -198,7 +204,7 @@ function AppContent() {
   const notificationsReady = ready && navigationReady && authReady && !cloudRestoring;
   useLearningNotifications({
     ready: notificationsReady,
-    active: notificationsReady && !loadError && onboarded && !!(user || guestMode),
+    active: notificationsReady && !loadError && onboarded && access.allowed,
     onOpen: notice => {
       setAiImmersive(false);
       setWorldImmersive(false);
@@ -215,6 +221,17 @@ function AppContent() {
   });
   if (!ready || !navigationReady || !authReady) return <LoadingScreen />;
   if (!user && !guestMode) return <AuthScreen />;
+  if (!access.allowed) return <ScreenFrame transitionKey="access" style={styles.safe}>
+    {overlay?.type === "account"
+      ? <AuthScreen optional onClose={() => setOverlay(null)} />
+      : <AccessScreen key={user?.id || "guest"} onAccount={() => setOverlay({ type: "account" })} />}
+  </ScreenFrame>;
+  if (overlay?.type === "access") return <ScreenFrame transitionKey="access" style={styles.safe}>
+    <AccessScreen onClose={() => setOverlay(null)} />
+  </ScreenFrame>;
+  if (overlay?.type === "admin") return <ScreenFrame transitionKey="admin" style={styles.safe}>
+    <AdminScreen onClose={() => setOverlay(null)} />
+  </ScreenFrame>;
   if (loadError && !cloudRestoring) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><RecoveryScreen error={loadError} /></ScreenFrame>;
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
@@ -800,8 +817,10 @@ function AppContent() {
             onBackup={() => setOverlay({ type: "backup" })}
             onLevels={() => setOverlay({ type: "levelProgress" })}
             onStreak={() => setOverlay({ type: "streakCalendar" })}
-            onAccount={() => setOverlay({ type: "account" })}
+            onAccount={() => setOverlay({ type: user ? "settings" : "account" })}
             onDiagnostics={() => setOverlay({ type: "diagnostics" })}
+            onAccess={() => setOverlay({ type: "access" })}
+            onAdmin={access.isAdmin ? () => setOverlay({ type: "admin" }) : undefined}
           />
         )}
       </View>

@@ -60,13 +60,6 @@ export function AuthProvider({ children }) {
       email: email.trim(),
       password,
     });
-    if (result.data.user) {
-      await supabase.from("profiles").upsert({
-        id: result.data.user.id,
-        display_name: result.data.user.user_metadata?.display_name || null,
-        updated_at: new Date().toISOString(),
-      });
-    }
     return result;
   }, []);
   const signUp = useCallback(async (name, email, password) => {
@@ -75,12 +68,14 @@ export function AuthProvider({ children }) {
       password,
       options: { data: { display_name: name.trim() } },
     });
-    if (result.data.user && result.data.session) {
-      await supabase.from("profiles").upsert({
-        id: result.data.user.id,
-        display_name: name.trim() || null,
-        updated_at: new Date().toISOString(),
-      });
+    return result;
+  }, []);
+  const updateDisplayName = useCallback(async (name) => {
+    const displayName = name.trim();
+    if (!displayName || displayName.length > 50) return { error: { message: "Введи имя длиной до 50 символов." } };
+    const result = await supabase.auth.updateUser({ data: { display_name: displayName } });
+    if (result.data.user) {
+      setSession(current => current?.user?.id === result.data.user.id ? { ...current, user: result.data.user } : current);
     }
     return result;
   }, []);
@@ -101,9 +96,10 @@ export function AuthProvider({ children }) {
       requestAuth,
       signIn,
       signUp,
+      updateDisplayName,
       signOut,
     }),
-    [ready, session, guestMode, enterGuestMode, requestAuth, signIn, signUp, signOut],
+    [ready, session, guestMode, enterGuestMode, requestAuth, signIn, signUp, updateDisplayName, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

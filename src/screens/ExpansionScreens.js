@@ -40,6 +40,7 @@ import {
 import { useProgress } from "../store/ProgressContext";
 import { colors , useTheme, createThemedStyles } from "../theme";
 import AppearancePicker from '../components/AppearancePicker';
+import { EditName } from './AccessScreen';
 import { PrimaryButton, ProgressBar } from "../components/UI";
 import { balancedOptions } from "../utils/shuffle";
 
@@ -213,6 +214,7 @@ export function BackupScreen({ onClose, initialMode = 'export' }) {
 
 export function SettingsScreen({ onClose }) {
   const appearance = useTheme();
+  const { user } = useAuth();
   const { progress, updateSettings } = useProgress();
   const settings = {
     accent: "en-US",
@@ -256,6 +258,11 @@ export function SettingsScreen({ onClose }) {
     <View style={s.container}>
       <Header title="Настройки" onClose={onClose} />
       <ScrollView contentContainerStyle={s.content}>
+        {!!user && <>
+          <Text style={s.sectionTitle}>Профиль</Text>
+          {!!user.email && <Text style={s.cardText}>{user.email}</Text>}
+          <EditName initialName={user.user_metadata?.display_name} />
+        </>}
         <Text style={s.sectionTitle}>Оформление</Text>
         <AppearancePicker />
         <Text style={s.sectionTitle}>Напоминания</Text>

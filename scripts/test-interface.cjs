@@ -26,7 +26,7 @@ const asyncStorage = { getItem: async key => storage.get(key) || null, setItem: 
 class Value { constructor(value) { this.value = value; } setValue(value) { this.value = value; } stopAnimation() {} interpolate() { return this.value; } }
 const animate = (value, options) => ({ start: callback => { animations.push(options); value.setValue(options.toValue); callback?.({ finished: true }); }, stop() {} });
 const native = {
-  View: host('View'), Text: host('Text'), TextInput: host('TextInput'), Pressable: host('Pressable'), ScrollView: host('ScrollView'), KeyboardAvoidingView: host('KeyboardAvoidingView'), Modal: host('Modal'), ActivityIndicator: host('ActivityIndicator'), InputAccessoryView: host('InputAccessoryView'), Switch: host('Switch'),
+  View: host('View'), Text: host('Text'), TextInput: host('TextInput'), Pressable: host('Pressable'), ScrollView: host('ScrollView'), TouchableWithoutFeedback: host('TouchableWithoutFeedback'), KeyboardAvoidingView: host('KeyboardAvoidingView'), Modal: host('Modal'), ActivityIndicator: host('ActivityIndicator'), InputAccessoryView: host('InputAccessoryView'), Switch: host('Switch'),
   FlatList: props => React.createElement('FlatList', props, props.ListHeaderComponent, props.data?.length ? props.data.slice(0, 5).map((item, index) => React.createElement(React.Fragment, { key: props.keyExtractor(item) }, props.renderItem({ item, index }))) : props.ListEmptyComponent, props.ListFooterComponent),
   StyleSheet: { create: styles => styles, hairlineWidth: 1, absoluteFillObject: { position: 'absolute' } }, Platform: { OS: 'ios', select: options => options.ios ?? options.default },
   Appearance: { getColorScheme: () => override || system, setColorScheme: value => { const old = override || system; override = ['light', 'dark'].includes(value) ? value : null; if ((override || system) !== old) emit('appearance', { colorScheme: override || system }); }, addChangeListener: callback => subscribe('appearance', callback) },
@@ -51,7 +51,17 @@ const actions = new Proxy({}, { get: (target, key) => target[key] || (target[key
 const providers = ({ children }) => children;
 const progressApi = { useProgress: () => new Proxy({ progress }, { get: (target, key) => key in target ? target[key] : actions[key] }), useProgressSelector: selector => selector({ progress, ready: true }), useProgressStore: () => progressStore, useProgressActions: () => actions, ProgressProvider: providers };
 const cloudApi = { useCloudBootstrap: () => false, useCloudSync: () => ({ status: 'offline', conflict: null }), CloudSyncProvider: providers };
-const authApi = { useAuth: () => ({ ready: true, user: null, guestMode: true }), AuthProvider: providers };
+let accountUser = null;
+let canEnter = true;
+let staffRole = null;
+const accountActions = [];
+const authApi = { useAuth: () => ({ ready: true, user: accountUser, guestMode: true,
+  signUp: async (...args) => { accountActions.push(args); return { data: { session: null } }; },
+  updateDisplayName: async name => { accountActions.push(name); return {}; },
+}), AuthProvider: providers };
+const accessApi = { AccessProvider: providers, useAccess: () => ({ allowed: canEnter, isAdmin: !!staffRole, role: staffRole }),
+  manageAccess: async action => action === 'list_promos' ? [] : {},
+};
 const cache = new Map();
 const dynamicImports = ({ types: t }) => ({ visitor: { CallExpression(p) { if (p.node.callee.type === 'Import') p.replaceWith(t.callExpression(t.memberExpression(t.callExpression(t.memberExpression(t.identifier('Promise'), t.identifier('resolve')), []), t.identifier('then')), [t.arrowFunctionExpression([], t.callExpression(t.identifier('require'), p.node.arguments))])); } } });
 function load(filename) {
@@ -61,6 +71,7 @@ function load(filename) {
   if (file.endsWith('/store/ProgressContext.js')) return progressApi;
   if (file.endsWith('/store/CloudSyncContext.js')) return cloudApi;
   if (file.endsWith('/store/AuthContext.js')) return authApi;
+  if (file.endsWith('/store/AccessContext.js')) return accessApi;
   if (file.endsWith('/services/localAi.js')) return tutorApi;
   if (file.endsWith('/services/offlineSpeech.js')) return { getReadySpeechModel: async () => null, cancelSpeechRecording: async () => {}, resumeSpeechModelDownload: async () => {} };
   if (/\/(?:VoiceCoachScreen|AICenterScreen|PronunciationLabScreen|SpeechModelsScreen|AIDirectorScreen)\.js$/.test(file)) return { default: () => null };
@@ -581,6 +592,47 @@ async function main() {
   await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Сегодня').props.onPress());
   await act(async () => { emit('notification', tapModel); await flush(); });
   assert.equal(homeSelected(), true, 'a duplicate notification response must be ignored');
+  await act(async () => tree.unmount());
+
+  const AuthScreen = load('src/screens/AuthScreen.js').default;
+  await act(async () => { tree = Renderer.create(React.createElement(theme.ThemeProvider, null, React.createElement(AuthScreen))); await flush(); });
+  await act(async () => namedButton('Регистрация').props.onPress());
+  const field = name => tree.root.findAllByType('TextInput').find(node => node.props.accessibilityLabel === name || node.props.placeholder === name);
+  await act(async () => {
+    field('Электронная почта').props.onChangeText('new@example.com');
+    field('Пароль').props.onChangeText('password');
+    field('Повтори пароль').props.onChangeText('password');
+  });
+  await act(async () => namedButton('Создать аккаунт').props.onPress());
+  assert.equal(accountActions.length, 0, 'registration requires a name');
+  await act(async () => field('Имя').props.onChangeText('Анна'));
+  await act(async () => { namedButton('Создать аккаунт').props.onPress(); await flush(); });
+  assert.deepEqual(accountActions.at(-1), ['Анна', 'new@example.com', 'password']);
+  await act(async () => tree.unmount());
+
+  canEnter = false;
+  accountUser = { id: 'unlicensed-learner', email: 'new@example.com', user_metadata: { display_name: 'Анна' } };
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.ok(field('Промокод'), 'unlicensed learners can activate a promo');
+  assert.ok(!tree.root.findAllByType('Pressable').some(node => node.props.accessibilityLabel === 'Сегодня'), 'blocked learners cannot enter any study tab');
+  await act(async () => field('Имя профиля').props.onChangeText('Анна-Мария'));
+  await act(async () => { namedButton('Сохранить имя').props.onPress(); await flush(); });
+  assert.equal(accountActions.at(-1), 'Анна-Мария');
+  await act(async () => tree.unmount());
+
+  canEnter = true;
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
+  assert.ok(namedButton('Лицензия и промокоды'));
+  assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === 'Админ-панель'));
+  await act(async () => tree.unmount());
+
+  staffRole = 'owner';
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Админ-панель').props.onPress(); await flush(); });
+  assert.ok(field('Название промокода'));
+  assert.ok(field('Почта аккаунта'));
   await act(async () => tree.unmount());
   console.log('Interface passed: model library/manual downloads/legacy/terms, themes, word sessions, chat keyboard inset/input, stop/retry, Home routes, background preserves work, cold start opens Today, and notification taps open the review or model card. Native model quality and keyboard movement still require iPhone checks.');
 }

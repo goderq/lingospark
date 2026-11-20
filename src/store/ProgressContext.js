@@ -243,6 +243,8 @@ export function ProgressProvider({ children }) {
     }));
   };
 
+  const updateName = name => setProgress(old => old.name === name ? old : { ...old, name });
+
   const recordRetention = (lessonId, dueAt, answers) => {
     setProgress(old => finishRetention(old, lessons, lessonId, dueAt, answers));
   };
@@ -1345,6 +1347,7 @@ export function ProgressProvider({ children }) {
       loadError,
       retryLocalLoad: () => setReadAttempt(value => value + 1),
       finishOnboarding,
+      updateName,
       completeLesson,
       recordRetention,
       savePracticeDraft,
