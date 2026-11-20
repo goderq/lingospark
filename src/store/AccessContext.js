@@ -91,6 +91,12 @@ export async function manageAccess(action, options = {}) {
   return data;
 }
 
+export async function loadAdminProfile(userId, signal) {
+  const { data, error } = await supabase.rpc('lingo_admin_user_profile', { p_user_id: userId }).abortSignal(signal);
+  if (error) throw error;
+  return data;
+}
+
 export async function loadAccessEvents(before, email) {
   const options = before ? { p_before_at: before.occurred_at, p_before_id: before.id } : {};
   const { data, error } = email

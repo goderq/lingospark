@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import AdminLearnerProfile from '../components/AdminLearnerProfile';
 import { useAuth } from '../store/AuthContext';
 import { loadAccessEvents, manageAccess, useAccess } from '../store/AccessContext';
 import { offlineRemaining } from '../utils/licenseTiming';
@@ -311,6 +312,7 @@ function AccessJournal({ onClose, account, staffRole }) {
   const email = account?.email;
   const confirmed = account?.confirmed !== false;
   const [profile, setProfile] = useState(account);
+  const [showProfile, setShowProfile] = useState(false);
   const [entries, setEntries] = useState([]);
   const [license, setLicense] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -339,11 +341,16 @@ function AccessJournal({ onClose, account, staffRole }) {
     return () => { request.current++; };
   }, [confirmed, load]);
 
+  if (showProfile && profile?.id) return <AccessLayout title="Профиль пользователя" onClose={() => setShowProfile(false)}>
+    <AdminLearnerProfile userId={profile.id} />
+  </AccessLayout>;
+
   return <AccessLayout title={account ? 'Карточка пользователя' : 'Журнал лицензий'} onClose={onClose}>
     {!!profile && <View style={s.card}>
       {!!profile.name && <Text style={s.label}>{profile.name}</Text>}
       <Text style={s.muted}>{profile.email}</Text>
       <Text style={s.label}>{roleTitle(profile.role)} · {licenseStatus(license || profile)}</Text>
+      {!!profile.id && <Button title="Открыть полный профиль" secondary onPress={() => setShowProfile(true)} />}
       {confirmed ? <AccountActions account={{ ...profile, ...license }} staffRole={staffRole} onUpdate={updated => {
         setProfile(current => ({ ...current, ...updated }));
         setLicense(updated);

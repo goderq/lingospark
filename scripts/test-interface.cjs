@@ -60,6 +60,8 @@ const accountActions = [];
 const journalRequests = [];
 const journalAccounts = [];
 const adminRequests = [];
+const profileRequests = [];
+let profileInCloud = true;
 let manualGrantAttempts = 0;
 let studentLicense = { licensed: false, revoked_at: '2026-11-20T10:00:00Z' };
 let verifyRealAccess = false;
@@ -90,6 +92,18 @@ const accessApi = { AccessProvider: providers, useAccess: () => ({ ...licenseSta
     licenseState = { licensed: true, expires_at: new Date(checkedAt + 864000000).toISOString(), verifiedAt: checkedAt, offlineUntil: checkedAt + 604800000 };
     return {};
   } }),
+  loadAdminProfile: async (userId, signal) => {
+    profileRequests.push({ userId, signal });
+    return {
+      account: { id: userId, name: 'Анна', email: 'student@example.com', licensed: false },
+      cloud: profileInCloud ? {
+        summary: { totalXP: 135, streak: 3, learnerLevel: 'A2' }, stats: {}, settings: {}, completed: ['greetings'],
+        lesson_results: { greetings: { bestAccuracy: 80 } }, journey_stages: { greetings: 2 },
+        level_exam_best: { A1: 28 }, counts: {}, words: [{ english: 'queue', russian: 'очередь' }],
+        activity: { '2026-11-20': 3 },
+      } : null,
+    };
+  },
   manageAccess: async (action, options) => {
     adminRequests.push({ action, options });
     if (action === 'list_promos') {
@@ -750,6 +764,20 @@ async function main() {
   assert.equal(journalAccounts.at(-1), 'student@example.com');
   assert.ok(journalText('Лицензия отозвана'));
   assert.ok(!journalText('Бессрочный доступ'), 'account history refreshes the current license along with the events');
+  assert.equal(profileRequests.length, 0, 'the progress snapshot is fetched only when the full profile is opened');
+  await act(async () => { namedButton('Открыть полный профиль').props.onPress(); await flush(); });
+  assert.equal(profileRequests.at(-1).userId, 'student');
+  assert.ok(journalText('Профиль пользователя'));
+  assert.ok(journalText('Прогресс по темам · пройдено 1'));
+  assert.ok(journalText('135'));
+  assert.ok(journalText('очередь'));
+  assert.ok(journalText('20.11.2026'));
+  profileInCloud = false;
+  await act(async () => { namedButton('Обновить профиль').props.onPress(); await flush(); });
+  assert.ok(profileRequests[0].signal.aborted);
+  assert.ok(journalText('Учебный прогресс ещё не синхронизирован.'));
+  await goBack();
+  assert.ok(journalText('Карточка пользователя'));
   await act(async () => field('Причина выдачи или продления').props.onChangeText('Тестовый доступ'));
   const grant = async () => {
     await act(async () => namedButton('Выдать лицензию').props.onPress());
