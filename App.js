@@ -151,7 +151,7 @@ function AppContent() {
     guestMode,
   } = useAuth();
   const access = useAccess();
-  const cloudRestoring = useCloudBootstrap();
+  const cloudRestoring = useCloudBootstrap() && !access.offline;
   const [tab, rawSetTab] = useState("home");
   const [overlay, rawSetOverlay] = useState(null);
   const setTab = useCallback(value => { if (value !== tab) beginScreenTransition(value); rawSetTab(value); }, [tab]);

@@ -15,7 +15,7 @@ const baseKey = id => '@lingospark/cloud-base-v2:' + id;
 export const recoveryKey = id => '@lingospark/cloud-recovery-v1:' + id;
 
 export function CloudSyncProvider({ children }) {
-  const { user } = useAuth();
+  const { user, offlineSession } = useAuth();
   const { progress, ready, restoreProgress, localUpdatedAt, loadError } = useProgress();
   const [status, setStatus] = useState('offline');
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
@@ -87,7 +87,7 @@ export function CloudSyncProvider({ children }) {
     clearTimeout(timer.current); initialized.current = null; inFlight.current = null;
     acknowledged.current = null; remoteRevision.current = 0; conflictRef.current = null;
     setConflict(null); setConflictVisible(false); setRevision(0); setLastError(''); setLastSyncedAt(null);
-    if (!ready || !user) { setBootstrapping(false); setStatus('offline'); return; }
+    if (!ready || !user || offlineSession) { setBootstrapping(false); setStatus('offline'); return; }
     const id = user.id;
     const initialize = async () => {
       if (!isCurrent(id, generation)) return false;
@@ -125,7 +125,7 @@ export function CloudSyncProvider({ children }) {
     initializeRef.current = initialize;
     initialize();
     return () => { clearTimeout(timer.current); if (epoch.current === generation) epoch.current++; };
-  }, [ready, user?.id, acknowledge, raiseConflict, restoreProgress]);
+  }, [ready, user?.id, offlineSession, acknowledge, raiseConflict, restoreProgress]);
 
   useEffect(() => {
     if (!ready || !user || bootstrapping || initialized.current !== user.id || conflictRef.current) return;

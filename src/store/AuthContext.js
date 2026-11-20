@@ -5,36 +5,62 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { AppState, Platform } from "react-native";
-import { supabase } from "../lib/supabase";
+import { isAuthRetryableFetchError } from "@supabase/supabase-js";
+import { authStorageKey, supabase } from "../lib/supabase";
 
 const GUEST_KEY = "@lingospark/guest-mode-v1";
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
+  const [offlineUser, setOfflineUser] = useState(null);
   const [ready, setReady] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
+  const authRevision = useRef(0);
+
+  const retrySession = useCallback(async () => {
+    const revision = ++authRevision.current;
+    const result = await supabase.auth.getSession().catch(() => null);
+    if (!result || revision !== authRevision.current) return;
+    const { data, error } = result;
+    const stored = !data.session && isAuthRetryableFetchError(error)
+      ? await AsyncStorage.getItem(authStorageKey).then(JSON.parse).catch(() => null)
+      : null;
+    if (revision !== authRevision.current) return;
+    // An expired token is never used for API requests. The stored user only
+    // identifies the account whose previously verified local access can be read.
+    const cachedUser = stored?.access_token && stored.refresh_token && stored.user?.id && !stored.user.is_anonymous
+      ? stored.user : null;
+    setOfflineUser(cachedUser);
+    setSession(data.session || null);
+  }, []);
 
   useEffect(() => {
-    Promise.all([supabase.auth.getSession(), AsyncStorage.getItem(GUEST_KEY)])
-      .then(([{ data }, guest]) => {
-        setSession(data.session || null);
-        setGuestMode(guest === "true");
-      })
-      .finally(() => setReady(true));
-
-    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    let mounted = true;
+    const { data } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "INITIAL_SESSION") return;
+      authRevision.current++;
       setSession(nextSession);
+      setOfflineUser(null);
       if (nextSession) {
         setGuestMode(false);
         AsyncStorage.removeItem(GUEST_KEY).catch(() => {});
       }
     });
-    return () => data.subscription.unsubscribe();
-  }, []);
+    Promise.all([retrySession(), AsyncStorage.getItem(GUEST_KEY)])
+      .then(([, guest]) => { if (mounted) setGuestMode(guest === "true"); })
+      .catch(() => {})
+      .finally(() => { if (mounted) setReady(true); });
+    return () => {
+      mounted = false;
+      authRevision.current++;
+      data.subscription.unsubscribe();
+    };
+  }, [retrySession]);
 
   useEffect(() => {
     if (Platform.OS === "web") return undefined;
@@ -80,17 +106,20 @@ export function AuthProvider({ children }) {
     return result;
   }, []);
   const signOut = useCallback(async () => {
-    const result = await supabase.auth.signOut();
+    let result = await supabase.auth.signOut({ scope: offlineUser ? 'local' : 'global' });
+    if (!offlineUser && isAuthRetryableFetchError(result.error)) result = await supabase.auth.signOut({ scope: 'local' });
     setGuestMode(true);
     await AsyncStorage.setItem(GUEST_KEY, "true");
     return result;
-  }, []);
+  }, [offlineUser]);
 
   const value = useMemo(
     () => ({
       ready,
       session,
-      user: session?.user || null,
+      user: session?.user || offlineUser,
+      offlineSession: !session && !!offlineUser,
+      retrySession,
       guestMode,
       enterGuestMode,
       requestAuth,
@@ -99,7 +128,7 @@ export function AuthProvider({ children }) {
       updateDisplayName,
       signOut,
     }),
-    [ready, session, guestMode, enterGuestMode, requestAuth, signIn, signUp, updateDisplayName, signOut],
+    [ready, session, offlineUser, retrySession, guestMode, enterGuestMode, requestAuth, signIn, signUp, updateDisplayName, signOut],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

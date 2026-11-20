@@ -58,6 +58,23 @@ let licenseState = {};
 const accountActions = [];
 const journalRequests = [];
 const journalAccounts = [];
+let verifyRealAccess = false;
+const testAuthKey = 'test-supabase-auth-token';
+let authResult, rpcResult, authListener;
+let statusRequests = 0;
+const apiDouble = {
+  auth: {
+    getSession: async () => authResult,
+    onAuthStateChange: listener => { authListener = listener; return { data: { subscription: { unsubscribe() { authListener = null; } } } }; },
+    startAutoRefresh() {},
+    stopAutoRefresh() {},
+  },
+  rpc(name) {
+    assert.equal(name, 'lingo_access_status');
+    statusRequests++;
+    return { abortSignal: async () => rpcResult };
+  },
+};
 const authApi = { useAuth: () => ({ ready: true, user: accountUser, guestMode: true,
   signUp: async (...args) => { accountActions.push(args); return { data: { session: null } }; },
   updateDisplayName: async name => { accountActions.push(name); return {}; },
@@ -93,8 +110,9 @@ function load(filename) {
   if (!file) throw new Error('Missing module: ' + filename);
   if (file.endsWith('/store/ProgressContext.js')) return progressApi;
   if (file.endsWith('/store/CloudSyncContext.js')) return cloudApi;
-  if (file.endsWith('/store/AuthContext.js')) return authApi;
-  if (file.endsWith('/store/AccessContext.js')) return accessApi;
+  if (file.endsWith('/lib/supabase.js')) return { supabase: apiDouble, authStorageKey: testAuthKey };
+  if (!verifyRealAccess && file.endsWith('/store/AuthContext.js')) return authApi;
+  if (!verifyRealAccess && file.endsWith('/store/AccessContext.js')) return accessApi;
   if (file.endsWith('/services/localAi.js')) return tutorApi;
   if (file.endsWith('/services/offlineSpeech.js')) return { getReadySpeechModel: async () => null, cancelSpeechRecording: async () => {}, resumeSpeechModelDownload: async () => {} };
   if (/\/(?:VoiceCoachScreen|AICenterScreen|PronunciationLabScreen|SpeechModelsScreen|AIDirectorScreen)\.js$/.test(file)) return { default: () => null };
@@ -727,6 +745,65 @@ async function main() {
   await act(async () => namedButton('Сохранить для повторения').props.onPress());
   assert.equal(queued, 'knowNotNow');
   await act(async () => tree.unmount());
+
+  // Use the real providers here. A role alone must preserve lessons across a network break.
+  verifyRealAccess = true;
+  const { AuthProvider, useAuth } = load('src/store/AuthContext.js');
+  const { AccessProvider, useAccess } = load('src/store/AccessContext.js');
+  const { AuthRetryableFetchError } = require('@supabase/supabase-js');
+  const session = { access_token: 'test-access', refresh_token: 'test-refresh', user: { id: 'staff-account' } };
+  const sessionKey = '@lingospark/access-v1/staff-account';
+  const online = value => ({ data: value, error: null, status: 200 });
+  const noNetwork = { data: null, error: { message: 'Network request failed' }, status: 0 };
+  authResult = { data: { session }, error: null };
+  storage.set(testAuthKey, JSON.stringify(session));
+  rpcResult = online({ role: 'owner', licensed: false, expires_at: null });
+  let accessSnapshot, authSnapshot;
+  function ProbeAccess() {
+    accessSnapshot = useAccess();
+    authSnapshot = useAuth();
+    return null;
+  }
+  const mountAccess = () => Renderer.create(React.createElement(AuthProvider, null,
+    React.createElement(AccessProvider, null, React.createElement(ProbeAccess))));
+  await act(async () => { tree = mountAccess(); await flush(); });
+  assert.ok(accessSnapshot.allowed && accessSnapshot.isAdmin);
+  assert.equal(JSON.parse(storage.get(sessionKey)).staffAccess, true);
+  rpcResult = noNetwork;
+  await act(async () => { emit('appstate', 'active'); await flush(); });
+  assert.ok(accessSnapshot.allowed && accessSnapshot.offline);
+  assert.equal(accessSnapshot.isAdmin, false, 'the offline cache never grants admin rights');
+  assert.equal(accessSnapshot.licensed, false, 'staff access is not a promo license');
+  await act(async () => tree.unmount());
+
+  authResult = { data: { session: null }, error: new AuthRetryableFetchError('Network request failed', 0) };
+  const beforeRestart = statusRequests;
+  await act(async () => { tree = mountAccess(); await flush(); });
+  assert.equal(authSnapshot.offlineSession, true);
+  assert.equal(authSnapshot.session, null);
+  assert.equal(statusRequests, beforeRestart, 'a failed token refresh must not send an anonymous access RPC');
+  assert.ok(accessSnapshot.allowed && !accessSnapshot.isAdmin);
+  rpcResult = online({ role: null, licensed: false, expires_at: null });
+  authResult = { data: { session }, error: null };
+  await act(async () => { await accessSnapshot.refresh(); await flush(); });
+  assert.equal(accessSnapshot.allowed, false, 'a server response removing staff access wins');
+  assert.equal(storage.has(sessionKey), false);
+  rpcResult = noNetwork;
+  await act(async () => { emit('appstate', 'active'); await flush(); });
+  assert.equal(accessSnapshot.allowed, false, 'disconnecting again does not restore revoked access');
+
+  const secondSession = { ...session, user: { id: 'promo-account' } };
+  const promoKey = '@lingospark/access-v1/promo-account';
+  storage.set(promoKey, JSON.stringify({ verifiedAt: Date.now(), expires_at: null }));
+  await act(async () => { authListener('SIGNED_IN', secondSession); await flush(); });
+  assert.ok(accessSnapshot.allowed && accessSnapshot.licensed && !accessSnapshot.isAdmin, 'old promo caches continue to work');
+  rpcResult = { data: null, error: { message: 'account_required' }, status: 401 };
+  await act(async () => { emit('appstate', 'active'); await flush(); });
+  assert.equal(storage.has(promoKey), false);
+  assert.equal(accessSnapshot.allowed, false);
+  await act(async () => tree.unmount());
+  assert.equal(licenseTiming(offlineLicense({ licensed: false, staffAccess: true, verifiedAt: now }, now), now).staffOffline, true);
+  assert.equal(licenseTiming(offlineLicense({ licensed: false, staffAccess: true, verifiedAt: now }, now + 7 * 86400000), now + 7 * 86400000).staffOffline, false);
   console.log('Interface passed: model library/manual downloads/legacy/terms, themes, word sessions, chat keyboard inset/input, stop/retry, Home routes, background preserves work, cold start opens Today, and notification taps open the review or model card. Native model quality and keyboard movement still require iPhone checks.');
 }
 const watchdog = setTimeout(() => { console.error('Interface test did not finish'); process.exitCode = 1; }, 20000);

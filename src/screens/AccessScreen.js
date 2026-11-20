@@ -80,13 +80,13 @@ export function EditName({ initialName }) {
 
 export default function AccessScreen({ onClose, onAccount }) {
   const { user, signOut } = useAuth();
-  const { licensed, expires_at, revoked_at, expired, verifiedAt, offlineUntil, offline, isAdmin, error, loading, refresh, redeem } = useAccess();
+  const { licensed, expires_at, revoked_at, expired, verifiedAt, offlineUntil, offline, staffOffline, isAdmin, error, loading, refresh, redeem } = useAccess();
   const [code, setCode] = useState('');
   const [showCode, setShowCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const status = loading ? 'Проверяем доступ…' : licensed ? licenseStatus({ licensed, expires_at }) :
-    revoked_at ? 'Лицензия отозвана' : expired ? 'Срок лицензии истёк' :
+    staffOffline ? 'Офлайн-доступ к обучению' : revoked_at ? 'Лицензия отозвана' : expired ? 'Срок лицензии истёк' :
     offline && verifiedAt ? 'Срок офлайн-доступа истёк' : isAdmin ? 'Доступ администратора' : 'Нет активной лицензии';
   const activate = async () => {
     setBusy(true);
@@ -111,8 +111,9 @@ export default function AccessScreen({ onClose, onAccount }) {
         {isAdmin && status !== 'Доступ администратора' && <Text style={s.muted}>Доступ администратора активен.</Text>}
         {!licensed && !!expires_at && <Text style={s.muted}>Срок лицензии был до {displayTime(expires_at)}</Text>}
         {!!verifiedAt && <Text style={s.muted}>Последняя проверка {displayTime(verifiedAt)}</Text>}
-        {licensed && offlineUntil > Date.now() && <Text style={s.muted}>Офлайн до {displayTime(offlineUntil)} · ещё {offlineRemaining(offlineUntil)}</Text>}
-        {offline && !licensed && <Text style={s.muted}>Подключись к интернету и обнови статус.</Text>}
+        {(licensed || isAdmin || staffOffline) && offlineUntil > Date.now() && <Text style={s.muted}>Офлайн до {displayTime(offlineUntil)} · ещё {offlineRemaining(offlineUntil)}</Text>}
+        {staffOffline && <Text style={s.muted}>Чтобы открыть админ-панель, подключись к интернету.</Text>}
+        {offline && !licensed && !staffOffline && <Text style={s.muted}>Подключись к интернету и обнови статус.</Text>}
         {!offline && !licensed && !isAdmin && !loading && <Text style={s.muted}>Введи промокод, чтобы открыть обучение, словарь, «Английскую жизнь» и ИИ.</Text>}
         {loading && <ActivityIndicator color={colors.purple} />}
         {!!error && <Text accessibilityLiveRegion="polite" style={s.muted}>{error}</Text>}

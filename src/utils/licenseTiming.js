@@ -1,22 +1,29 @@
 const OFFLINE_MS = 7 * 86400000;
 
-export function licenseTiming({ expires_at, revoked_at, licensed, verifiedAt } = {}, now = Date.now()) {
+export const isAccessStaff = role => role === 'owner' || role === 'admin';
+
+export function licenseTiming({ expires_at, revoked_at, licensed, offline, staffAccess, role, verifiedAt } = {}, now = Date.now()) {
   const expiry = expires_at ? Date.parse(expires_at) : Infinity;
   const checked = Number.isFinite(verifiedAt) && verifiedAt > 0 && verifiedAt <= now;
-  const offlineUntil = checked ? Math.min(verifiedAt + OFFLINE_MS, expiry) : null;
+  const cacheExpiry = checked ? verifiedAt + OFFLINE_MS : null;
+  const staffOffline = staffAccess === true && cacheExpiry > now;
+  const offlineUntil = checked ? Math.min(cacheExpiry, isAccessStaff(role) || staffAccess === true ? Infinity : expiry) : null;
   return {
-    licensed: !!licensed && !revoked_at && expiry > now,
+    licensed: !!licensed && !revoked_at && expiry > now && (!offline || cacheExpiry > now),
+    staffOffline,
     expired: expiry <= now,
     offlineUntil: Number.isFinite(offlineUntil) ? offlineUntil : null,
   };
 }
 
 export function offlineLicense(cached, now = Date.now()) {
-  const timing = licenseTiming({ ...cached, licensed: true }, now);
+  const license = cached?.licensed === true || (cached?.licensed === undefined && !!cached?.verifiedAt);
+  const timing = licenseTiming({ ...cached, licensed: license }, now);
   return {
     expires_at: cached?.expires_at ?? null,
     verifiedAt: cached?.verifiedAt ?? null,
     licensed: timing.licensed && timing.offlineUntil > now,
+    staffAccess: cached?.staffAccess === true,
     offline: true,
   };
 }
