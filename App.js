@@ -12,6 +12,7 @@ import CloudConflictGate from './src/components/CloudConflictGate';
 import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
+import { groupPracticeDeck, groupPracticeKey, groupTopicName } from "./src/utils/groupStudy";
 
 import { mainTabs, navigationTarget, practiceAlias } from './src/utils/appNavigation';
 
@@ -236,6 +237,14 @@ function AppContent() {
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
+  if (overlay?.type === 'groupAssignment') {
+    const { assignment } = overlay;
+    const deck = groupPracticeDeck(assignment.topic_id);
+    return <ScreenFrame transitionKey="groupAssignment" style={styles.safe}>
+      <PracticeScreen key={assignment.id} title={groupTopicName(assignment.topic_id)}
+        presetDeck={deck} sessionKey={groupPracticeKey(assignment.id)} onClose={() => setOverlay(null)} />
+    </ScreenFrame>;
+  }
   if (practiceAlias(overlay?.type)) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><PracticeScreen key={overlay.noticeKey || overlay.type} {...practiceAlias(overlay.type)} autoStartReview={!!overlay.shortReview} reviewLimit={overlay.shortReview ? 5 : undefined} onClose={() => setOverlay(null)} onRetention={() => setOverlay({ type: 'retention' })} /></ScreenFrame>;
   if (overlay?.type === "account")
     return (
@@ -762,6 +771,7 @@ function AppContent() {
             onSyncDetails={() => setOverlay({ type: 'diagnostics' })}
             onStartStudy={openStudyTarget}
             onQuickSession={() => setOverlay({ type: 'quickSession' })}
+            onGroupAssignment={assignment => setOverlay({ type: 'groupAssignment', assignment })}
             onLearning={() => navigate('learn')}
             onPhrases={() => setOverlay({ type: "phrases" })}
             onDictation={() => setOverlay({ type: "dictation" })}

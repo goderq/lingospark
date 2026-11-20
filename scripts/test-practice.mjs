@@ -8,6 +8,7 @@ import { lessons } from '../src/data/course.js';
 import { learningJourneys } from '../src/data/learningJourney.js';
 import { DAY } from '../src/utils/retention.js';
 import { practiceAlias } from '../src/utils/appNavigation.js';
+import { groupPracticeDeck, groupPracticeKey, recordGroupStudy } from '../src/utils/groupStudy.js';
 
 const now = Date.UTC(2026, 10, 16, 12);
 const bank = practiceCatalog();
@@ -26,6 +27,10 @@ for (const journey of learningJourneys) {
   assert.equal(journey.stages.length, 5);
   assert.ok(journey.ai.instruction.length > 40);
   for (const item of journey.stages.find(stage => stage.id === 'dialogue').exercises) assert.ok(item.line && !/what did you practi[cs]e|which phrase|use the first|from this lesson/i.test(item.line), item.id);
+  const groupDeck = groupPracticeDeck(journey.id);
+  assert.ok(groupDeck.length > 0 && groupDeck.length <= 10);
+  assert.equal(new Set(groupDeck.map(item => item.id)).size, groupDeck.length);
+  assert.ok(groupDeck.every(item => evaluateExercise(item, item.answer).correct));
 }
 assert.equal(learningJourneys.length, lessons.length);
 assert.ok(practiceAlias('adaptive')); assert.ok(practiceAlias('skillSprint')); assert.equal(practiceAlias('dailyMixedExam').initialMode, 'exam');
@@ -78,4 +83,16 @@ const duplicated = [lessons[0].exercises[0], lessons[0].exercises[0], ...lessons
 const exam = sampleExamQuestions(duplicated, 30, 42);
 assert.equal(exam.length, lessons[0].exercises.filter(item => item.type === 'choice').length);
 assert.equal(new Set(exam.map(item => item.id)).size, exam.length);
+const assignmentId = '00000000-0000-4000-8000-000000000001';
+const groupKey = groupPracticeKey(assignmentId);
+const groupDraft = recordGroupStudy({}, groupKey);
+assert.equal(groupDraft.groupStudyResults[assignmentId].status, 'started');
+const question = { id: 'group-question', type: 'translate', prompt: 'Скажи «Привет»', answer: 'Hello' };
+const groupAttempt = { version: 1, id: 'group-attempt', mode: 'exam', deck: [question], index: 0,
+  input: 'Hello', built: [], checked: true, responses: [{ id: question.id, input: 'Hello' }] };
+const groupCompleted = finishPracticeSession(groupDraft, groupKey, groupAttempt, now);
+assert.deepEqual(groupCompleted.groupStudyResults[assignmentId], { status: 'completed', correct: 1, total: 1 });
+assert.equal(recordGroupStudy(groupCompleted, groupKey), groupCompleted, 'starting a retake preserves the latest submitted result');
+assert.equal(finishPracticeSession(groupCompleted, groupKey, groupAttempt, now), groupCompleted, 'a duplicate submission is ignored');
+assert.deepEqual(groupPracticeDeck('unknown-group-topic'), []);
 console.log(`Practice passed: ${bank.length} pooled questions, all levels/skills, ${learningJourneys.length} topic conversations, drafts, assisted grading, review merging, delays and exam deduplication.`);

@@ -60,6 +60,28 @@ const accountActions = [];
 const journalRequests = [];
 const journalAccounts = [];
 const adminRequests = [];
+const studyGroupRequests = [];
+let groupFixture = null, learnerAssignments = [], studyNetwork = true;
+const groupAssignment = { id: '00000000-0000-4000-8000-000000000011', topic_id: 'greetings',
+  due_on: '2026-11-27', group_name: 'Рабочий английский', completed: 1, started: 0, errors: 2, answers: 5 };
+const groupStudent = { id: 'student', name: 'Анна', email: 'student@example.com' };
+const studyGroupsApi = {
+  loadStudyAssignments: async () => studyNetwork ? { data: learnerAssignments } : { status: 0, error: {} },
+  manageStudyGroups: async (action, options) => {
+    studyGroupRequests.push({ action, options });
+    if (action === 'list_groups') return { groups: groupFixture ? [groupFixture.group] : [], has_more: false };
+    if (action === 'create_group') {
+      groupFixture = { group: { id: 'work-group', name: options.name }, members: [], assignments: [] };
+      return groupFixture.group;
+    }
+    if (action === 'group_detail') return { ...groupFixture };
+    if (action === 'add_member') groupFixture.members = [groupStudent];
+    else if (action === 'assign_topic') groupFixture.assignments = [groupAssignment];
+    else if (action === 'assignment_report') return [{ ...groupStudent, status: 'completed', errors: 2, total: 5 }];
+    else throw Error('Unexpected study group action: ' + action);
+    return {};
+  },
+};
 const profileRequests = [];
 let profileInCloud = true;
 let manualGrantAttempts = 0;
@@ -148,6 +170,7 @@ function load(filename) {
   if (file.endsWith('/store/ProgressContext.js')) return progressApi;
   if (file.endsWith('/store/CloudSyncContext.js')) return cloudApi;
   if (file.endsWith('/lib/supabase.js')) return { supabase: apiDouble, authStorageKey: testAuthKey };
+  if (file.endsWith('/services/studyGroups.js')) return studyGroupsApi;
   if (!verifyRealAccess && file.endsWith('/store/AuthContext.js')) return authApi;
   if (!verifyRealAccess && file.endsWith('/store/AccessContext.js')) return accessApi;
   if (file.endsWith('/services/localAi.js')) return tutorApi;
@@ -798,6 +821,44 @@ async function main() {
   await goBack();
   await goBack();
   assert.ok(!namedButton('Журнал ролей'));
+  await act(async () => tree.unmount());
+
+  staffRole = 'owner';
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Админ-панель').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Учебные группы').props.onPress(); await flush(); });
+  await act(async () => field('Название группы').props.onChangeText('Рабочий английский'));
+  await act(async () => { namedButton('Создать группу').props.onPress(); await flush(); });
+  await act(async () => field('Почта участника').props.onChangeText('student@example.com'));
+  await act(async () => { namedButton('Добавить участника').props.onPress(); await flush(); });
+  assert.ok(journalText('student@example.com'));
+  await act(async () => namedButton('Выбрать тему').props.onPress());
+  await act(async () => namedButton('A1 · Знакомство').props.onPress());
+  await act(async () => { namedButton('Назначить группе').props.onPress(); await flush(); });
+  assert.deepEqual(studyGroupRequests.find(item => item.action === 'assign_topic').options, {
+    group_id: 'work-group', topic_id: 'greetings', days: 7,
+  });
+  await act(async () => { namedButton('Результаты участников').props.onPress(); await flush(); });
+  assert.ok(tree.root.findAllByType('Text').some(node => Array.isArray(node.props.children)
+    && node.props.children.join('') === 'Выполнено · Ошибок 2 из 5'));
+  await act(async () => tree.unmount());
+
+  staffRole = null;
+  const advancedTopic = load('src/data/learningJourney.js').learningJourneys.at(-1);
+  assert.equal(load('src/utils/learningJourney.js').isJourneyUnlocked(progress, advancedTopic.id), false);
+  learnerAssignments = [{ ...groupAssignment, topic_id: advancedTopic.id }];
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.ok(journalText('Задания группы'));
+  await act(async () => tree.unmount());
+  studyNetwork = false;
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.ok(journalText('Задания группы'), 'an offline learner can open a previously synced assignment');
+  const assignedTopic = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === advancedTopic.title + ' · задание группы');
+  await act(async () => { assignedTopic.props.onPress(); await flush(); });
+  assert.ok(journalText(advancedTopic.title));
+  await act(async () => { namedButton('Начать практику').props.onPress(); await flush(); });
+  assert.ok(namedButton('Ответить'));
   await act(async () => tree.unmount());
 
   const { tutorPracticeFromMessages } = load('src/utils/tutorPractice.js');

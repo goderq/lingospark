@@ -1,6 +1,7 @@
 import { constructionReviews } from '../data/constructionPractice.js';
 import { snapshotKey } from './snapshot.js';
 import { evaluateExercise, normalizeAnswer } from './answer.js';
+import { recordGroupStudy } from './groupStudy.js';
 import { retentionSummary, retentionDeck, DAY } from './retention.js';
 import { advanceWordReview } from './wordSchedule.js';
 
@@ -131,11 +132,12 @@ export function finishPracticeSession(progress, draftKey, session, now = Date.no
   const results = Object.fromEntries(Object.entries({ ...progress.practiceResults, [session.id]: record }).sort((a, b) => b[1].at - a[1].at).slice(0, 50));
   const yesterday = new Date(now - DAY).toISOString().slice(0, 10);
   const actions = progress.dailyActions?.date === date ? progress.dailyActions : { date, lessons: 0, reviews: 0, dictations: 0 };
-  return { ...progress, practiceResults: results, practiceDrafts: { ...progress.practiceDrafts, [draftKey]: null }, reviewQueue: queue, reviewStats,
+  const updated = { ...progress, practiceResults: results, practiceDrafts: { ...progress.practiceDrafts, [draftKey]: null }, reviewQueue: queue, reviewStats,
     practiceRewards: { date, ids: [...rewarded] }, totalXP: (progress.totalXP || 0) + earnedXP, dailyXP: (progress.dailyDate === date ? progress.dailyXP || 0 : 0) + earnedXP,
     dailyDate: date, lastStudyDate: date, streak: progress.lastStudyDate === date ? progress.streak || 1 : progress.lastStudyDate === yesterday ? (progress.streak || 0) + 1 : 1,
     activity: { ...progress.activity, [date]: (progress.activity?.[date] || 0) + 1 }, dailyActions: { ...actions, practice: (actions.practice || 0) + 1, unifiedReviews: (actions.unifiedReviews || 0) + (session.mode === 'review' ? 1 : 0), reviews: (actions.reviews || 0) + (session.mode === 'review' ? 1 : 0) },
     mistakes: (progress.mistakes || []).filter(item => !resolved.has(item.id)) };
+  return recordGroupStudy(updated, draftKey, record);
 }
 
 export function enqueuePhrase(progress, phrase, now = Date.now()) {

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import StudyGroupsAdmin from '../components/StudyGroupsAdmin';
 import AdminLearnerProfile from '../components/AdminLearnerProfile';
 import { useAuth } from '../store/AuthContext';
 import { loadAccessEvents, manageAccess, useAccess } from '../store/AccessContext';
@@ -428,6 +429,9 @@ export function AdminScreen({ onClose }) {
     await loadPage(0, promoFilter);
   });
   if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
+  if (route?.type === 'studyGroups') return <AccessLayout title="Учебные группы" onClose={() => setRoute(null)}>
+    <StudyGroupsAdmin />
+  </AccessLayout>;
   if (route?.type === 'journal') return <AccessJournal onClose={() => setRoute(null)} />;
   if (route?.type === 'roles' && access.role === 'owner') return <RoleJournal onClose={() => setRoute(null)} />;
   if (route?.type === 'account') return <AccessJournal account={route.account} staffRole={access.role} onClose={() => setRoute({ type: 'users' })} />;
@@ -435,6 +439,7 @@ export function AdminScreen({ onClose }) {
     onAccount={account => setRoute({ type: 'account', account })} onClose={() => setRoute(null)} />;
 
   return <AccessLayout title="Админ-панель" onClose={onClose}>
+    <Button title="Учебные группы" secondary onPress={() => setRoute({ type: 'studyGroups' })} />
     <Button title="Пользователи" secondary onPress={() => setRoute({ type: 'users' })} />
     <Button title="Журнал лицензий" secondary onPress={() => setRoute({ type: 'journal' })} />
     {access.role === 'owner' && <Button title="Журнал ролей" secondary onPress={() => setRoute({ type: 'roles' })} />}

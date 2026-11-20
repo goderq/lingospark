@@ -1,3 +1,4 @@
+import { recordGroupStudy } from '../utils/groupStudy';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState } from "react-native";
 import React, {
@@ -43,6 +44,7 @@ const initial = {
   journeys: {},
   practiceDrafts: {},
   practiceResults: {},
+  groupStudyResults: {},
   reviewQueue: {},
   wordSessionDraft: null,
   studyDrafts: {},
@@ -252,7 +254,7 @@ export function ProgressProvider({ children }) {
     if (!validatePracticeSession(session)) return;
     setProgress(old => {
       if (old.practiceResults?.[session.id] || JSON.stringify(old.practiceDrafts?.[key]) === JSON.stringify(session)) return old;
-      return { ...old, practiceDrafts: { ...old.practiceDrafts, [key]: session } };
+      return recordGroupStudy({ ...old, practiceDrafts: { ...old.practiceDrafts, [key]: session } }, key);
     });
   };
   const completePractice = (key, session) => setProgress(old => {
