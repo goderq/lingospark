@@ -20,6 +20,8 @@ import { useProgress } from "../store/ProgressContext";
 import { balancedOptions } from "../utils/shuffle";
 import { speak, stopSpeech } from "../utils/speech";
 import { isVoicePracticeTurn } from "../utils/voiceCoachReply";
+import { tutorPracticeFromMessages } from "../utils/tutorPractice";
+import TutorErrorPractice from "../components/TutorErrorPractice";
 import {
   analyzeTutorConversation,
   completeVoiceCoachMessage,
@@ -104,7 +106,7 @@ const todayScenario = () => SCENARIOS[Math.floor(Date.now() / 86400000) % SCENAR
 
 export default function VoiceCoachScreen({ model, onClose }) {
   useTheme();
-  const { progress, addCustomWord } = useProgress();
+  const { progress, addCustomWord, addConstructionReview } = useProgress();
   const [stage, setStage] = useState("setup");
   const [scenario, setScenario] = useState(todayScenario());
   const [level, setLevel] = useState(progress.learnerLevel?.replace("+", "") || "A2");
@@ -360,6 +362,8 @@ export default function VoiceCoachScreen({ model, onClose }) {
       <VoiceResult
         scenario={scenario}
         analysis={analysis}
+        focus={tutorPracticeFromMessages(messages)}
+        onSavePractice={addConstructionReview}
         analyzing={status === "analyzing"}
         progress={progress}
         onAddWord={addCustomWord}
@@ -553,7 +557,7 @@ function OptionRow({ options, value, onChange }) {
   );
 }
 
-function VoiceResult({ scenario, analysis, analyzing, progress, onAddWord, onRetry, onClose }) {
+function VoiceResult({ scenario, analysis, focus, onSavePractice, analyzing, progress, onAddWord, onRetry, onClose }) {
   useTheme();
   const [selected, setSelected] = useState({});
   const [added, setAdded] = useState([]);
@@ -563,7 +567,11 @@ function VoiceResult({ scenario, analysis, analyzing, progress, onAddWord, onRet
     </View>
   );
   if (!analysis) return (
-    <View style={s.container}><View style={s.resultLoading}><Text style={s.resultTitle}>Не удалось получить оценку</Text><Pressable onPress={onRetry} style={s.startButton}><Text style={s.startText}>Попробовать снова</Text></Pressable></View></View>
+    <ScrollView style={s.container} contentContainerStyle={s.resultContent}>
+      <Text style={s.resultTitle}>Не удалось получить оценку</Text>
+      {!!focus && <TutorErrorPractice key={focus.original} practice={focus} progress={progress} onSave={onSavePractice} />}
+      <Pressable onPress={onRetry} style={s.startButton}><Text style={s.startText}>Новый разговор</Text></Pressable>
+    </ScrollView>
   );
   const existing = new Set((progress.customWords || []).map((item) => item.english.toLowerCase()));
   return (
@@ -579,6 +587,7 @@ function VoiceResult({ scenario, analysis, analyzing, progress, onAddWord, onRet
             <View key={key} style={s.resultScore}><Text style={s.resultScoreValue}>{analysis.scores?.[key] || 0}</Text><Text style={s.resultScoreLabel}>{title}</Text></View>
           ))}
         </View>
+        {!!focus && <TutorErrorPractice key={focus.original} practice={focus} progress={progress} onSave={onSavePractice} />}
         <Text style={s.section}>ИСПРАВЛЕНИЯ</Text>
         {analysis.mistakes?.length ? analysis.mistakes.map((item, index) => (
           <View key={`${item.original}-${index}`} style={s.correctionCard}><Text style={s.wrongPhrase}>✕ {item.original}</Text><Text style={s.rightPhrase}>✓ {item.corrected}</Text><Text style={s.cardText}>{item.explanation}</Text></View>

@@ -4,7 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { courseTutorContext } from '../utils/learningJourney';
 import { courseDialogueEvidence, learnerTurns } from '../utils/conversationCoach';
 import { interviewContext, interviewProgress, interviewReview } from '../utils/interview';
-import { tutorPracticeFor } from '../utils/tutorPractice';
+import { tutorPracticeFor, tutorPracticeFromMessages } from '../utils/tutorPractice';
+import TutorErrorPractice from '../components/TutorErrorPractice';
 import ToolSheet from '../components/ToolSheet';
 import useKeyboardDock from '../components/useKeyboardDock';
 import {
@@ -944,7 +945,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
       setError(/json|parse|unexpected|незаверш/i.test(message)
         ? "Разбор не успел завершиться. Нажми ещё раз — он будет создан в сокращённом формате."
         : message || "Не удалось разобрать разговор. Попробуйте ещё раз.");
-      setAnalysisOpen(false);
+      if (!tutorPracticeFromMessages(messages)) setAnalysisOpen(false);
     } finally {
       setAnalyzing(false);
     }
@@ -954,6 +955,8 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
     return (
       <ConversationAnalysis
         analysis={analysis}
+        focus={tutorPracticeFromMessages(messages)}
+        onSavePractice={addConstructionReview}
         analyzing={analyzing}
         level={level}
         topic={topic}
@@ -1299,7 +1302,7 @@ export function TutorChat({ model, onModels, onVoice, onDirector, onNavigate, pr
   );
 }
 
-function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onAddWord, onBack, onRetry }) {
+function ConversationAnalysis({ analysis, focus, onSavePractice, analyzing, level, topic, progress, onAddWord, onBack, onRetry }) {
   useTheme();
   const [addedWords, setAddedWords] = useState([]);
   const existingWords = new Set(
@@ -1374,6 +1377,7 @@ function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onA
             </>
           ) : null}
 
+          {!!focus && <TutorErrorPractice key={focus.original} practice={focus} progress={progress} onSave={onSavePractice} />}
           <Text style={styles.analysisSection}>ИСПРАВЛЕНИЯ</Text>
           {analysis.mistakes?.length ? analysis.mistakes.map((mistake, index) => (
             <View key={`${mistake.original}-${index}`} style={styles.mistakeCard}>
@@ -1425,6 +1429,7 @@ function ConversationAnalysis({ analysis, analyzing, level, topic, progress, onA
       ) : (
         <View style={styles.analysisLoading}>
           <Text style={styles.modelLoadingTitle}>Разбор не готов</Text>
+          {!!focus && <TutorErrorPractice key={focus.original} practice={focus} progress={progress} onSave={onSavePractice} />}
           <Pressable onPress={onRetry} style={styles.retryButton}>
             <Text style={styles.startText}>Попробовать ещё раз</Text>
           </Pressable>

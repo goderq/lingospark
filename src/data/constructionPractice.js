@@ -3,6 +3,10 @@ const dialogue = (id, topic, context, prompt, answer, explanation, answers = [])
 });
 
 export const constructionReviews = {
+  knowNotNow: dialogue('know-not-now', 'Know / now', 'Colleague: Where can I find the meeting room?', 'Скажи, что не знаешь, где находится переговорная.',
+    "I don’t know where the meeting room is.", 'Know — «знать», now — «сейчас». После don’t поставь know.', [
+      'I do not know where the meeting room is.',
+    ]),
   name: dialogue('name', 'Знакомство', 'Sam: Hi, I’m Sam. What’s your name?', 'Назови своё имя. Используй My name. Тебя зовут Кейт.',
     'My name is Kate.', 'Подлежащее My name в единственном числе, поэтому нужна связка is.'),
   introduceFriend: dialogue('introduce-friend', 'Знакомство', 'Sam: Who’s here with you today?', 'Представь своего друга по имени Дэн. Начни с This.',

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '../store/AuthContext';
 import { loadAccessEvents, manageAccess, useAccess } from '../store/AccessContext';
+import { offlineRemaining } from '../utils/licenseTiming';
 import { colors, useTheme, createThemedStyles } from '../theme';
 
 const errorMessage = error => ({
@@ -15,7 +16,12 @@ const errorMessage = error => ({
 }[error?.message] || 'Не удалось выполнить действие. Проверь подключение и попробуй ещё раз.');
 
 const displayDate = value => new Date(value).toLocaleDateString('ru-RU');
-const licenseStatus = license => license.licensed ? (license.expires_at ? 'Доступ до ' + displayDate(license.expires_at) : 'Бессрочный доступ') : 'Нет активной лицензии';
+const licenseStatus = license => {
+  if (license.licensed) return license.expires_at ? 'Доступ до ' + displayTime(license.expires_at) : 'Бессрочный доступ';
+  if (license.revoked_at) return 'Лицензия отозвана';
+  if (license.expires_at && Date.parse(license.expires_at) <= Date.now()) return 'Срок лицензии истёк';
+  return 'Нет активной лицензии';
+};
 
 function AccessLayout({ title, onClose, children }) {
   useTheme();
@@ -74,10 +80,14 @@ export function EditName({ initialName }) {
 
 export default function AccessScreen({ onClose, onAccount }) {
   const { user, signOut } = useAuth();
-  const { licensed, expires_at, offline, isAdmin, error, loading, refresh, redeem } = useAccess();
+  const { licensed, expires_at, revoked_at, expired, verifiedAt, offlineUntil, offline, isAdmin, error, loading, refresh, redeem } = useAccess();
   const [code, setCode] = useState('');
+  const [showCode, setShowCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const status = loading ? 'Проверяем доступ…' : licensed ? licenseStatus({ licensed, expires_at }) :
+    revoked_at ? 'Лицензия отозвана' : expired ? 'Срок лицензии истёк' :
+    offline && verifiedAt ? 'Срок офлайн-доступа истёк' : isAdmin ? 'Доступ администратора' : 'Нет активной лицензии';
   const activate = async () => {
     setBusy(true);
     setMessage('');
@@ -97,17 +107,23 @@ export default function AccessScreen({ onClose, onAccount }) {
       <Button title="Войти или создать аккаунт" onPress={onAccount} />
     </> : <>
       <View style={s.card}>
-        <Text style={s.label}>{isAdmin ? 'Доступ администратора' : licenseStatus({ licensed, expires_at })}</Text>
-        <Text style={s.muted}>{offline ? 'Лицензия проверена ранее. Для продления офлайн-доступа подключись к интернету.' : 'Лицензия открывает обучение, словарь, «Английскую жизнь» и ИИ.'}</Text>
+        <Text style={s.label}>{status}</Text>
+        {isAdmin && status !== 'Доступ администратора' && <Text style={s.muted}>Доступ администратора активен.</Text>}
+        {!licensed && !!expires_at && <Text style={s.muted}>Срок лицензии был до {displayTime(expires_at)}</Text>}
+        {!!verifiedAt && <Text style={s.muted}>Последняя проверка {displayTime(verifiedAt)}</Text>}
+        {licensed && offlineUntil > Date.now() && <Text style={s.muted}>Офлайн до {displayTime(offlineUntil)} · ещё {offlineRemaining(offlineUntil)}</Text>}
+        {offline && !licensed && <Text style={s.muted}>Подключись к интернету и обнови статус.</Text>}
+        {!offline && !licensed && !isAdmin && !loading && <Text style={s.muted}>Введи промокод, чтобы открыть обучение, словарь, «Английскую жизнь» и ИИ.</Text>}
         {loading && <ActivityIndicator color={colors.purple} />}
         {!!error && <Text accessibilityLiveRegion="polite" style={s.muted}>{error}</Text>}
         <Button title="Обновить статус" secondary disabled={loading || busy} onPress={refresh} />
       </View>
-      <View style={s.card}>
+      {licensed && !showCode && <Button title="Продлить по промокоду" onPress={() => setShowCode(true)} disabled={loading} />}
+      {(!licensed || showCode) && <View style={s.card}>
         <Field label="Промокод" placeholder="Введи или вставь код" value={code} onChangeText={setCode} autoCorrect={false} autoCapitalize="characters" maxLength={48} editable={!busy} />
         <Button title={busy ? 'Активируем…' : 'Активировать'} onPress={activate} disabled={busy || !code.trim()} />
         {!!message && <Text accessibilityLiveRegion="polite" style={s.muted}>{message}</Text>}
-      </View>
+      </View>}
       {!onClose && <>
         <EditName initialName={user.user_metadata?.display_name} />
         <Button title="Выйти из аккаунта" onPress={signOut} secondary />
@@ -127,8 +143,10 @@ const displayTime = value => new Date(value).toLocaleString('ru-RU', {
   year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
 });
 
-function AccessJournal({ onClose }) {
+function AccessJournal({ onClose, account }) {
+  const email = account?.email;
   const [entries, setEntries] = useState([]);
+  const [license, setLicense] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -138,22 +156,28 @@ function AccessJournal({ onClose }) {
     setLoading(true);
     setError('');
     try {
-      const { events, has_more } = await loadAccessEvents(cursor);
+      const { events, has_more, license: currentLicense } = await loadAccessEvents(cursor, email);
       if (id !== request.current) return;
       setEntries(previous => cursor ? [...previous, ...events] : events);
       setHasMore(has_more);
+      setLicense(currentLicense || null);
     } catch (reason) {
       if (id === request.current) setError(errorMessage(reason));
     } finally {
       if (id === request.current) setLoading(false);
     }
-  }, []);
+  }, [email]);
   useEffect(() => {
     load();
     return () => { request.current++; };
   }, [load]);
 
-  return <AccessLayout title="Журнал лицензий" onClose={onClose}>
+  return <AccessLayout title={account ? 'История доступа' : 'Журнал лицензий'} onClose={onClose}>
+    {!!account && <View style={s.card}>
+      {!!account.name && <Text style={s.label}>{account.name}</Text>}
+      <Text style={s.muted}>{account.email}</Text>
+      <Text style={s.label}>{licenseStatus(license || account)}</Text>
+    </View>}
     <Button title="Обновить журнал" secondary disabled={loading} onPress={() => load()} />
     {!!error && <Text accessibilityLiveRegion="polite" style={s.notice}>{error}</Text>}
     {loading && <ActivityIndicator color={colors.purple} />}
@@ -180,7 +204,7 @@ function AccessJournal({ onClose }) {
 
 export function AdminScreen({ onClose }) {
   const access = useAccess();
-  const [showJournal, setShowJournal] = useState(false);
+  const [journal, setJournal] = useState(null);
   const [promos, setPromos] = useState([]);
   const [page, setPage] = useState(0);
   const [label, setLabel] = useState('');
@@ -227,10 +251,10 @@ export function AdminScreen({ onClose }) {
     { text: 'Подтвердить', style: 'destructive', onPress: action },
   ]);
   if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
-  if (showJournal) return <AccessJournal onClose={() => setShowJournal(false)} />;
+  if (journal) return <AccessJournal account={journal.account} onClose={() => setJournal(null)} />;
 
   return <AccessLayout title="Админ-панель" onClose={onClose}>
-    <Button title="Журнал лицензий" secondary onPress={() => setShowJournal(true)} />
+    <Button title="Журнал лицензий" secondary onPress={() => setJournal({})} />
     {!!message && <Text accessibilityLiveRegion="polite" style={s.notice}>{message}</Text>}
     <View style={s.card}>
       <Text style={s.heading}>Новый промокод</Text>
@@ -256,6 +280,7 @@ export function AdminScreen({ onClose }) {
       {!!target && <>
         <Text style={s.label}>{target.name || target.email}</Text>
         <Text style={s.muted}>{({ owner: 'Владелец', admin: 'Администратор' }[target.role] || 'Пользователь') + ' · ' + licenseStatus(target)}</Text>
+        <Button title="История доступа" secondary onPress={() => setJournal({ account: target })} disabled={busy} />
         {access.role === 'owner' && target.role !== 'owner' && (target.role === 'admin'
           ? <Button title="Снять права администратора" secondary disabled={busy} onPress={() => confirm('Снять права?', target.email, () => accountAction('revoke_admin'))} />
           : <Button title="Назначить администратором" secondary disabled={busy} onPress={() => confirm('Назначить администратором?', target.email, () => accountAction('grant_admin'))} />)}

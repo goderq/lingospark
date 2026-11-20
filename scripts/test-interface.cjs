@@ -54,16 +54,25 @@ const cloudApi = { useCloudBootstrap: () => false, useCloudSync: () => ({ status
 let accountUser = null;
 let canEnter = true;
 let staffRole = null;
+let licenseState = {};
 const accountActions = [];
 const journalRequests = [];
+const journalAccounts = [];
 const authApi = { useAuth: () => ({ ready: true, user: accountUser, guestMode: true,
   signUp: async (...args) => { accountActions.push(args); return { data: { session: null } }; },
   updateDisplayName: async name => { accountActions.push(name); return {}; },
 }), AuthProvider: providers };
-const accessApi = { AccessProvider: providers, useAccess: () => ({ allowed: canEnter, isAdmin: !!staffRole, role: staffRole }),
-  manageAccess: async action => action === 'list_promos' ? [] : {},
-  loadAccessEvents: async cursor => {
+const accessApi = { AccessProvider: providers, useAccess: () => ({ ...licenseState, allowed: canEnter, isAdmin: !!staffRole, role: staffRole, redeem: async code => {
+    assert.equal(code, 'PROMO-TEST');
+    canEnter = true;
+    const checkedAt = Date.now();
+    licenseState = { licensed: true, expires_at: new Date(checkedAt + 864000000).toISOString(), verifiedAt: checkedAt, offlineUntil: checkedAt + 604800000 };
+    return {};
+  } }),
+  manageAccess: async (action, options) => action === 'list_promos' ? [] : { email: options.email, name: 'Анна', licensed: true },
+  loadAccessEvents: async (cursor, email) => {
     journalRequests.push(cursor);
+    journalAccounts.push(email);
     return cursor ? {
       events: [{ id: 'event-1', occurred_at: '2026-11-20T09:00:00Z', kind: 'promo_redeemed', historical: true,
         promo_label: 'Первый код', promo_suffix: 'AB12', target_email: 'student@example.com', actor_email: 'student@example.com' }],
@@ -72,6 +81,7 @@ const accessApi = { AccessProvider: providers, useAccess: () => ({ allowed: canE
       events: [{ id: 'event-2', occurred_at: '2026-11-20T10:00:00Z', kind: 'license_revoked',
         expires_at: '2026-11-25T10:00:00Z', actor_email: 'admin@example.com', target_email: 'student@example.com' }],
       has_more: true,
+      ...(email && { license: { licensed: false, revoked_at: '2026-11-20T10:00:00Z' } }),
     };
   },
 };
@@ -631,15 +641,35 @@ async function main() {
   await act(async () => field('Имя профиля').props.onChangeText('Анна-Мария'));
   await act(async () => { namedButton('Сохранить имя').props.onPress(); await flush(); });
   assert.equal(accountActions.at(-1), 'Анна-Мария');
+  await act(async () => field('Промокод').props.onChangeText('PROMO-TEST'));
+  await act(async () => { namedButton('Активировать').props.onPress(); await flush(); });
+  await act(async () => { tree.update(React.createElement(App, { testPhase: 'activated' })); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Обучение').props.onPress(); await flush(); });
+  await act(async () => field('Найти тему').props.onChangeText('Знакомство'));
+  await act(async () => { namedButton('Знакомство').props.onPress(); await flush(); });
+  assert.ok(!field('Промокод'), 'activation unlocks the course route');
+  assert.ok(namedButton('Дополнительная практика с разбором'), 'the first topic opens after activation');
+  await act(async () => { emit('back'); await flush(); });
   await act(async () => tree.unmount());
 
-  canEnter = true;
+  licenseState = { ...licenseState, offline: true };
   await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
   await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
   assert.ok(namedButton('Лицензия и промокоды'));
   assert.ok(!tree.root.findAllByType('Text').some(node => node.props.children === 'Админ-панель'));
+  await act(async () => { namedButton('Лицензия и промокоды').props.onPress(); await flush(); });
+  assert.ok(!field('Промокод'));
+  assert.ok(tree.root.findAllByType('Text').some(node => Array.isArray(node.props.children) && node.props.children[0] === 'Офлайн до '));
+  await act(async () => namedButton('Продлить по промокоду').props.onPress());
+  assert.ok(field('Промокод'));
+  canEnter = false;
+  licenseState = { licensed: false, revoked_at: '2026-11-20T08:00:00Z' };
+  await act(async () => { tree.update(React.createElement(App, { testPhase: 'revoked' })); await flush(); });
+  assert.ok(tree.root.findAllByType('Text').some(node => node.props.children === 'Лицензия отозвана'));
+  assert.ok(!tree.root.findAllByType('Pressable').some(node => node.props.accessibilityLabel === 'Обучение'));
   await act(async () => tree.unmount());
 
+  canEnter = true;
   staffRole = 'owner';
   await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
   await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
@@ -659,6 +689,43 @@ async function main() {
   await act(async () => { namedButton('Обновить журнал').props.onPress(); await flush(); });
   assert.equal(journalRequests.at(-1), undefined);
   assert.ok(!journalText('Промокод активирован'));
+  await act(async () => tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Назад').props.onPress());
+  await act(async () => field('Почта аккаунта').props.onChangeText('student@example.com'));
+  await act(async () => { namedButton('Найти аккаунт').props.onPress(); await flush(); });
+  await act(async () => { namedButton('История доступа').props.onPress(); await flush(); });
+  assert.equal(journalAccounts.at(-1), 'student@example.com');
+  assert.ok(journalText('Лицензия отозвана'));
+  assert.ok(!journalText('Бессрочный доступ'), 'account history refreshes the current license along with the events');
+  await act(async () => tree.unmount());
+
+  const { tutorPracticeFromMessages } = load('src/utils/tutorPractice.js');
+  const { licenseTiming, offlineLicense } = load('src/utils/licenseTiming.js');
+  const now = Date.parse('2026-11-20T10:00:00Z');
+  const earlyExpiry = { verifiedAt: now, expires_at: new Date(now + 3600000).toISOString(), licensed: true };
+  assert.equal(licenseTiming(earlyExpiry, now).offlineUntil, now + 3600000);
+  assert.equal(offlineLicense(earlyExpiry, now + 3600000).licensed, false);
+  assert.equal(offlineLicense({ verifiedAt: now }, now + 7 * 86400000).licensed, false);
+  assert.equal(offlineLicense({ verifiedAt: now }, now - 1).licensed, false);
+  const focus = tutorPracticeFromMessages([
+    { role: 'assistant', content: 'What is his name?' },
+    { role: 'user', content: 'i dont now' },
+    { role: 'assistant', content: 'Did you went there?' },
+  ]);
+  assert.equal(focus?.construction, 'knowNotNow');
+  assert.equal(tutorPracticeFromMessages([{ role: 'assistant', content: 'Did you went there?' }]), null);
+  assert.equal(tutorPracticeFromMessages([{ role: 'assistant', content: 'Do you still play?' }, { role: 'user', content: 'I don’t now.' }]), null);
+  const TutorErrorPractice = load('src/components/TutorErrorPractice.js').default;
+  let queued;
+  await act(async () => {
+    tree = Renderer.create(React.createElement(theme.ThemeProvider, null,
+      React.createElement(TutorErrorPractice, { practice: focus, progress, onSave: value => { queued = value; } })));
+    await flush();
+  });
+  assert.ok(journalText('i dont now'));
+  await act(async () => namedButton(focus.exercise.answer).props.onPress());
+  assert.ok(journalText('Верно!'));
+  await act(async () => namedButton('Сохранить для повторения').props.onPress());
+  assert.equal(queued, 'knowNotNow');
   await act(async () => tree.unmount());
   console.log('Interface passed: model library/manual downloads/legacy/terms, themes, word sessions, chat keyboard inset/input, stop/retry, Home routes, background preserves work, cold start opens Today, and notification taps open the review or model card. Native model quality and keyboard movement still require iPhone checks.');
 }
