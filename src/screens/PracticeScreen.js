@@ -17,12 +17,12 @@ import { ScreenEntrance } from '../components/Motion';
 
 const skillNames = { mixed: 'Все навыки', grammar: 'Грамматика', vocabulary: 'Выражения', listening: 'Слух', writing: 'Письмо' };
 
-export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, autoStartReview = false, sessionKey, title, onComplete, eventAssignment }) {
+export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, autoStartReview = false, sessionKey, title, onComplete, eventAssignment, preview = false }) {
   useTheme();
   useScreenTiming('practice_open');
   const { progress, savePracticeDraft, completePractice, clearPracticeDraft } = useProgress();
   const draftKey = sessionKey || (review ? 'unified-review' : initialMode === 'exam' ? 'common-exam' : 'common-practice');
-  const saved = progress.practiceDrafts?.[draftKey];
+  const saved = !preview && progress.practiceDrafts?.[draftKey];
   const [session, setSession] = useState(null);
   const [mode, setMode] = useState(initialMode);
   const [level, setLevel] = useState(initialLevel || progress.learnerLevel?.replace('+', '') || 'A1');
@@ -42,8 +42,8 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
   const options = useMemo(() => current?.type === 'choice' ? balancedOptions(current.options, current.answer, session.index, session.seed) : current?.options || [], [current, session?.index, session?.seed]);
   const typed = current?.type === 'build' ? (session?.built || []).map(i => options[i]).join(' ') : session?.input || '';
   useEffect(() => {
-    if (session && !finished) savePracticeDraft(draftKey, session);
-  }, [session, finished, draftKey, savePracticeDraft]);
+    if (!preview && session && !finished) savePracticeDraft(draftKey, session, eventAssignment);
+  }, [session, finished, draftKey, savePracticeDraft, eventAssignment, preview]);
   useEffect(() => { scroll.current?.scrollTo({ y: 0, animated: false }); }, [session?.index, finished]);
   useEffect(() => () => { stopSpeech(); }, []);
   const start = async () => {
@@ -83,14 +83,14 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
     if (session.index + 1 === session.deck.length) {
       if (completedRef.current === session.id) return;
       completedRef.current = session.id;
-      completePractice(draftKey, session, eventAssignment);
+      if (!preview) completePractice(draftKey, session, eventAssignment);
       const score = session.deck.filter((item, i) => evaluateExercise(item, session.responses[i].input).correct).length;
       onComplete?.(score, session.deck.length);
       setFinished(true);
     }
     else setSession({ ...session, index: session.index + 1, input: '', built: [], checked: false, assisted: false, help: false, retried: false, showReplyAnswer: false });
   };
-  const exit = () => { if (session && !finished) savePracticeDraft(draftKey, session); Keyboard.dismiss(); onClose(); };
+  const exit = () => { if (!preview && session && !finished) savePracticeDraft(draftKey, session, eventAssignment); Keyboard.dismiss(); onClose(); };
   const feedback = session?.checked && session.mode === 'learn';
   const correct = feedback && evaluateExercise(current, typed).correct;
   const canCorrectReply = feedback && !!current.dialogueHint && !correct;
@@ -122,7 +122,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
         {review && <PrimaryButton title="Расписание проверок уроков" color={colors.cardLight} onPress={onRetention} />}
       </> : finished ? <>
         <Text style={s.title}>Результат: {results.filter(item => item.correct).length}/{results.length}</Text>
-        <Text style={s.success}>+{progress.practiceResults?.[session.id]?.earnedXP || 0} XP · за самостоятельные верные ответы, один раз за вопрос в день</Text>
+        <Text style={s.success}>{preview ? 'Предпросмотр задания' : '+' + (progress.practiceResults?.[session.id]?.earnedXP || 0) + ' XP · за самостоятельные верные ответы, один раз за вопрос в день'}</Text>
         <Text style={s.text}>Самостоятельно верно: {results.filter(item => item.correct && !item.answer.assisted).length}. {results.some(item => item.item.dialogueHint) ? "С подсказкой или после исправления" : "С подсказкой"}: {results.filter(item => item.answer.assisted).length}. Повторная практика не выдаёт повторно награду за прохождение курса.</Text>
         {results.map(({ item, answer, correct }, i) => <View key={i} style={s.card}>
           <Text style={s.heading}>{item.prompt}</Text>{!!item.dialogueHint && <Text style={s.text}>{item.context}</Text>}<Text style={s.text}>Твой ответ: {answer.input}</Text>
@@ -155,7 +155,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
         {feedback && (!canCorrectReply || session.showReplyAnswer) && <ExplanationCard key={current.id} item={current} selected={typed} correct={correct} />}
         {!session.checked && <Pressable onPress={Keyboard.dismiss} style={s.back}><Text style={s.link}>Скрыть клавиатуру</Text></Pressable>}
         <PrimaryButton disabled={!session.checked && !typed.trim()} title={session.checked ? session.index + 1 === session.deck.length ? 'Завершить и посмотреть разбор' : 'Следующий вопрос' : 'Ответить'} onPress={session.checked ? next : check} />
-        <Pressable onPress={() => Alert.alert('Начать заново?', 'Текущий черновик будет удалён. Результат незавершённой попытки не засчитывается.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Начать заново', style: 'destructive', onPress: () => { clearPracticeDraft(draftKey); setSession(null); } }])} style={s.back}><Text style={s.link}>Сменить настройки</Text></Pressable>
+        <Pressable onPress={() => Alert.alert('Начать заново?', 'Текущий черновик будет удалён. Результат незавершённой попытки не засчитывается.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Начать заново', style: 'destructive', onPress: () => { if (!preview) clearPracticeDraft(draftKey); setSession(null); } }])} style={s.back}><Text style={s.link}>Сменить настройки</Text></Pressable>
       </>}
     </ScrollView>
   </KeyboardAvoidingView>;

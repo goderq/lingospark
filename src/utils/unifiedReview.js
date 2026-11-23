@@ -138,7 +138,7 @@ export function finishPracticeSession(progress, draftKey, session, now = Date.no
     dailyDate: date, lastStudyDate: date, streak: progress.lastStudyDate === date ? progress.streak || 1 : progress.lastStudyDate === yesterday ? (progress.streak || 0) + 1 : 1,
     activity: { ...progress.activity, [date]: (progress.activity?.[date] || 0) + 1 }, dailyActions: { ...actions, practice: (actions.practice || 0) + 1, unifiedReviews: (actions.unifiedReviews || 0) + (session.mode === 'review' ? 1 : 0), reviews: (actions.reviews || 0) + (session.mode === 'review' ? 1 : 0) },
     mistakes: (progress.mistakes || []).filter(item => !resolved.has(item.id)) };
-  return recordStudyEvent(recordGroupStudy(updated, draftKey, record), draftKey, eventAssignment, now);
+  return recordStudyEvent(recordGroupStudy(updated, draftKey, record), draftKey, eventAssignment, now, grades);
 }
 
 export function enqueuePhrase(progress, phrase, now = Date.now()) {

@@ -13,7 +13,7 @@ import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import { groupPracticeDeck, groupPracticeKey, groupTopicName } from "./src/utils/groupStudy";
-import { canOpenEventDay, eventPracticeKey } from "./src/utils/studyEvents";
+import { canOpenEventDay, eventPracticeDeck, eventPracticeKey } from "./src/utils/studyEvents";
 
 import { mainTabs, navigationTarget, practiceAlias } from './src/utils/appNavigation';
 
@@ -23,6 +23,9 @@ import { colors , useTheme, createThemedStyles , ThemeProvider } from "./src/the
 import { lessons } from "./src/data/course";
 import {markStartup,beginScreenTransition} from './src/utils/performance';
 import useLearningNotifications from './src/components/useLearningNotifications';
+import { useCachedStudyList } from './src/components/useStudyAssignments';
+import useEventReminders from './src/components/useEventReminders';
+import { loadStudyEvents } from './src/services/studyEvents';
 
 const CourseScreen = React.lazy(() => import("./src/screens/CourseScreen"));
 const AITutorScreen = React.lazy(() => import("./src/screens/AITutorScreen"));
@@ -205,13 +208,28 @@ function AppContent() {
     setOverlay({ type: target.type, topicId: target.id, stageId: target.stageId, noticeKey, shortReview: target.type === 'unifiedReview' });
   };
   const notificationsReady = ready && navigationReady && authReady && !cloudRestoring;
+  const notificationsActive = notificationsReady && !loadError && onboarded && access.allowed;
+  const events = useCachedStudyList('@lingospark/study-events-v1/', loadStudyEvents, null, tab === 'home' && !overlay);
+  const reminders = useEventReminders({ ready: notificationsReady, active: notificationsActive, account: user?.id, events });
+  const [eventNotice, setEventNotice] = useState(null);
+  useEffect(() => {
+    if (!eventNotice || !events || !notificationsActive) return;
+    const event = eventNotice.account === user?.id && events.find(item => item.id === eventNotice.eventId);
+    setEventNotice(null);
+    if (event) {
+      setTab('home');
+      setOverlay({ type: 'studyEvent', event });
+    }
+  }, [eventNotice, events, notificationsActive, user?.id, setTab, setOverlay]);
   useLearningNotifications({
     ready: notificationsReady,
-    active: notificationsReady && !loadError && onboarded && access.allowed,
+    active: notificationsActive,
     onOpen: notice => {
       setAiImmersive(false);
       setWorldImmersive(false);
-      if (notice.kind === 'model') {
+      if (notice.kind === 'event') {
+        setEventNotice(notice);
+      } else if (notice.kind === 'model') {
         setAiPractice(null);
         setModelNotice(notice);
         setOverlay(null);
@@ -246,12 +264,12 @@ function AppContent() {
     if (overlay.type === 'studyEventDay' && groupTopicName(topic) && canOpenEventDay(event, index)) {
       const key = eventPracticeKey(event.id, index);
       return <ScreenFrame transitionKey="studyEventDay" style={styles.safe}>
-        <PracticeScreen key={key} title={groupTopicName(topic)} presetDeck={groupPracticeDeck(topic, 1)}
+        <PracticeScreen key={key} title={groupTopicName(topic)} presetDeck={eventPracticeDeck(topic, event.formats?.[index])}
           sessionKey={key} eventAssignment={{ event, index }} onClose={showEvent} />
       </ScreenFrame>;
     }
     return <ScreenFrame transitionKey="studyEvent" style={styles.safe}>
-      <StudyEventScreen event={event} onClose={() => setOverlay(null)}
+      <StudyEventScreen event={event} reminders={reminders} onClose={() => setOverlay(null)}
         onOpen={day => setOverlay({ type: 'studyEventDay', event, index: day })} />
     </ScreenFrame>;
   }
@@ -790,6 +808,7 @@ function AppContent() {
             onStartStudy={openStudyTarget}
             onQuickSession={() => setOverlay({ type: 'quickSession' })}
             onGroupAssignment={assignment => setOverlay({ type: 'groupAssignment', assignment })}
+            studyEvents={events || []}
             onStudyEvent={event => setOverlay({ type: 'studyEvent', event })}
             onLearning={() => navigate('learn')}
             onPhrases={() => setOverlay({ type: "phrases" })}

@@ -1,3 +1,4 @@
+import { canOpenEventDay, eventPracticeKey, joinStudyEvent } from '../utils/studyEvents';
 import { recordGroupStudy } from '../utils/groupStudy';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AppState } from "react-native";
@@ -251,11 +252,15 @@ export function ProgressProvider({ children }) {
   const recordRetention = (lessonId, dueAt, answers) => {
     setProgress(old => finishRetention(old, lessons, lessonId, dueAt, answers));
   };
-  const savePracticeDraft = (key, session) => {
+  const joinEvent = event => setProgress(old => joinStudyEvent(old, event));
+  const savePracticeDraft = (key, session, assignment) => {
     if (!validatePracticeSession(session)) return;
     setProgress(old => {
       if (old.practiceResults?.[session.id] || JSON.stringify(old.practiceDrafts?.[key]) === JSON.stringify(session)) return old;
-      return recordGroupStudy({ ...old, practiceDrafts: { ...old.practiceDrafts, [key]: session } }, key);
+      const updated = recordGroupStudy({ ...old, practiceDrafts: { ...old.practiceDrafts, [key]: session } }, key);
+      const event = assignment?.event;
+      return event && key === eventPracticeKey(event.id, assignment.index) && canOpenEventDay(event, assignment.index)
+        ? joinStudyEvent(updated, event, Date.now(), true) : updated;
     });
   };
   const completePractice = (key, session, assignment) => setProgress(old => {
@@ -1354,6 +1359,7 @@ export function ProgressProvider({ children }) {
       completeLesson,
       recordRetention,
       savePracticeDraft,
+      joinEvent,
       completePractice,
       addReviewPhrase,
       addConstructionReview,

@@ -1,5 +1,12 @@
+import { groupPracticeDeck } from './groupStudy.js';
+
 const DAY = 86400000;
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+export const eventFormats = { mixed: 'Смешанная практика', listening: 'Аудирование', dialogue: 'Диалог', phrases: 'Собрать фразы' };
+const formatSkills = { listening: 'listening', dialogue: 'conversation', phrases: 'writing' };
+
+export const eventPracticeDeck = (topic, format) => formatSkills[format]
+  ? groupPracticeDeck(topic, 5, formatSkills[format]) : groupPracticeDeck(topic, 1);
 
 export const eventDate = now => new Date(now).toISOString().slice(0, 10);
 
@@ -14,7 +21,16 @@ export function canOpenEventDay(event, index, now = Date.now()) {
   return Number.isInteger(index) && index >= 0 && index <= day && day < event.topics.length;
 }
 
-export function recordStudyEvent(progress, draftKey, assignment, now) {
+export function joinStudyEvent(progress, event, now = Date.now(), started = false) {
+  if (!event || !idPattern.test(event.id) || !Array.isArray(event.topics) || !event.topics.length ||
+    !(eventDay(event, now) < event.topics.length)) return progress;
+  const previous = progress.studyEventResults?.[event.id];
+  if (previous && (!started || previous.started || Object.keys(previous.days || {}).length)) return progress;
+  const entry = { name: event.name, days: {}, ...previous, joined: true, ...(started && { started: true }) };
+  return { ...progress, studyEventResults: { ...progress.studyEventResults, [event.id]: entry } };
+}
+
+export function recordStudyEvent(progress, draftKey, assignment, now, grades) {
   const event = assignment?.event;
   const index = assignment?.index;
   if (!event || !idPattern.test(event.id) || draftKey !== eventPracticeKey(event.id, index) || !canOpenEventDay(event, index, now)) {
@@ -24,7 +40,9 @@ export function recordStudyEvent(progress, draftKey, assignment, now) {
   if (previous?.days?.[index]) return progress;
   const days = { ...previous?.days, [index]: true };
   const badgeAt = previous?.badgeAt || (event.topics.every((_, day) => days[day]) ? now : null);
-  const entry = { name: event.name, days, badgeAt };
+  const answers = Object.fromEntries(grades.map(({ item, correct }) => [item.id, correct]));
+  const entry = { ...previous, name: event.name, joined: true, started: true, days, badgeAt,
+    answers: { ...previous?.answers, [index]: answers } };
   return { ...progress, studyEventResults: { ...progress.studyEventResults, [event.id]: entry } };
 }
 

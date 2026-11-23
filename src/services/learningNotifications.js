@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
+import { planEventReminders } from '../utils/eventReminderPlan';
 import { AI_MODELS } from '../data/aiModels';
 import { localDay, planStudyReminder } from '../utils/notificationPlans';
 import { hasReviewWordCandidates } from '../utils/unifiedReview';
@@ -111,6 +112,42 @@ export function syncStudyNotification({ progress, preferences, lessons }) {
   return scheduleTail;
 }
 
+const EVENT_PREFIX = 'lingospark-event-reminder-';
+let eventSchedule = Promise.resolve();
+let eventRevision = 0;
+
+export function syncEventReminders(options) {
+  const revision = ++eventRevision;
+  const schedule = async () => {
+    const requests = (await Notifications.getAllScheduledNotificationsAsync())
+      .filter(item => item.identifier.startsWith(EVENT_PREFIX));
+    const plans = options.events.length && Object.keys(options.enabled).length &&
+      isAllowed(await Notifications.getPermissionsAsync()) ? planEventReminders(options) : [];
+    if (revision !== eventRevision) return;
+    const pending = new Map(plans.map(plan => [EVENT_PREFIX + plan.day, plan]));
+    for (const request of requests) {
+      const saved = request.content.data;
+      const next = pending.get(request.identifier);
+      if (next && saved?.eventId === next.eventId && saved?.fireAt === next.fireAt && saved?.account === options.account) {
+        pending.delete(request.identifier);
+      } else {
+        await Notifications.cancelScheduledNotificationAsync(request.identifier);
+      }
+    }
+    for (const [identifier, plan] of pending) {
+      if (revision !== eventRevision) return;
+      await Notifications.scheduleNotificationAsync({
+        identifier,
+        content: { title: plan.title, body: 'Тебя ждут задания события.',
+          data: { source: SOURCE, kind: 'event', eventId: plan.eventId, account: options.account, fireAt: plan.fireAt } },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: plan.fireAt },
+      });
+    }
+  };
+  eventSchedule = eventSchedule.catch(() => {}).then(schedule);
+  return eventSchedule;
+}
+
 export function readNotificationResponse(response) {
   if (response?.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return null;
   const request = response.notification?.request;
@@ -118,6 +155,10 @@ export function readNotificationResponse(response) {
   if (!request?.identifier || data?.source !== SOURCE) return null;
   if (data.kind === 'model' && AI_MODELS.some(model => model.id === data.modelId)) {
     return { kind: 'model', modelId: data.modelId, key: request.identifier };
+  }
+  if (data.kind === 'event' && request.identifier.startsWith(EVENT_PREFIX) && typeof data.eventId === 'string' &&
+    typeof data.account === 'string' && Number.isFinite(data.fireAt)) {
+    return { kind: 'event', eventId: data.eventId, account: data.account, key: request.identifier + '-' + data.fireAt };
   }
   if (request.identifier !== STUDY_ID || !Number.isFinite(data.fireAt)) return null;
   const key = `${request.identifier}-${data.fireAt}`;

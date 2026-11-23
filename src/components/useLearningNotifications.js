@@ -60,7 +60,7 @@ export default function useLearningNotifications({ ready, active, onOpen }) {
       seen.current = notice.key;
       Notifications.clearLastNotificationResponseAsync().catch(() => {});
       const { progress } = store.getSnapshot();
-      if (!notificationPreferences(progress.settings)[notice.kind]) return;
+      if (notice.kind !== 'event' && !notificationPreferences(progress.settings)[notice.kind]) return;
       if (notice.kind === 'resume' && !savedStudyTargets(progress, lessons).some(target =>
         target.type === notice.target.type && target.id === notice.target.id && target.stageId === notice.target.stageId)) return;
       open.current(notice);

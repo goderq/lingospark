@@ -4,15 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { groupDueDate } from '../utils/groupStudy';
 import { eventDay } from '../utils/studyEvents';
 import { useProgressSelector } from '../store/ProgressContext';
-import { loadStudyEvents } from '../services/studyEvents';
-import { useCachedStudyList } from './useStudyAssignments';
 import { MotionPressable } from './Motion';
 import { PrimaryButton } from './UI';
 import { colors, createThemedStyles, useTheme } from '../theme';
 
-export default function TodayStudyEvents({ onOpen, now }) {
+export default function TodayStudyEvents({ events, onOpen, now }) {
   useTheme();
-  const events = useCachedStudyList('@lingospark/study-events-v1/', loadStudyEvents);
   const results = useProgressSelector(state => state.progress.studyEventResults);
   const [visible, setVisible] = useState(3);
   const current = events.filter(event => Array.isArray(event?.topics) && event.topics.length && eventDay(event, now) < event.topics.length + 7);

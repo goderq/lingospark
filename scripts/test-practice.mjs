@@ -9,7 +9,8 @@ import { learningJourneys } from '../src/data/learningJourney.js';
 import { DAY } from '../src/utils/retention.js';
 import { practiceAlias } from '../src/utils/appNavigation.js';
 import { groupPracticeDeck, groupPracticeKey, recordGroupStudy } from '../src/utils/groupStudy.js';
-import { canOpenEventDay, eventBadges, eventDate, eventPracticeKey } from '../src/utils/studyEvents.js';
+import { canOpenEventDay, eventBadges, eventDate, eventPracticeDeck, eventPracticeKey, joinStudyEvent } from '../src/utils/studyEvents.js';
+import { planEventReminders } from '../src/utils/eventReminderPlan.js';
 
 const now = Date.UTC(2026, 10, 16, 12);
 const bank = practiceCatalog();
@@ -32,6 +33,10 @@ for (const journey of learningJourneys) {
   assert.ok(groupDeck.length > 0 && groupDeck.length <= 10);
   assert.equal(new Set(groupDeck.map(item => item.id)).size, groupDeck.length);
   assert.ok(groupDeck.every(item => evaluateExercise(item, item.answer).correct));
+  for (const [format, skill] of [['listening', 'listening'], ['dialogue', 'conversation'], ['phrases', 'writing']]) {
+    const eventDeck = eventPracticeDeck(journey.id, format);
+    assert.ok(eventDeck.length > 0 && eventDeck.every(item => item.skill === skill), journey.id + ' ' + format);
+  }
 }
 assert.equal(learningJourneys.length, lessons.length);
 assert.ok(practiceAlias('adaptive')); assert.ok(practiceAlias('skillSprint')); assert.equal(practiceAlias('dailyMixedExam').initialMode, 'exam');
@@ -104,6 +109,7 @@ assert.equal(canOpenEventDay(event, 0, now + DAY), true, 'the previous day remai
 assert.equal(canOpenEventDay(event, 1, now + 2 * DAY), false);
 const firstEventResult = finishPracticeSession({}, firstDay, groupAttempt, now, { event, index: 0 });
 assert.deepEqual(firstEventResult.studyEventResults[event.id].days, { 0: true });
+assert.deepEqual(firstEventResult.studyEventResults[event.id].answers[0], { 'group-question': true });
 assert.deepEqual(eventBadges(firstEventResult), []);
 const future = finishPracticeSession(firstEventResult, secondDay, { ...groupAttempt, id: 'locked-attempt' }, now, { event, index: 1 });
 assert.deepEqual(future.studyEventResults, firstEventResult.studyEventResults);
@@ -111,4 +117,12 @@ const finishedEvent = finishPracticeSession(firstEventResult, secondDay, { ...gr
 assert.deepEqual(eventBadges(finishedEvent), [{ id: event.id, name: event.name }]);
 const repeatedEvent = finishPracticeSession(finishedEvent, secondDay, { ...groupAttempt, id: 'event-retake' }, now + DAY, { event, index: 1 });
 assert.equal(repeatedEvent.studyEventResults, finishedEvent.studyEventResults);
+const joined = joinStudyEvent({}, event, now);
+assert.ok(joined.studyEventResults[event.id].joined);
+const reminders = { events: [event, event], enabled: { [event.id]: true }, results: joined.studyEventResults, now, hour: 19 };
+const dates = planEventReminders(reminders);
+assert.ok(dates.length > 0);
+assert.equal(new Set(dates.map(item => item.day)).size, dates.length, 'only one local reminder per day');
+assert.deepEqual(planEventReminders({ ...reminders, results: finishedEvent.studyEventResults }), []);
+assert.deepEqual(planEventReminders({ ...reminders, enabled: {} }), []);
 console.log(`Practice passed: ${bank.length} pooled questions, all levels/skills, ${learningJourneys.length} topic conversations, drafts, assisted grading, review merging, delays and exam deduplication.`);

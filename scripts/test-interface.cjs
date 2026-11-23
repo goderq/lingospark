@@ -40,10 +40,17 @@ const native = {
 const progress = { name: 'Лео', onboarded: true, dailyGoal: 30, totalXP: 40, dailyXP: 10, streak: 2, completed: [], journeys: {}, retention: {}, reviewStats: {}, reviewQueue: {}, mistakes: [], settings: {}, stats: {}, activity: {} };
 const progressStore = { getSnapshot: () => ({ progress, ready: true }), subscribe: () => () => {} };
 let lastNotification = null;
+let notificationAllowed = false;
+const scheduledNotifications = new Map();
 const notificationApi = {
   DEFAULT_ACTION_IDENTIFIER: 'default',
+  SchedulableTriggerInputTypes: { DATE: 'date' },
+  IosAuthorizationStatus: { PROVISIONAL: 3, EPHEMERAL: 4 },
   setNotificationHandler() {},
-  getAllScheduledNotificationsAsync: async () => [],
+  getPermissionsAsync: async () => ({ granted: notificationAllowed }),
+  getAllScheduledNotificationsAsync: async () => [...scheduledNotifications.values()],
+  scheduleNotificationAsync: async notification => { scheduledNotifications.set(notification.identifier, notification); },
+  cancelScheduledNotificationAsync: async id => { scheduledNotifications.delete(id); },
   getLastNotificationResponseAsync: async () => lastNotification,
   clearLastNotificationResponseAsync: async () => { lastNotification = null; },
   addNotificationResponseReceivedListener: callback => subscribe('notification', callback),
@@ -83,17 +90,23 @@ const studyGroupsApi = {
   },
 };
 const eventRequests = [];
-let publishedEvent = null, eventsNetwork = true;
+let publishedEvent = null, eventDraft = null, eventsNetwork = true;
 const studyEventsApi = {
   loadStudyEvents: async () => eventsNetwork ? { data: publishedEvent ? [publishedEvent] : [] } : { status: 0, error: {} },
   manageStudyEvents: async (action, options) => {
     eventRequests.push({ action, options });
-    if (action === 'list') return publishedEvent ? [publishedEvent] : [];
+    if (action === 'list') return [publishedEvent, eventDraft].filter(Boolean);
+    if (action === 'save_draft') {
+      eventDraft = { ...options, id: '00000000-0000-4000-8000-000000000099', draft: true };
+      return eventDraft;
+    }
     if (action === 'publish') {
-      publishedEvent = { ...options, id: '00000000-0000-4000-8000-000000000099',
+      publishedEvent = { ...options, id: options.event_id || '00000000-0000-4000-8000-000000000099',
         ends_on: new Date(Date.parse(options.starts_on) + (options.topics.length - 1) * 86400000).toISOString().slice(0, 10) };
+      eventDraft = null;
       return publishedEvent;
     }
+    if (action === 'report') return { joined: 3, started: 2, finished: 1, days: [{ index: 0, completed: 2, items: [] }] };
     throw Error('Unexpected event action: ' + action);
   },
 };
@@ -885,11 +898,29 @@ async function main() {
   await act(async () => field('Название события').props.onChangeText('Неделя общения'));
   for (let day = 0; day < 2; day++) {
     await act(async () => namedButton('Добавить тему на день').props.onPress());
+    await act(async () => namedButton(day ? 'Диалог' : 'Аудирование').props.onPress());
     await act(async () => namedButton('A1 · Знакомство').props.onPress());
   }
+  await act(async () => { namedButton('Сохранить черновик').props.onPress(); await flush(); });
+  assert.ok(journalText('Черновик сохранён.'));
+  assert.equal(publishedEvent, null);
+  await act(async () => namedButton('Предпросмотр дня 1').props.onPress());
+  assert.ok(journalText('Предпросмотр · Знакомство'));
+  const originalSaveDraft = actions.savePracticeDraft;
+  let previewWrites = 0;
+  actions.savePracticeDraft = () => { previewWrites++; };
+  await act(async () => { namedButton('Начать практику').props.onPress(); await flush(); });
+  await act(async () => namedButton('← Назад').props.onPress());
+  assert.equal(previewWrites, 0);
+  actions.savePracticeDraft = originalSaveDraft;
   await act(async () => { namedButton('Опубликовать для всех').props.onPress(); await flush(); });
+  assert.deepEqual(eventRequests.find(item => item.action === 'publish').options.formats, ['listening', 'dialogue']);
+  assert.equal(eventRequests.find(item => item.action === 'publish').options.event_id, '00000000-0000-4000-8000-000000000099');
   assert.deepEqual(eventRequests.find(item => item.action === 'publish').options.topics, ['greetings', 'greetings']);
   assert.ok(journalText('Событие опубликовано.'));
+  await act(async () => { namedButton('Отчёт о событии').props.onPress(); await flush(); });
+  assert.ok(tree.root.findAllByType('Text').some(node => Array.isArray(node.props.children)
+    && node.props.children.join('') === 'Участвуют 3 · начали 2 · завершили 1'));
   await act(async () => tree.unmount());
 
   staffRole = null;
@@ -902,13 +933,27 @@ async function main() {
   const eventTile = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Неделя общения · общее событие');
   await act(async () => { eventTile.props.onPress(); await flush(); });
   assert.ok(journalText('Ещё не открыто'));
+  assert.ok(namedButton('Участвовать'));
+  progress.studyEventResults = { [publishedEvent.id]: { name: publishedEvent.name, joined: true, days: {} } };
+  notificationAllowed = true;
+  await act(async () => { tree.update(React.createElement(App, { testingParticipation: true })); await flush(); });
+  await act(async () => { await namedButton('Включить напоминания').props.onPress(); await flush(); });
+  assert.ok(namedButton('Выключить напоминания'));
+  assert.ok([...scheduledNotifications.values()].some(notification => notification.content.data?.eventId === publishedEvent.id));
   await act(async () => { namedButton('Начать задание').props.onPress(); await flush(); });
   assert.ok(journalText('Знакомство'));
   assert.ok(namedButton('Начать практику'));
   await act(async () => tree.unmount());
 
+  const eventReminder = [...scheduledNotifications.values()].find(notification => notification.content.data?.eventId === publishedEvent.id);
+  lastNotification = { actionIdentifier: 'default', notification: { request: eventReminder } };
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.ok(namedButton('К экрану «Сегодня»'), 'a cold navigation from a notification opens the event');
+  await act(async () => tree.unmount());
+
   progress.studyEventResults = { [publishedEvent.id]: { name: publishedEvent.name, days: { 0: true, 1: true }, badgeAt: Date.now() } };
   await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.ok(![...scheduledNotifications.values()].some(notification => notification.content.data?.eventId === publishedEvent.id));
   await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
   assert.ok(journalText('Значки событий'));
   assert.ok(journalText(publishedEvent.name));

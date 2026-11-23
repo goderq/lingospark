@@ -8,7 +8,7 @@ export default function useStudyAssignments() {
   return useCachedStudyList('@lingospark/study-assignments-v1/', loadStudyAssignments);
 }
 
-export function useCachedStudyList(prefix, load) {
+export function useCachedStudyList(prefix, load, fallback = [], refreshKey) {
   const { user, offlineSession } = useAuth();
   const account = user?.id;
   const [state, setState] = useState(null);
@@ -55,6 +55,6 @@ export function useCachedStudyList(prefix, load) {
       controller?.abort();
       subscription.remove();
     };
-  }, [account, offlineSession, prefix, load]);
-  return account && state?.account === account ? state.assignments : [];
+  }, [account, offlineSession, prefix, load, refreshKey]);
+  return account && state?.account === account ? state.assignments : fallback;
 }
