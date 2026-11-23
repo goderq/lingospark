@@ -9,6 +9,7 @@ import { learningJourneys } from '../src/data/learningJourney.js';
 import { DAY } from '../src/utils/retention.js';
 import { practiceAlias } from '../src/utils/appNavigation.js';
 import { groupPracticeDeck, groupPracticeKey, recordGroupStudy } from '../src/utils/groupStudy.js';
+import { canOpenEventDay, eventBadges, eventDate, eventPracticeKey } from '../src/utils/studyEvents.js';
 
 const now = Date.UTC(2026, 10, 16, 12);
 const bank = practiceCatalog();
@@ -95,4 +96,19 @@ assert.deepEqual(groupCompleted.groupStudyResults[assignmentId], { status: 'comp
 assert.equal(recordGroupStudy(groupCompleted, groupKey), groupCompleted, 'starting a retake preserves the latest submitted result');
 assert.equal(finishPracticeSession(groupCompleted, groupKey, groupAttempt, now), groupCompleted, 'a duplicate submission is ignored');
 assert.deepEqual(groupPracticeDeck('unknown-group-topic'), []);
+const event = { id: '00000000-0000-4000-8000-000000000002', name: 'Неделя общения', starts_on: eventDate(now), topics: ['greetings', 'travel'] };
+const firstDay = eventPracticeKey(event.id, 0), secondDay = eventPracticeKey(event.id, 1);
+assert.equal(canOpenEventDay(event, 0, now - DAY), false);
+assert.equal(canOpenEventDay(event, 1, now), false);
+assert.equal(canOpenEventDay(event, 0, now + DAY), true, 'the previous day remains available through the event');
+assert.equal(canOpenEventDay(event, 1, now + 2 * DAY), false);
+const firstEventResult = finishPracticeSession({}, firstDay, groupAttempt, now, { event, index: 0 });
+assert.deepEqual(firstEventResult.studyEventResults[event.id].days, { 0: true });
+assert.deepEqual(eventBadges(firstEventResult), []);
+const future = finishPracticeSession(firstEventResult, secondDay, { ...groupAttempt, id: 'locked-attempt' }, now, { event, index: 1 });
+assert.deepEqual(future.studyEventResults, firstEventResult.studyEventResults);
+const finishedEvent = finishPracticeSession(firstEventResult, secondDay, { ...groupAttempt, id: 'valid-event-2' }, now + DAY, { event, index: 1 });
+assert.deepEqual(eventBadges(finishedEvent), [{ id: event.id, name: event.name }]);
+const repeatedEvent = finishPracticeSession(finishedEvent, secondDay, { ...groupAttempt, id: 'event-retake' }, now + DAY, { event, index: 1 });
+assert.equal(repeatedEvent.studyEventResults, finishedEvent.studyEventResults);
 console.log(`Practice passed: ${bank.length} pooled questions, all levels/skills, ${learningJourneys.length} topic conversations, drafts, assisted grading, review merging, delays and exam deduplication.`);

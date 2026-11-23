@@ -5,12 +5,16 @@ import { useAuth } from '../store/AuthContext';
 import { loadStudyAssignments } from '../services/studyGroups';
 
 export default function useStudyAssignments() {
+  return useCachedStudyList('@lingospark/study-assignments-v1/', loadStudyAssignments);
+}
+
+export function useCachedStudyList(prefix, load) {
   const { user, offlineSession } = useAuth();
   const account = user?.id;
   const [state, setState] = useState(null);
   useEffect(() => {
     if (!account) return;
-    const key = '@lingospark/study-assignments-v1/' + account;
+    const key = prefix + account;
     let mounted = true;
     let controller;
     let confirmed = false;
@@ -27,7 +31,7 @@ export default function useStudyAssignments() {
       controller = request;
       const timer = setTimeout(() => request.abort(), 7000);
       try {
-        const { data, error, status } = await loadStudyAssignments(request.signal);
+        const { data, error, status } = await load(request.signal);
         if (!mounted || request.signal.aborted) return;
         if (!error && Array.isArray(data)) {
           confirmed = true;
@@ -51,6 +55,6 @@ export default function useStudyAssignments() {
       controller?.abort();
       subscription.remove();
     };
-  }, [account, offlineSession]);
+  }, [account, offlineSession, prefix, load]);
   return account && state?.account === account ? state.assignments : [];
 }

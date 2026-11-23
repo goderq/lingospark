@@ -45,6 +45,7 @@ const initial = {
   practiceDrafts: {},
   practiceResults: {},
   groupStudyResults: {},
+  studyEventResults: {},
   reviewQueue: {},
   wordSessionDraft: null,
   studyDrafts: {},
@@ -257,8 +258,8 @@ export function ProgressProvider({ children }) {
       return recordGroupStudy({ ...old, practiceDrafts: { ...old.practiceDrafts, [key]: session } }, key);
     });
   };
-  const completePractice = (key, session) => setProgress(old => {
-    let next = finishPracticeSession(old, key, session);
+  const completePractice = (key, session, assignment) => setProgress(old => {
+    let next = finishPracticeSession(old, key, session, Date.now(), assignment);
     if (next === old) return old;
     const groups = new Map();
     session.deck.forEach((item, i) => {

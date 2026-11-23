@@ -6,6 +6,7 @@ import { useProgress } from '../store/ProgressContext';
 import { useAuth } from '../store/AuthContext';
 import { useCloudSync } from '../store/CloudSyncContext';
 import { ProgressBar } from '../components/UI';
+import { eventBadges } from '../utils/studyEvents';
 import AppearancePicker from '../components/AppearancePicker';
 
 export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLevels, onStreak, onAccount, onDiagnostics, onAccess, onAdmin }) {
@@ -14,6 +15,7 @@ export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLe
   const { user, signOut } = useAuth();
   const { status, lastSyncedAt, syncNow } = useCloudSync();
   const data = progress.stats || {};
+  const badges = eventBadges(progress);
   const level = Math.floor(progress.totalXP / 100) + 1;
   const metrics = [
     ['Слова', data.reviewTotal ? Math.round(data.reviewCorrect / data.reviewTotal * 100) + '%' : 'Нет данных'],
@@ -32,6 +34,12 @@ export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLe
     <Text style={s.section}>Всё под рукой</Text>
     {[['school-outline', 'Прогресс A1–C1', onLevels], ['calendar-outline', 'Календарь занятий', onStreak], ['book-outline', 'Мой словарь', onVocabulary], ['save-outline', 'Резервная копия', onBackup], ['options-outline', 'Настройки профиля и обучения', onSettings], ['key-outline', 'Лицензия и промокоды', onAccess], ['shield-outline', 'Админ-панель', onAdmin], ['pulse-outline', 'Диагностика', onDiagnostics]].filter(([, , onPress]) => !!onPress).map(([icon, label, onPress]) => <Pressable key={label} onPress={onPress} style={s.link}><View style={s.icon}><Ionicons name={icon} size={23} color={colors.purple} /></View><Text style={[s.heading, { flex: 1 }]}>{label}</Text><Ionicons name="chevron-forward" size={18} color={colors.textMuted} /></Pressable>)}
     <Text style={s.section}>Твои достижения</Text><View style={s.achievements}>{[['🌱', 'Первый шаг', progress.totalXP > 0], ['🔥', 'На огне', progress.streak >= 3], ['🏆', 'Знаток', progress.totalXP >= 300]].map(([emoji, title, achieved]) => <View key={title} style={[s.achievement, !achieved && { opacity: 0.45 }]}><Text style={{ fontSize: 30 }}>{emoji}</Text><Text style={s.small}>{title}</Text></View>)}</View>
+    {badges.length > 0 && <>
+      <Text style={s.section}>Значки событий</Text>
+      {badges.map(badge => <View key={badge.id} style={s.link}>
+        <Ionicons name="ribbon-outline" size={22} color={colors.purple} /><Text style={s.heading}>{badge.name}</Text>
+      </View>)}
+    </>}
     {!!user && <Pressable style={s.inline} onPress={() => Alert.alert('Выйти из аккаунта?', 'Чтобы продолжить обучение, снова войди в аккаунт.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Выйти', onPress: signOut }])}><Text style={s.muted}>Выйти из аккаунта</Text></Pressable>}
     <Pressable style={s.inline} onPress={() => Alert.alert('Сбросить учебный прогресс?', 'Пройденные темы, XP и серия будут удалены.', [{ text: 'Отмена', style: 'cancel' }, { text: 'Сбросить', style: 'destructive', onPress: reset }])}><Text style={{ color: colors.pink, fontSize: 13 }}>Сбросить прогресс</Text></Pressable>
   </ScrollView>;

@@ -13,6 +13,7 @@ import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import { groupPracticeDeck, groupPracticeKey, groupTopicName } from "./src/utils/groupStudy";
+import { canOpenEventDay, eventPracticeKey } from "./src/utils/studyEvents";
 
 import { mainTabs, navigationTarget, practiceAlias } from './src/utils/appNavigation';
 
@@ -108,6 +109,7 @@ const FullIeltsMockScreen = lazyNamed(() => import("./src/screens/PremiumScreens
 const RecoveryScreen = React.lazy(() => import("./src/screens/RecoveryScreen"));
 const CourseTestScreen = React.lazy(() => import("./src/screens/CourseTestScreen"));
 const QuickSessionScreen = React.lazy(() => import("./src/screens/QuickSessionScreen"));
+const StudyEventScreen = React.lazy(() => import("./src/screens/StudyEventScreen"));
 const PracticeScreen = React.lazy(() => import("./src/screens/PracticeScreen"));
 
 import { ScreenFrame, MotionPressable } from './src/components/Motion';
@@ -237,6 +239,22 @@ function AppContent() {
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
+  if (overlay?.type === 'studyEvent' || overlay?.type === 'studyEventDay') {
+    const { event, index } = overlay;
+    const showEvent = () => setOverlay({ type: 'studyEvent', event });
+    const topic = event.topics[index];
+    if (overlay.type === 'studyEventDay' && groupTopicName(topic) && canOpenEventDay(event, index)) {
+      const key = eventPracticeKey(event.id, index);
+      return <ScreenFrame transitionKey="studyEventDay" style={styles.safe}>
+        <PracticeScreen key={key} title={groupTopicName(topic)} presetDeck={groupPracticeDeck(topic, 1)}
+          sessionKey={key} eventAssignment={{ event, index }} onClose={showEvent} />
+      </ScreenFrame>;
+    }
+    return <ScreenFrame transitionKey="studyEvent" style={styles.safe}>
+      <StudyEventScreen event={event} onClose={() => setOverlay(null)}
+        onOpen={day => setOverlay({ type: 'studyEventDay', event, index: day })} />
+    </ScreenFrame>;
+  }
   if (overlay?.type === 'groupAssignment') {
     const { assignment } = overlay;
     const deck = groupPracticeDeck(assignment.topic_id);
@@ -772,6 +790,7 @@ function AppContent() {
             onStartStudy={openStudyTarget}
             onQuickSession={() => setOverlay({ type: 'quickSession' })}
             onGroupAssignment={assignment => setOverlay({ type: 'groupAssignment', assignment })}
+            onStudyEvent={event => setOverlay({ type: 'studyEvent', event })}
             onLearning={() => navigate('learn')}
             onPhrases={() => setOverlay({ type: "phrases" })}
             onDictation={() => setOverlay({ type: "dictation" })}

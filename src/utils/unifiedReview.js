@@ -2,6 +2,7 @@ import { constructionReviews } from '../data/constructionPractice.js';
 import { snapshotKey } from './snapshot.js';
 import { evaluateExercise, normalizeAnswer } from './answer.js';
 import { recordGroupStudy } from './groupStudy.js';
+import { recordStudyEvent } from './studyEvents.js';
 import { retentionSummary, retentionDeck, DAY } from './retention.js';
 import { advanceWordReview } from './wordSchedule.js';
 
@@ -101,7 +102,7 @@ export function validatePracticeSession(session, requireComplete = false) {
   return !session.checked || session.responses[session.index]?.input === input;
 }
 
-export function finishPracticeSession(progress, draftKey, session, now = Date.now()) {
+export function finishPracticeSession(progress, draftKey, session, now = Date.now(), eventAssignment) {
   if (!validatePracticeSession(session, true) || progress.practiceResults?.[session.id]) return progress;
   const grades = session.deck.map((item, i) => ({ item, response: session.responses[i], correct: evaluateExercise(item, session.responses[i].input).correct }));
   const queue = { ...(progress.reviewQueue || {}) }, reviewStats = { ...(progress.reviewStats || {}) };
@@ -137,7 +138,7 @@ export function finishPracticeSession(progress, draftKey, session, now = Date.no
     dailyDate: date, lastStudyDate: date, streak: progress.lastStudyDate === date ? progress.streak || 1 : progress.lastStudyDate === yesterday ? (progress.streak || 0) + 1 : 1,
     activity: { ...progress.activity, [date]: (progress.activity?.[date] || 0) + 1 }, dailyActions: { ...actions, practice: (actions.practice || 0) + 1, unifiedReviews: (actions.unifiedReviews || 0) + (session.mode === 'review' ? 1 : 0), reviews: (actions.reviews || 0) + (session.mode === 'review' ? 1 : 0) },
     mistakes: (progress.mistakes || []).filter(item => !resolved.has(item.id)) };
-  return recordGroupStudy(updated, draftKey, record);
+  return recordStudyEvent(recordGroupStudy(updated, draftKey, record), draftKey, eventAssignment, now);
 }
 
 export function enqueuePhrase(progress, phrase, now = Date.now()) {

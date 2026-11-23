@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import StudyEventsAdmin from '../components/StudyEventsAdmin';
 import StudyGroupsAdmin from '../components/StudyGroupsAdmin';
 import AdminLearnerProfile from '../components/AdminLearnerProfile';
 import { useAuth } from '../store/AuthContext';
@@ -429,6 +430,9 @@ export function AdminScreen({ onClose }) {
     await loadPage(0, promoFilter);
   });
   if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
+  if (route?.type === 'studyEvents') return <AccessLayout title="Общие события" onClose={() => setRoute(null)}>
+    <StudyEventsAdmin />
+  </AccessLayout>;
   if (route?.type === 'studyGroups') return <AccessLayout title="Учебные группы" onClose={() => setRoute(null)}>
     <StudyGroupsAdmin />
   </AccessLayout>;
@@ -439,6 +443,7 @@ export function AdminScreen({ onClose }) {
     onAccount={account => setRoute({ type: 'account', account })} onClose={() => setRoute(null)} />;
 
   return <AccessLayout title="Админ-панель" onClose={onClose}>
+    <Button title="Общие события" secondary onPress={() => setRoute({ type: 'studyEvents' })} />
     <Button title="Учебные группы" secondary onPress={() => setRoute({ type: 'studyGroups' })} />
     <Button title="Пользователи" secondary onPress={() => setRoute({ type: 'users' })} />
     <Button title="Журнал лицензий" secondary onPress={() => setRoute({ type: 'journal' })} />

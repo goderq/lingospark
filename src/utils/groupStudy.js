@@ -6,10 +6,10 @@ export const groupPracticeKey = id => PREFIX + id;
 export const groupTopics = learningJourneys.map(({ id, title, level }) => ({ id, title, level }));
 export const groupTopicName = id => getJourney(id)?.title;
 
-export function groupPracticeDeck(topicId) {
+export function groupPracticeDeck(topicId, perStage = 2) {
   const journey = getJourney(topicId);
   if (!journey) return [];
-  return journey.stages.flatMap(stage => stage.exercises.slice(0, 2).map(item => ({
+  return journey.stages.flatMap(stage => stage.exercises.slice(0, perStage).map(item => ({
     ...item, topic: journey.title, skill: stage.skill, context: item.context || item.line,
   }))).slice(0, 10);
 }

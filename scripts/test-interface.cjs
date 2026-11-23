@@ -82,6 +82,21 @@ const studyGroupsApi = {
     return {};
   },
 };
+const eventRequests = [];
+let publishedEvent = null, eventsNetwork = true;
+const studyEventsApi = {
+  loadStudyEvents: async () => eventsNetwork ? { data: publishedEvent ? [publishedEvent] : [] } : { status: 0, error: {} },
+  manageStudyEvents: async (action, options) => {
+    eventRequests.push({ action, options });
+    if (action === 'list') return publishedEvent ? [publishedEvent] : [];
+    if (action === 'publish') {
+      publishedEvent = { ...options, id: '00000000-0000-4000-8000-000000000099',
+        ends_on: new Date(Date.parse(options.starts_on) + (options.topics.length - 1) * 86400000).toISOString().slice(0, 10) };
+      return publishedEvent;
+    }
+    throw Error('Unexpected event action: ' + action);
+  },
+};
 const profileRequests = [];
 let profileInCloud = true;
 let manualGrantAttempts = 0;
@@ -171,6 +186,7 @@ function load(filename) {
   if (file.endsWith('/store/CloudSyncContext.js')) return cloudApi;
   if (file.endsWith('/lib/supabase.js')) return { supabase: apiDouble, authStorageKey: testAuthKey };
   if (file.endsWith('/services/studyGroups.js')) return studyGroupsApi;
+  if (file.endsWith('/services/studyEvents.js')) return studyEventsApi;
   if (!verifyRealAccess && file.endsWith('/store/AuthContext.js')) return authApi;
   if (!verifyRealAccess && file.endsWith('/store/AccessContext.js')) return accessApi;
   if (file.endsWith('/services/localAi.js')) return tutorApi;
@@ -859,6 +875,43 @@ async function main() {
   assert.ok(journalText(advancedTopic.title));
   await act(async () => { namedButton('Начать практику').props.onPress(); await flush(); });
   assert.ok(namedButton('Ответить'));
+  await act(async () => tree.unmount());
+
+  staffRole = 'owner';
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Админ-панель').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Общие события').props.onPress(); await flush(); });
+  await act(async () => field('Название события').props.onChangeText('Неделя общения'));
+  for (let day = 0; day < 2; day++) {
+    await act(async () => namedButton('Добавить тему на день').props.onPress());
+    await act(async () => namedButton('A1 · Знакомство').props.onPress());
+  }
+  await act(async () => { namedButton('Опубликовать для всех').props.onPress(); await flush(); });
+  assert.deepEqual(eventRequests.find(item => item.action === 'publish').options.topics, ['greetings', 'greetings']);
+  assert.ok(journalText('Событие опубликовано.'));
+  await act(async () => tree.unmount());
+
+  staffRole = null;
+  learnerAssignments = [];
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  assert.ok(journalText('Общие события'));
+  await act(async () => tree.unmount());
+  eventsNetwork = false;
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  const eventTile = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Неделя общения · общее событие');
+  await act(async () => { eventTile.props.onPress(); await flush(); });
+  assert.ok(journalText('Ещё не открыто'));
+  await act(async () => { namedButton('Начать задание').props.onPress(); await flush(); });
+  assert.ok(journalText('Знакомство'));
+  assert.ok(namedButton('Начать практику'));
+  await act(async () => tree.unmount());
+
+  progress.studyEventResults = { [publishedEvent.id]: { name: publishedEvent.name, days: { 0: true, 1: true }, badgeAt: Date.now() } };
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
+  assert.ok(journalText('Значки событий'));
+  assert.ok(journalText(publishedEvent.name));
   await act(async () => tree.unmount());
 
   const { tutorPracticeFromMessages } = load('src/utils/tutorPractice.js');

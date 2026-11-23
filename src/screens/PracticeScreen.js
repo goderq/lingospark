@@ -17,7 +17,7 @@ import { ScreenEntrance } from '../components/Motion';
 
 const skillNames = { mixed: 'Все навыки', grammar: 'Грамматика', vocabulary: 'Выражения', listening: 'Слух', writing: 'Письмо' };
 
-export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, autoStartReview = false, sessionKey, title, onComplete }) {
+export default function PracticeScreen({ onClose, review = false, initialMode = 'learn', initialLevel, initialSkill = 'mixed', onRetention, presetDeck, presetMode = 'exam', reviewLimit = 12, autoStartReview = false, sessionKey, title, onComplete, eventAssignment }) {
   useTheme();
   useScreenTiming('practice_open');
   const { progress, savePracticeDraft, completePractice, clearPracticeDraft } = useProgress();
@@ -83,7 +83,7 @@ export default function PracticeScreen({ onClose, review = false, initialMode = 
     if (session.index + 1 === session.deck.length) {
       if (completedRef.current === session.id) return;
       completedRef.current = session.id;
-      completePractice(draftKey, session);
+      completePractice(draftKey, session, eventAssignment);
       const score = session.deck.filter((item, i) => evaluateExercise(item, session.responses[i].input).correct).length;
       onComplete?.(score, session.deck.length);
       setFinished(true);

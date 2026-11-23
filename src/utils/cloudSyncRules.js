@@ -50,6 +50,7 @@ function learningProgressScore(progress = {}) {
     0,
   );
   score += Object.values(progress.groupStudyResults || {}).filter(result => result?.status === 'completed').length * 10;
+  score += Object.values(progress.studyEventResults || {}).reduce((sum, result) => sum + objectSize(result?.days) * 10, 0);
   // Opening a topic creates a draft, but is not completed learning. Only
   // actual submitted answers/attempts may compete with an existing cloud save.
   for (const topic of Object.values(progress.journeys || {})) {

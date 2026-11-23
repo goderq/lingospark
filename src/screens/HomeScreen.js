@@ -7,13 +7,14 @@ import { useProgressSelector } from '../store/ProgressContext';
 import { todayStudyAction } from '../utils/learningContinuation';
 import { buildUnifiedReview, hasReviewWordCandidates } from '../utils/unifiedReview';
 import { getLoadedReviewWordIndex, includeCustomReviewWords, loadReviewWordIndex } from '../utils/reviewWords';
+import TodayStudyEvents from '../components/TodayStudyEvents';
 import TodayGroupAssignments from '../components/TodayGroupAssignments';
 import SyncStatus from '../components/SyncStatus';
 import { ProgressBar } from '../components/UI';
 import { MotionPressable } from '../components/Motion';
 import { colors, useTheme, createThemedStyles } from '../theme';
 
-export default function HomeScreen({ onStartStudy, onRetention, onLearningHub, onLearning, onSearch, onBookmarks, onAccount, onSyncDetails, onQuickSession, onGroupAssignment }) {
+export default function HomeScreen({ onStartStudy, onRetention, onLearningHub, onLearning, onSearch, onBookmarks, onAccount, onSyncDetails, onQuickSession, onGroupAssignment, onStudyEvent }) {
   useTheme();
   const progress = useProgressSelector(({ progress: p }) => ({
     name: p.name, streak: p.streak, completed: p.completed, retention: p.retention, journeys: p.journeys, dailyXP: p.dailyXP, dailyGoal: p.dailyGoal, reviewStats: p.reviewStats, quickSession: p.quickSession,
@@ -60,6 +61,7 @@ export default function HomeScreen({ onStartStudy, onRetention, onLearningHub, o
         <View style={s.heroBottom}><Text style={s.heroButton}>{label} →</Text></View>
       </LinearGradient>
     </MotionPressable>
+    <TodayStudyEvents onOpen={onStudyEvent} now={now} />
     <TodayGroupAssignments onOpen={onGroupAssignment} />
     <MotionPressable accessibilityRole="button" accessibilityLabel="Короткое занятие" onPress={onQuickSession} style={s.quick}><View style={s.quickIcon}><Ionicons name="timer-outline" size={25} color={colors.purple} /></View><View style={{ flex: 1, gap: 4 }}><Text style={s.heading}>Короткое занятие</Text><Text style={s.muted}>Один этап темы, повторение и письменная реплика</Text></View><Ionicons name="chevron-forward" size={21} color={colors.purple} /></MotionPressable>
     <MotionPressable accessibilityRole="button" onPress={onRetention} style={s.quick}><View style={[s.quickIcon, { backgroundColor: colors.successSoft }]}><Ionicons name="time-outline" size={25} color={colors.mint} /></View><View style={{ flex: 1, gap: 4 }}><Text style={s.heading}>Повторение</Text><Text style={s.muted}>{reviewCount ? 'Открыть очередь повторения' : 'Расписание и сохранённые задания'}</Text></View><Ionicons name="chevron-forward" size={21} color={colors.mint} /></MotionPressable>
