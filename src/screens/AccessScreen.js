@@ -385,9 +385,9 @@ function AccessJournal({ onClose, account, staffRole }) {
   </AccessLayout>;
 }
 
-export function AdminScreen({ onClose }) {
+export function AdminScreen({ onClose, initialRoute }) {
   const access = useAccess();
-  const [route, setRoute] = useState(null);
+  const [route, setRoute] = useState(() => initialRoute ? { type: initialRoute } : null);
   const [criteria, setCriteria] = useState({ query: '', filter: 'all' });
   const [promoFilter, setPromoFilter] = useState('all');
   const [promos, setPromos] = useState([]);
@@ -429,10 +429,10 @@ export function AdminScreen({ onClose }) {
     setLabel('');
     await loadPage(0, promoFilter);
   });
-  if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
-  if (route?.type === 'studyEvents') return <AccessLayout title="Общие события" onClose={() => setRoute(null)}>
-    <StudyEventsAdmin />
+  if (route?.type === 'studyEvents' && (access.isAdmin || access.staffOffline)) return <AccessLayout title="Общие события" onClose={initialRoute || !access.isAdmin ? onClose : () => setRoute(null)}>
+    <StudyEventsAdmin localOnly={!access.isAdmin} />
   </AccessLayout>;
+  if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
   if (route?.type === 'studyGroups') return <AccessLayout title="Учебные группы" onClose={() => setRoute(null)}>
     <StudyGroupsAdmin />
   </AccessLayout>;

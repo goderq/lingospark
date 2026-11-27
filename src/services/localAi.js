@@ -7,6 +7,7 @@ import { continuityGuidance, dialogueGuidance, earlierLearnerFacts } from '../ut
 import { assertTutorReplyNotAborted, generateTutorReply, openingQuestionForGreeting, translateTutorOpening, tutorLanguageRule, tutorReplyLanguage, tutorTranslationSource, withoutTutorTranslations } from '../utils/tutorReply';
 import { AI_MODELS, isLightModel } from '../data/aiModels';
 import { modelCompletionOptions, modelSizeProblem } from '../utils/aiModelRuntime';
+import { parseEventAiOutput } from '../utils/studyEventAi';
 export { AI_MODELS } from '../data/aiModels';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system/legacy";
@@ -1056,6 +1057,34 @@ export async function completeTutorMessage(args) {
   });
 }
 export const analyzeTutorConversation = args => withNativeResource('llm', () => analyzeTutorConversationUnsafe(args));
+export async function generateStudyEvent(request, signal) {
+  assertTutorReplyNotAborted(signal);
+  const activeId = await getActiveModelId();
+  const installed = await inspectModels();
+  const model = AI_MODELS.find(item => item.id === activeId && installed[item.id]?.verified)
+    || AI_MODELS.find(item => installed[item.id]?.verified);
+  if (!model) throw new Error('Сначала скачай локальную модель в разделе «ИИ».');
+  return withNativeResource('llm', async () => {
+    assertTutorReplyNotAborted(signal);
+    const llama = await loadModelUnsafe(model);
+    assertTutorReplyNotAborted(signal);
+    const stop = () => { llama.stopCompletion().catch(() => {}); };
+    signal?.addEventListener('abort', stop, { once: true });
+    try {
+      for (const attempt of [0, 1]) {
+        assertTutorReplyNotAborted(signal);
+        const result = await completeWithGuard(llama, {
+          messages: attempt ? [{ ...request.messages[0], content: `${request.messages[0].content} Проверь поля, номера и число элементов перед ответом.` }, ...request.messages.slice(1)] : request.messages,
+          response_format: { type: 'json_schema', json_schema: { strict: true, schema: request.schema } },
+          n_predict: request.limit, temperature: attempt ? 0.35 : 0.2,
+        });
+        assertTutorReplyNotAborted(signal);
+        try { return parseEventAiOutput(request, result.text); }
+        catch (error) { if (attempt) throw error; }
+      }
+    } finally { signal?.removeEventListener('abort', stop); }
+  });
+}
 export async function completeVoiceCoachMessage(args) {
   assertTutorReplyNotAborted(args.signal);
   const clarification = doctorOpeningClarification(args.scenario, args.messages);

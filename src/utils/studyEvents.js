@@ -1,4 +1,5 @@
 import { groupPracticeDeck } from './groupStudy.js';
+import { validEventExercisePair } from './studyEventAi.js';
 
 const DAY = 86400000;
 const idPattern = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -7,6 +8,15 @@ const formatSkills = { listening: 'listening', dialogue: 'conversation', phrases
 
 export const eventPracticeDeck = (topic, format) => formatSkills[format]
   ? groupPracticeDeck(topic, 5, formatSkills[format]) : groupPracticeDeck(topic, 1);
+
+export function eventDayDeck(event, index, preview = false) {
+  const format = event.formats?.[index] || 'mixed';
+  const deck = eventPracticeDeck(event.topics[index], format);
+  const pair = event.custom_days?.[index];
+  if (format !== 'mixed' || !deck.length || !validEventExercisePair(pair) || (!preview && pair.approved !== true)) return deck;
+  const choice = item => ({ type: 'choice', ...item, answer: item.options[item.answer], skill: 'grammar', topic: deck[0].topic });
+  return [...deck, { ...choice(pair.question), id: `event-custom-${event.id || 'preview'}-${index}`, reviewVariant: choice(pair.review) }];
+}
 
 export const eventDate = now => new Date(now).toISOString().slice(0, 10);
 
@@ -41,9 +51,9 @@ export function recordStudyEvent(progress, draftKey, assignment, now, grades) {
   const days = { ...previous?.days, [index]: true };
   const badgeAt = previous?.badgeAt || (event.topics.every((_, day) => days[day]) ? now : null);
   const answers = Object.fromEntries(grades.map(({ item, correct }) => [item.id, correct]));
-  const { id, name, starts_on, ends_on, topics, formats } = event;
+  const { id, name, starts_on, ends_on, topics, formats, custom_days } = event;
   const entry = { ...previous, name, joined: true, started: true, days, badgeAt,
-    event: { id, name, starts_on, ends_on, topics, formats },
+    event: { id, name, starts_on, ends_on, topics, formats, ...(custom_days && { custom_days }) },
     answers: { ...previous?.answers, [index]: answers } };
   return { ...progress, studyEventResults: { ...progress.studyEventResults, [event.id]: entry } };
 }

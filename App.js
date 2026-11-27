@@ -13,7 +13,7 @@ import { LoadingScreen } from "./src/components/UI";
 import OnboardingScreen from "./src/screens/OnboardingScreen";
 import HomeScreen from "./src/screens/HomeScreen";
 import { groupPracticeDeck, groupPracticeKey, groupTopicName } from "./src/utils/groupStudy";
-import { canOpenEventDay, eventPracticeDeck, eventPracticeKey } from "./src/utils/studyEvents";
+import { canOpenEventDay, eventDayDeck, eventPracticeKey } from "./src/utils/studyEvents";
 
 import { mainTabs, navigationTarget, practiceAlias } from './src/utils/appNavigation';
 
@@ -209,7 +209,7 @@ function AppContent() {
   };
   const notificationsReady = ready && navigationReady && authReady && !cloudRestoring;
   const notificationsActive = notificationsReady && !loadError && onboarded && access.allowed;
-  const events = useCachedStudyList('@lingospark/study-events-v1/', loadStudyEvents, null, tab === 'home' && !overlay);
+  const events = useCachedStudyList('@lingospark/study-events-v2/', loadStudyEvents, null, tab === 'home' && !overlay, '@lingospark/study-events-v1/');
   const reminders = useEventReminders({ ready: notificationsReady, active: notificationsActive, account: user?.id, events });
   const [eventNotice, setEventNotice] = useState(null);
   useEffect(() => {
@@ -251,7 +251,7 @@ function AppContent() {
     <AccessScreen onClose={() => setOverlay(null)} />
   </ScreenFrame>;
   if (overlay?.type === "admin") return <ScreenFrame transitionKey="admin" style={styles.safe}>
-    <AdminScreen onClose={() => setOverlay(null)} />
+    <AdminScreen initialRoute={overlay.authoring ? 'studyEvents' : null} onClose={() => setOverlay(null)} />
   </ScreenFrame>;
   if (loadError && !cloudRestoring) return <ScreenFrame transitionKey={overlay?.type || tab} style={styles.safe}><RecoveryScreen error={loadError} /></ScreenFrame>;
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
@@ -271,7 +271,7 @@ function AppContent() {
     if (overlay.type === 'studyEventDay' && groupTopicName(topic) && canOpenEventDay(event, index)) {
       const key = eventPracticeKey(event.id, index);
       return <ScreenFrame transitionKey="studyEventDay" style={styles.safe}>
-        <PracticeScreen key={key} title={groupTopicName(topic)} presetDeck={eventPracticeDeck(topic, event.formats?.[index])}
+        <PracticeScreen key={key} title={groupTopicName(topic)} presetDeck={eventDayDeck(event, index)}
           sessionKey={key} eventAssignment={{ event, index }} onClose={showEvent} />
       </ScreenFrame>;
     }
@@ -878,7 +878,8 @@ function AppContent() {
             onDiagnostics={() => setOverlay({ type: "diagnostics" })}
             onAccess={() => setOverlay({ type: "access" })}
             onStudyEvent={saved => setOverlay({ type: 'studyEvent', event: events?.find(event => event.id === saved.id) || saved, fromProfile: true })}
-            onAdmin={access.isAdmin ? () => setOverlay({ type: "admin" }) : undefined}
+            onAdmin={access.isAdmin || access.staffOffline ? () => setOverlay({ type: 'admin', authoring: !access.isAdmin }) : undefined}
+            offlineEvents={!access.isAdmin && access.staffOffline}
           />
         )}
       </View>

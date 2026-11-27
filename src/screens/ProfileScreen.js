@@ -9,7 +9,7 @@ import { ProgressBar } from '../components/UI';
 import { eventBadges, eventHistory } from '../utils/studyEvents';
 import AppearancePicker from '../components/AppearancePicker';
 
-export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLevels, onStreak, onAccount, onDiagnostics, onAccess, onAdmin, onStudyEvent }) {
+export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLevels, onStreak, onAccount, onDiagnostics, onAccess, onAdmin, onStudyEvent, offlineEvents }) {
   useTheme();
   const { progress, reset } = useProgress();
   const { user, signOut } = useAuth();
@@ -34,7 +34,7 @@ export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLe
     {user && <Pressable onPress={syncNow} style={s.inline}><Text style={s.accent}>Синхронизировать сейчас</Text><Text style={s.small}>{lastSyncedAt ? new Date(lastSyncedAt).toLocaleString('ru-RU') : 'Ожидаем сохранение'}</Text></Pressable>}
     <Text style={s.section}>Результаты практики</Text><View style={s.grid}>{metrics.map(([label, value]) => <View key={label} style={s.metric}><Text style={s.metricValue}>{value}</Text><Text style={s.muted}>{label}</Text></View>)}</View>
     <Text style={s.section}>Всё под рукой</Text>
-    {[['school-outline', 'Прогресс A1–C1', onLevels], ['calendar-outline', 'Календарь занятий', onStreak], ['book-outline', 'Мой словарь', onVocabulary], ['save-outline', 'Резервная копия', onBackup], ['options-outline', 'Настройки профиля и обучения', onSettings], ['key-outline', 'Лицензия и промокоды', onAccess], ['shield-outline', 'Админ-панель', onAdmin], ['pulse-outline', 'Диагностика', onDiagnostics]].filter(([, , onPress]) => !!onPress).map(([icon, label, onPress]) => <Pressable key={label} onPress={onPress} style={s.link}><View style={s.icon}><Ionicons name={icon} size={23} color={colors.purple} /></View><Text style={[s.heading, { flex: 1 }]}>{label}</Text><Ionicons name="chevron-forward" size={18} color={colors.textMuted} /></Pressable>)}
+    {[['school-outline', 'Прогресс A1–C1', onLevels], ['calendar-outline', 'Календарь занятий', onStreak], ['book-outline', 'Мой словарь', onVocabulary], ['save-outline', 'Резервная копия', onBackup], ['options-outline', 'Настройки профиля и обучения', onSettings], ['key-outline', 'Лицензия и промокоды', onAccess], ['shield-outline', offlineEvents ? 'Черновики событий офлайн' : 'Админ-панель', onAdmin], ['pulse-outline', 'Диагностика', onDiagnostics]].filter(([, , onPress]) => !!onPress).map(([icon, label, onPress]) => <Pressable key={label} onPress={onPress} style={s.link}><View style={s.icon}><Ionicons name={icon} size={23} color={colors.purple} /></View><Text style={[s.heading, { flex: 1 }]}>{label}</Text><Ionicons name="chevron-forward" size={18} color={colors.textMuted} /></Pressable>)}
     <Text style={s.section}>Твои достижения</Text><View style={s.achievements}>{[['🌱', 'Первый шаг', progress.totalXP > 0], ['🔥', 'На огне', progress.streak >= 3], ['🏆', 'Знаток', progress.totalXP >= 300]].map(([emoji, title, achieved]) => <View key={title} style={[s.achievement, !achieved && { opacity: 0.45 }]}><Text style={{ fontSize: 30 }}>{emoji}</Text><Text style={s.small}>{title}</Text></View>)}</View>
     {events.length > 0 && <>
       <Text style={s.section}>Мои события</Text>

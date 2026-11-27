@@ -977,6 +977,61 @@ async function main() {
   assert.ok(journalText('Ты на первом занятии. Представься группе как Эмма.'));
   await act(async () => tree.unmount());
 
+  const generatedExercise = { prompt: 'Выбери фразу, чтобы попросить билет до Йорка.', options: ['One ticket to York, please.', 'Where is the ticket office?', 'Is York far from here?'], answer: 0, explanation: 'One ticket to York — один билет до Йорка.' };
+  const generatedRepeat = { prompt: 'Попроси два билета до Лондона.', options: ['One ticket to York, please.', 'Two tickets to London, please.', 'Which train goes to London?'], answer: 1, explanation: 'Two tickets to London — два билета до Лондона.' };
+  const replies = [
+    { name: 'Поездка на выходные', description: 'Английский на вокзале и в дороге', days: [{ topic: 0, format: 1 }, { topic: 1, format: 2 }] },
+    { days: [{ topic: 0, format: 0 }] },
+    { question: generatedExercise, review: generatedRepeat },
+  ];
+  tutorApi.generateStudyEvent = async request => request.parse(replies.shift());
+  licenseState = { staffOffline: true };
+  const beforeOffline = eventRequests.length;
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Черновики событий офлайн').props.onPress(); await flush(); });
+  assert.equal(namedButton('Опубликовать для всех'), undefined);
+  await act(async () => namedButton('Создать событие с ИИ').props.onPress());
+  await act(async () => field('Идея события').props.onChangeText('Английский в поездке'));
+  await act(async () => field('Количество дней (1–14)').props.onChangeText('2'));
+  await act(async () => { namedButton('Сгенерировать план').props.onPress(); await flush(); });
+  assert.equal(field('Название события').props.value, '');
+  await act(async () => namedButton('Открыть план в редакторе').props.onPress());
+  assert.equal(field('Название события').props.value, 'Поездка на выходные');
+  await act(async () => { namedButton('Предложить другой вариант дня 1').props.onPress(); await flush(); });
+  await act(async () => namedButton('Применить вариант дня').props.onPress());
+  await act(async () => { namedButton('Создать упражнение для дня 1').props.onPress(); await flush(); });
+  await act(async () => namedButton('Открыть проверку упражнения').props.onPress());
+  assert.equal(field('Основное задание · вопрос').props.value, generatedExercise.prompt);
+  await act(async () => { namedButton('Предпросмотр повтора').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Начать практику').props.onPress(); await flush(); });
+  assert.ok(journalText(generatedRepeat.prompt));
+  await act(async () => namedButton('← Назад').props.onPress());
+  await act(async () => namedButton('Подтвердить правильные ответы').props.onPress());
+  await act(async () => field('Основное задание · объяснение').props.onChangeText('One ticket — один билет. York — Йорк.'));
+  assert.ok(namedButton('Подтвердить правильные ответы'));
+  await act(async () => { namedButton('Сохранить на устройстве').props.onPress(); await flush(); });
+  assert.equal(eventRequests.length, beforeOffline);
+  await act(async () => tree.unmount());
+
+  staffRole = 'owner';
+  licenseState = {};
+  await act(async () => { tree = Renderer.create(React.createElement(App)); await flush(); });
+  await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Админ-панель').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Общие события').props.onPress(); await flush(); });
+  await act(async () => { namedButton('Открыть с устройства').props.onPress(); await flush(); });
+  assert.equal(field('Название события').props.value, 'Поездка на выходные');
+  assert.ok(namedButton('Опубликовать для всех').props.disabled);
+  await act(async () => namedButton('Проверить упражнение').props.onPress());
+  await act(async () => namedButton('Подтвердить правильные ответы').props.onPress());
+  await act(async () => { namedButton('Опубликовать для всех').props.onPress(); await flush(); });
+  assert.deepEqual(publishedEvent.formats, ['mixed', 'dialogue']);
+  assert.equal(publishedEvent.custom_days[0].approved, true);
+  assert.equal(publishedEvent.custom_days[0].review.prompt, generatedRepeat.prompt);
+  staffRole = null;
+  await act(async () => tree.unmount());
+
   const { tutorPracticeFromMessages } = load('src/utils/tutorPractice.js');
   const { licenseTiming, offlineLicense } = load('src/utils/licenseTiming.js');
   const now = Date.parse('2026-11-20T10:00:00Z');

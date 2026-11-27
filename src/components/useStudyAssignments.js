@@ -8,7 +8,7 @@ export default function useStudyAssignments() {
   return useCachedStudyList('@lingospark/study-assignments-v1/', loadStudyAssignments);
 }
 
-export function useCachedStudyList(prefix, load, fallback = [], refreshKey) {
+export function useCachedStudyList(prefix, load, fallback = [], refreshKey, legacyPrefix) {
   const { user, offlineSession } = useAuth();
   const account = user?.id;
   const [state, setState] = useState(null);
@@ -21,7 +21,7 @@ export function useCachedStudyList(prefix, load, fallback = [], refreshKey) {
     const show = assignments => {
       if (mounted && Array.isArray(assignments)) setState({ account, assignments });
     };
-    AsyncStorage.getItem(key).then(raw => {
+    AsyncStorage.getItem(key).then(raw => raw || (legacyPrefix ? AsyncStorage.getItem(legacyPrefix + account) : null)).then(raw => {
       if (!confirmed && raw) show(JSON.parse(raw));
     }).catch(() => {});
     const refresh = async () => {
@@ -41,6 +41,7 @@ export function useCachedStudyList(prefix, load, fallback = [], refreshKey) {
           confirmed = true;
           show([]);
           await AsyncStorage.removeItem(key);
+          if (legacyPrefix) await AsyncStorage.removeItem(legacyPrefix + account);
         }
       } catch {
         // A failed connection leaves the last confirmed assignments available.
@@ -55,6 +56,6 @@ export function useCachedStudyList(prefix, load, fallback = [], refreshKey) {
       controller?.abort();
       subscription.remove();
     };
-  }, [account, offlineSession, prefix, load, refreshKey]);
+  }, [account, offlineSession, prefix, load, refreshKey, legacyPrefix]);
   return account && state?.account === account ? state.assignments : fallback;
 }

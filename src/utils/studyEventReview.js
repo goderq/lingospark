@@ -3,7 +3,7 @@ import { courseSupplement } from '../data/courseSupplement.js';
 import { eventReviewPhrases } from '../data/eventReviewPhrases.js';
 import { constructionForExercise, findReinforcement } from '../data/reinforcement.js';
 import { normalizeAnswer } from './answer.js';
-import { eventPracticeDeck } from './studyEvents.js';
+import { eventDayDeck } from './studyEvents.js';
 
 const skillNames = {
   grammar: 'Грамматика', vocabulary: 'Слова и выражения', listening: 'Аудирование',
@@ -34,6 +34,7 @@ const afternoonGreeting = {
 };
 
 function reviewVariants(item, topic) {
+  if (item.reviewVariant) return [item.reviewVariant];
   const topicPhrases = courseSupplement[topic] || [];
   const phrase = topicPhrases.find(([english, russian]) => english === item.answer || russian === item.answer)?.[0];
   const linkedPhrases = eventReviewPhrases[phrase] || [];
@@ -75,7 +76,7 @@ export function eventPersonalResult(event, result) {
   });
   if (!days.some(day => day.total)) return { days, focus: null, deck: [] };
 
-  const original = event.topics.map((topic, index) => eventPracticeDeck(topic, event.formats?.[index]));
+  const original = event.topics.map((_, index) => eventDayDeck(event, index));
   const used = new Set(original.flat().map(exerciseKey));
   const missedSkills = {};
   const groups = [];
