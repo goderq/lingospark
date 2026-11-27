@@ -2,7 +2,7 @@
   "expo": {
     "name": "LingoSpark",
     "slug": "lingospark",
-    "version": "4.9.1",
+    "version": "4.9.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.lingospark.app",
-      "buildNumber": "69",
+      "buildNumber": "70",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Разрешите LingoSpark слышать вашу речь для разговорной практики.",
         "NSSpeechRecognitionUsageDescription": "Разрешите LingoSpark локально преобразовывать английскую речь в текст.",

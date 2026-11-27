@@ -9,7 +9,8 @@ import { learningJourneys } from '../src/data/learningJourney.js';
 import { DAY } from '../src/utils/retention.js';
 import { practiceAlias } from '../src/utils/appNavigation.js';
 import { groupPracticeDeck, groupPracticeKey, recordGroupStudy } from '../src/utils/groupStudy.js';
-import { canOpenEventDay, eventBadges, eventDate, eventPracticeDeck, eventPracticeKey, joinStudyEvent } from '../src/utils/studyEvents.js';
+import { canOpenEventDay, eventBadges, eventDate, eventHistory, eventPracticeDeck, eventPracticeKey, joinStudyEvent } from '../src/utils/studyEvents.js';
+import { eventPersonalResult } from '../src/utils/studyEventReview.js';
 import { planEventReminders } from '../src/utils/eventReminderPlan.js';
 
 const now = Date.UTC(2026, 10, 16, 12);
@@ -115,6 +116,36 @@ const future = finishPracticeSession(firstEventResult, secondDay, { ...groupAtte
 assert.deepEqual(future.studyEventResults, firstEventResult.studyEventResults);
 const finishedEvent = finishPracticeSession(firstEventResult, secondDay, { ...groupAttempt, id: 'valid-event-2' }, now + DAY, { event, index: 1 });
 assert.deepEqual(eventBadges(finishedEvent), [{ id: event.id, name: event.name }]);
+assert.deepEqual(eventHistory(finishedEvent).map(item => item.event.topics), [event.topics]);
+const recapEvent = { ...event, topics: ['past', 'travel', 'greetings'], formats: ['mixed', 'phrases', 'mixed'] };
+const [pastGrammar] = eventPracticeDeck('past', 'mixed');
+const [travelPhrase, travelOther] = eventPracticeDeck('travel', 'phrases');
+const recapResult = { days: { 0: true, 1: true, 2: true }, answers: {
+  0: { [pastGrammar.id]: false }, 1: { [travelPhrase.id]: false, [travelOther.id]: true },
+} };
+const recap = eventPersonalResult(recapEvent, recapResult);
+assert.deepEqual(recap.days.map(({ completed, total, correct }) => [completed, total, correct]), [[true, 1, 0], [true, 2, 1], [true, 0, 0]]);
+assert.equal(recap.focus, 'Грамматика');
+assert.equal(recap.deck.length, 5);
+assert.equal(new Set(recap.deck.map(item => item.prompt)).size, 5);
+assert.ok(recap.deck.every(item => item.skill === 'grammar' ? /\bwent\b/.test(item.answer) : item.type === 'build' && /return ticket/.test(item.answer) && !/Oxford/.test(item.answer)));
+assert.ok(recap.deck.every(item => evaluateExercise(item, item.answer).correct));
+assert.equal(eventPersonalResult(recapEvent, { days: { 0: true } }).deck.length, 0);
+assert.equal(eventPersonalResult(recapEvent, { days: { 0: true }, answers: { 0: { unknown: false } } }).deck.length, 0);
+assert.equal(eventPersonalResult(recapEvent, { days: { 0: true }, answers: { 0: { [pastGrammar.id]: true } } }).focus, null);
+const [firstGreeting, , firstListening] = eventPracticeDeck('greetings', 'mixed');
+for (const item of [firstGreeting, firstListening]) {
+  const result = eventPersonalResult({ topics: ['greetings'] }, { days: { 0: true }, answers: { 0: { [item.id]: false } } });
+  assert.equal(result.deck.length, 3);
+  assert.ok(result.deck.every(variant => variant.skill === item.skill && variant.answer !== item.answer));
+  if (item.skill === 'listening') assert.ok(result.deck.every(variant => variant.speak === variant.answer));
+}
+const [reviewExercise] = recap.deck;
+const reviewAttempt = { ...groupAttempt, id: 'event-review-attempt', mode: 'learn', deck: [reviewExercise],
+  input: reviewExercise.answer, responses: [{ id: reviewExercise.id, input: reviewExercise.answer }] };
+const reviewFinished = finishPracticeSession(finishedEvent, `study-event-review-${event.id}`, reviewAttempt, now);
+assert.ok(reviewFinished.practiceResults[reviewAttempt.id]);
+assert.equal(reviewFinished.studyEventResults, finishedEvent.studyEventResults);
 const repeatedEvent = finishPracticeSession(finishedEvent, secondDay, { ...groupAttempt, id: 'event-retake' }, now + DAY, { event, index: 1 });
 assert.equal(repeatedEvent.studyEventResults, finishedEvent.studyEventResults);
 const joined = joinStudyEvent({}, event, now);

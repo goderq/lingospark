@@ -41,7 +41,9 @@ export function recordStudyEvent(progress, draftKey, assignment, now, grades) {
   const days = { ...previous?.days, [index]: true };
   const badgeAt = previous?.badgeAt || (event.topics.every((_, day) => days[day]) ? now : null);
   const answers = Object.fromEntries(grades.map(({ item, correct }) => [item.id, correct]));
-  const entry = { ...previous, name: event.name, joined: true, started: true, days, badgeAt,
+  const { id, name, starts_on, ends_on, topics, formats } = event;
+  const entry = { ...previous, name, joined: true, started: true, days, badgeAt,
+    event: { id, name, starts_on, ends_on, topics, formats },
     answers: { ...previous?.answers, [index]: answers } };
   return { ...progress, studyEventResults: { ...progress.studyEventResults, [event.id]: entry } };
 }
@@ -49,3 +51,8 @@ export function recordStudyEvent(progress, draftKey, assignment, now, grades) {
 export const eventBadges = progress => Object.entries(progress.studyEventResults || {})
   .filter(([, item]) => item?.badgeAt).sort((a, b) => b[1].badgeAt - a[1].badgeAt)
   .map(([id, item]) => ({ id, name: item.name }));
+
+export const eventHistory = progress => Object.entries(progress.studyEventResults || {})
+  .filter(([id, item]) => item?.event?.id === id && Array.isArray(item.event.topics) && item.event.topics.length)
+  .sort(([, a], [, b]) => String(b.event.starts_on).localeCompare(String(a.event.starts_on)))
+  .map(([id, { name, event, badgeAt }]) => ({ id, name, event, badgeAt }));

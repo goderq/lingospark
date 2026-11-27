@@ -957,6 +957,24 @@ async function main() {
   await act(async () => { tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === 'Профиль').props.onPress(); await flush(); });
   assert.ok(journalText('Значки событий'));
   assert.ok(journalText(publishedEvent.name));
+  const archivedEvent = { ...publishedEvent, id: '00000000-0000-4000-8000-000000000088', starts_on: '2026-09-01',
+    ends_on: '2026-09-02', formats: ['phrases', 'dialogue'] };
+  progress.studyEventResults = { [archivedEvent.id]: {
+    name: archivedEvent.name, event: archivedEvent, days: { 0: true, 1: true }, badgeAt: Date.now(),
+    answers: { 0: { 'j-phrases-1': false } },
+  } };
+  publishedEvent = null;
+  await act(async () => { tree.update(React.createElement(App, { testingRecap: true })); await flush(); });
+  assert.ok(journalText('Мои события'));
+  const archivedTile = tree.root.findAllByType('Pressable').find(node => node.props.accessibilityLabel === `Мой итог · ${archivedEvent.name}`);
+  await act(async () => { archivedTile.props.onPress(); await flush(); });
+  assert.ok(journalText('Мой итог'));
+  assert.ok(journalText('Верно 0 из 1'));
+  assert.ok(journalText('Выполнено · оценка недоступна'));
+  await act(async () => { namedButton('Повторить мои ошибки').props.onPress(); await flush(); });
+  assert.ok(namedButton('Начать практику'));
+  await act(async () => { namedButton('Начать практику').props.onPress(); await flush(); });
+  assert.ok(journalText('Ты на первом занятии. Представься группе как Эмма.'));
   await act(async () => tree.unmount());
 
   const { tutorPracticeFromMessages } = load('src/utils/tutorPractice.js');

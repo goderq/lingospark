@@ -6,16 +6,18 @@ import { useProgress } from '../store/ProgressContext';
 import { useAuth } from '../store/AuthContext';
 import { useCloudSync } from '../store/CloudSyncContext';
 import { ProgressBar } from '../components/UI';
-import { eventBadges } from '../utils/studyEvents';
+import { eventBadges, eventHistory } from '../utils/studyEvents';
 import AppearancePicker from '../components/AppearancePicker';
 
-export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLevels, onStreak, onAccount, onDiagnostics, onAccess, onAdmin }) {
+export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLevels, onStreak, onAccount, onDiagnostics, onAccess, onAdmin, onStudyEvent }) {
   useTheme();
   const { progress, reset } = useProgress();
   const { user, signOut } = useAuth();
   const { status, lastSyncedAt, syncNow } = useCloudSync();
   const data = progress.stats || {};
-  const badges = eventBadges(progress);
+  const events = eventHistory(progress);
+  const savedIds = new Set(events.map(event => event.id));
+  const badges = eventBadges(progress).filter(badge => !savedIds.has(badge.id));
   const level = Math.floor(progress.totalXP / 100) + 1;
   const metrics = [
     ['Слова', data.reviewTotal ? Math.round(data.reviewCorrect / data.reviewTotal * 100) + '%' : 'Нет данных'],
@@ -34,6 +36,15 @@ export default function ProfileScreen({ onSettings, onVocabulary, onBackup, onLe
     <Text style={s.section}>Всё под рукой</Text>
     {[['school-outline', 'Прогресс A1–C1', onLevels], ['calendar-outline', 'Календарь занятий', onStreak], ['book-outline', 'Мой словарь', onVocabulary], ['save-outline', 'Резервная копия', onBackup], ['options-outline', 'Настройки профиля и обучения', onSettings], ['key-outline', 'Лицензия и промокоды', onAccess], ['shield-outline', 'Админ-панель', onAdmin], ['pulse-outline', 'Диагностика', onDiagnostics]].filter(([, , onPress]) => !!onPress).map(([icon, label, onPress]) => <Pressable key={label} onPress={onPress} style={s.link}><View style={s.icon}><Ionicons name={icon} size={23} color={colors.purple} /></View><Text style={[s.heading, { flex: 1 }]}>{label}</Text><Ionicons name="chevron-forward" size={18} color={colors.textMuted} /></Pressable>)}
     <Text style={s.section}>Твои достижения</Text><View style={s.achievements}>{[['🌱', 'Первый шаг', progress.totalXP > 0], ['🔥', 'На огне', progress.streak >= 3], ['🏆', 'Знаток', progress.totalXP >= 300]].map(([emoji, title, achieved]) => <View key={title} style={[s.achievement, !achieved && { opacity: 0.45 }]}><Text style={{ fontSize: 30 }}>{emoji}</Text><Text style={s.small}>{title}</Text></View>)}</View>
+    {events.length > 0 && <>
+      <Text style={s.section}>Мои события</Text>
+      {events.map(({ id, name, event, badgeAt }) => <Pressable key={id} accessibilityRole="button"
+        accessibilityLabel={`Мой итог · ${name}`} onPress={() => onStudyEvent(event)} style={s.link}>
+        <Ionicons name={badgeAt ? 'ribbon-outline' : 'calendar-outline'} size={22} color={colors.purple} />
+        <View style={{ flex: 1 }}><Text style={s.heading}>{name}</Text><Text style={s.small}>{badgeAt ? 'Итог и значок' : 'Личный итог'}</Text></View>
+        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      </Pressable>)}
+    </>}
     {badges.length > 0 && <>
       <Text style={s.section}>Значки событий</Text>
       {badges.map(badge => <View key={badge.id} style={s.link}>

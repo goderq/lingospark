@@ -257,9 +257,16 @@ function AppContent() {
   if (user && (cloudRestoring || (!progress.onboarded && accountName)))
     return <LoadingScreen />;
   if (!progress.onboarded) return <OnboardingScreen />;
-  if (overlay?.type === 'studyEvent' || overlay?.type === 'studyEventDay') {
-    const { event, index } = overlay;
-    const showEvent = () => setOverlay({ type: 'studyEvent', event });
+  if (['studyEvent', 'studyEventDay', 'studyEventReview'].includes(overlay?.type)) {
+    const { event, index, fromProfile } = overlay;
+    const showEvent = () => setOverlay({ type: 'studyEvent', event, fromProfile });
+    if (overlay.type === 'studyEventReview') {
+      const key = `study-event-review-${event.id}-${overlay.deck.map(item => item.id).join(',')}`;
+      return <ScreenFrame transitionKey="studyEventReview" style={styles.safe}>
+        <PracticeScreen key={key} title="Повторить мои ошибки" presetDeck={overlay.deck} presetMode="learn"
+          sessionKey={key} onClose={showEvent} />
+      </ScreenFrame>;
+    }
     const topic = event.topics[index];
     if (overlay.type === 'studyEventDay' && groupTopicName(topic) && canOpenEventDay(event, index)) {
       const key = eventPracticeKey(event.id, index);
@@ -270,7 +277,9 @@ function AppContent() {
     }
     return <ScreenFrame transitionKey="studyEvent" style={styles.safe}>
       <StudyEventScreen event={event} reminders={reminders} onClose={() => setOverlay(null)}
-        onOpen={day => setOverlay({ type: 'studyEventDay', event, index: day })} />
+        closeTitle={fromProfile ? 'К профилю' : undefined}
+        onOpen={day => setOverlay({ type: 'studyEventDay', event, index: day, fromProfile })}
+        onReview={deck => setOverlay({ type: 'studyEventReview', event, deck, fromProfile })} />
     </ScreenFrame>;
   }
   if (overlay?.type === 'groupAssignment') {
@@ -868,6 +877,7 @@ function AppContent() {
             onAccount={() => setOverlay({ type: user ? "settings" : "account" })}
             onDiagnostics={() => setOverlay({ type: "diagnostics" })}
             onAccess={() => setOverlay({ type: "access" })}
+            onStudyEvent={saved => setOverlay({ type: 'studyEvent', event: events?.find(event => event.id === saved.id) || saved, fromProfile: true })}
             onAdmin={access.isAdmin ? () => setOverlay({ type: "admin" }) : undefined}
           />
         )}
