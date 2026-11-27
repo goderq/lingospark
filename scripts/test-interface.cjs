@@ -90,14 +90,15 @@ const studyGroupsApi = {
   },
 };
 const eventRequests = [];
-let publishedEvent = null, eventDraft = null, eventsNetwork = true;
+let publishedEvent = null, eventDraft = null, eventsNetwork = true, nextEventId = 101;
 const studyEventsApi = {
   loadStudyEvents: async () => eventsNetwork ? { data: publishedEvent ? [publishedEvent] : [] } : { status: 0, error: {} },
   manageStudyEvents: async (action, options) => {
     eventRequests.push({ action, options });
     if (action === 'list') return [publishedEvent, eventDraft].filter(Boolean);
     if (action === 'save_draft') {
-      eventDraft = { ...options, id: '00000000-0000-4000-8000-000000000099', draft: true };
+      const suffix = publishedEvent ? nextEventId++ : 99;
+      eventDraft = { ...options, id: options.event_id || '00000000-0000-4000-8000-' + String(suffix).padStart(12, '0'), draft: true };
       return eventDraft;
     }
     if (action === 'publish') {
@@ -1029,6 +1030,37 @@ async function main() {
   assert.deepEqual(publishedEvent.formats, ['mixed', 'dialogue']);
   assert.equal(publishedEvent.custom_days[0].approved, true);
   assert.equal(publishedEvent.custom_days[0].review.prompt, generatedRepeat.prompt);
+  const original = publishedEvent;
+  const beforeDuplicate = eventRequests.length;
+  await act(async () => field('Название события').props.onChangeText('Несохранённый черновик'));
+  await act(async () => namedButton('Дублировать событие').props.onPress());
+  assert.equal(lastAlert.title, 'Открыть копию в редакторе?');
+  assert.equal(field('Название события').props.value, 'Несохранённый черновик');
+  await act(async () => lastAlert.options.find(option => option.text === 'Открыть копию').onPress());
+  assert.equal(eventRequests.length, beforeDuplicate, 'opening a copy makes no server writes');
+  assert.equal(field('Название события').props.value, 'Поездка на выходные (копия)');
+  assert.equal(field('Описание').props.value, original.description);
+  assert.equal(field('Дата начала (ГГГГ-ММ-ДД)').props.value, new Date(Date.parse(original.ends_on) + 86400000).toISOString().slice(0, 10));
+  assert.ok(journalText('Собственное упражнение проверено'));
+  await act(async () => field('Описание').props.onChangeText('Новая поездка с теми же упражнениями'));
+  await act(async () => { namedButton('Сохранить черновик').props.onPress(); await flush(); });
+  assert.equal(eventRequests.findLast(request => request.action === 'save_draft').options.event_id, undefined);
+  assert.notEqual(eventDraft.id, original.id);
+  assert.deepEqual(eventDraft.topics, original.topics);
+  assert.deepEqual(eventDraft.formats, original.formats);
+  assert.deepEqual(eventDraft.custom_days, original.custom_days);
+  assert.equal(publishedEvent, original);
+  await act(async () => { namedButton('Опубликовать для всех').props.onPress(); await flush(); });
+  assert.notEqual(publishedEvent.id, original.id);
+  assert.equal(publishedEvent.description, 'Новая поездка с теми же упражнениями');
+  const previousId = publishedEvent.id;
+  await act(async () => namedButton('Дублировать событие').props.onPress());
+  const beforeDirectPublish = eventRequests.length;
+  await act(async () => { namedButton('Опубликовать для всех').props.onPress(); await flush(); });
+  assert.notEqual(publishedEvent.id, previousId);
+  assert.deepEqual(eventRequests.slice(beforeDirectPublish).map(request => request.action), ['save_draft', 'publish', 'list']);
+  assert.equal(eventRequests[beforeDirectPublish].options.event_id, undefined);
+  assert.equal(eventRequests[beforeDirectPublish + 1].options.event_id, publishedEvent.id);
   staffRole = null;
   await act(async () => tree.unmount());
 

@@ -29,10 +29,10 @@ const licenseStatus = license => {
   return 'Нет активной лицензии';
 };
 
-function AccessLayout({ title, onClose, children }) {
+function AccessLayout({ title, onClose, children, scrollRef }) {
   useTheme();
   return <KeyboardAvoidingView style={s.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScrollView ref={scrollRef} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <View style={s.header}>
         {onClose && <Pressable accessibilityRole="button" accessibilityLabel="Назад" style={s.back} onPress={onClose}>
           <Ionicons name="chevron-back" size={24} color={colors.text} />
@@ -387,6 +387,7 @@ function AccessJournal({ onClose, account, staffRole }) {
 
 export function AdminScreen({ onClose, initialRoute }) {
   const access = useAccess();
+  const eventsScroll = useRef(null);
   const [route, setRoute] = useState(() => initialRoute ? { type: initialRoute } : null);
   const [criteria, setCriteria] = useState({ query: '', filter: 'all' });
   const [promoFilter, setPromoFilter] = useState('all');
@@ -429,8 +430,9 @@ export function AdminScreen({ onClose, initialRoute }) {
     setLabel('');
     await loadPage(0, promoFilter);
   });
-  if (route?.type === 'studyEvents' && (access.isAdmin || access.staffOffline)) return <AccessLayout title="Общие события" onClose={initialRoute || !access.isAdmin ? onClose : () => setRoute(null)}>
-    <StudyEventsAdmin localOnly={!access.isAdmin} />
+  if (route?.type === 'studyEvents' && (access.isAdmin || access.staffOffline)) return <AccessLayout title="Общие события" scrollRef={eventsScroll}
+    onClose={initialRoute || !access.isAdmin ? onClose : () => setRoute(null)}>
+    <StudyEventsAdmin localOnly={!access.isAdmin} onOpenEditor={() => eventsScroll.current?.scrollTo?.({ y: 0, animated: true })} />
   </AccessLayout>;
   if (!access.isAdmin) return <AccessLayout title="Админ-панель" onClose={onClose}><Text style={s.muted}>Требуются права администратора.</Text></AccessLayout>;
   if (route?.type === 'studyGroups') return <AccessLayout title="Учебные группы" onClose={() => setRoute(null)}>

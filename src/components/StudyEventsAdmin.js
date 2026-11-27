@@ -12,6 +12,7 @@ import { PrimaryButton } from './UI';
 import { colors, createThemedStyles, useTheme } from '../theme';
 
 const PAGE = 30;
+const DAY_MS = 86400000;
 const errors = {
   invalid_event_date: 'Укажи сегодняшнюю или будущую дату в формате ГГГГ-ММ-ДД.',
   event_already_exists: 'Событие с таким названием и датой уже опубликовано.',
@@ -27,7 +28,7 @@ function Field({ label, ...props }) {
   </View>;
 }
 
-export default function StudyEventsAdmin({ localOnly = false }) {
+export default function StudyEventsAdmin({ localOnly = false, onOpenEditor }) {
   useTheme();
   const { user } = useAuth();
   const [events, setEvents] = useState([]);
@@ -39,6 +40,7 @@ export default function StudyEventsAdmin({ localOnly = false }) {
   const [formats, setFormats] = useState([]);
   const [customDays, setCustomDays] = useState([]);
   const [draftId, setDraftId] = useState(null);
+  const [copyPending, setCopyPending] = useState(false);
   const [format, setFormat] = useState('mixed');
   const [editing, setEditing] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -92,6 +94,7 @@ export default function StudyEventsAdmin({ localOnly = false }) {
   });
   const editDraft = event => {
     setDraftId(event.id || event.event_id || null);
+    setCopyPending(event.copyPending === true);
     setName(event.name);
     setDescription(event.description);
     setStartsOn(event.starts_on);
@@ -103,6 +106,30 @@ export default function StudyEventsAdmin({ localOnly = false }) {
     setCheckingDay(null);
     setNotice('');
   };
+  const duplicateEvent = event => {
+    const openCopy = () => {
+      const lastDay = Date.parse(event.ends_on || event.starts_on);
+      const today = Date.parse(eventDate(Date.now()));
+      const suffix = ' (копия)';
+      const name = event.name?.trim();
+      editDraft({
+        name: name ? Array.from(name).slice(0, 80 - suffix.length).join('').trimEnd() + suffix : 'Копия события',
+        description: event.description || '',
+        starts_on: eventDate(Math.max(today, Number.isFinite(lastDay) ? lastDay : today) + DAY_MS),
+        topics: event.topics,
+        formats: event.formats,
+        custom_days: event.custom_days,
+        copyPending: true,
+      });
+      setNotice('Копия открыта в редакторе. Сохрани её как черновик или опубликуй.');
+      onOpenEditor?.();
+    };
+    if (name.trim() || description.trim() || topics.length || startsOn !== eventDate(Date.now())) {
+      Alert.alert('Открыть копию в редакторе?', 'Текущее содержимое редактора будет заменено. Сохранённые черновики останутся доступны.', [
+        { text: 'Назад', style: 'cancel' }, { text: 'Открыть копию', onPress: openCopy },
+      ]);
+    } else openCopy();
+  };
   const chooseDay = index => {
     setEditing(index);
     setFormat(formats[index] || 'mixed');
@@ -111,6 +138,7 @@ export default function StudyEventsAdmin({ localOnly = false }) {
   };
   const reset = () => {
     setDraftId(null);
+    setCopyPending(false);
     setFormats([]);
     setName('');
     setDescription('');
@@ -122,7 +150,7 @@ export default function StudyEventsAdmin({ localOnly = false }) {
     setSuggestion(null);
   };
   const saveOnDevice = () => run(async () => {
-    await AsyncStorage.setItem(draftKey, JSON.stringify(payload()));
+    await AsyncStorage.setItem(draftKey, JSON.stringify({ ...payload(), ...(copyPending && { copyPending }) }));
     setNotice('Черновик сохранён на этом устройстве.');
   });
   const openFromDevice = () => run(async () => {
@@ -192,7 +220,14 @@ export default function StudyEventsAdmin({ localOnly = false }) {
     </View>}
   </>;
   const publish = () => run(async () => {
-    await manageStudyEvents('publish', payload());
+    let options = payload();
+    if (copyPending && !draftId) {
+      // Give the copy its own ID before publication, even if an identical event exists.
+      const draft = await manageStudyEvents('save_draft', options);
+      setDraftId(draft.id);
+      options = { ...options, event_id: draft.id };
+    }
+    await manageStudyEvents('publish', options);
     reset();
     await load(0);
     setNotice('Событие опубликовано.');
@@ -299,6 +334,8 @@ export default function StudyEventsAdmin({ localOnly = false }) {
         <Text style={s.muted}>{event.topics.map(id => groupTopicName(id) || id).join(' · ')}</Text>
         {event.draft && !event.cancelled_at && <PrimaryButton title="Открыть черновик" variant="secondary" disabled={working}
           onPress={() => editDraft(event)} />}
+        {event.topics.length > 0 && <PrimaryButton title="Дублировать событие" variant="secondary" disabled={working}
+          onPress={() => duplicateEvent(event)} />}
         {!event.draft && <PrimaryButton title="Отчёт о событии" variant="secondary" disabled={busy} onPress={() => run(async () => {
           const data = await manageStudyEvents('report', { event_id: event.id });
           setReport({ event, data });
